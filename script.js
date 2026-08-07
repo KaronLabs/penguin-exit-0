@@ -19,6 +19,7 @@ window.__resetGameForTest = function() {
     clearTerminalTimers();
     terminalOutput.replaceChildren();
     npcCard.hidden = true;
+    setEndingModalActive(false);
     clearGeminiTimer();
     const endingOverlay = document.getElementById('ending-overlay');
     if (endingOverlay) endingOverlay.style.display = 'none';
@@ -58,6 +59,13 @@ const quoteCollection = document.getElementById('quote-collection');
 
 const endingOverlay = document.getElementById('ending-overlay');
 const endingIncidentCost = document.getElementById('ending-incident-cost');
+const btnPlayAgain = document.getElementById('btn-play-again');
+const endingBackground = [
+    document.querySelector('header'),
+    document.querySelector('.dashboard'),
+    intrusionBanner,
+    document.querySelector('.main-grid')
+];
 
 function loadQuoteDiscovery() {
     const empty = { version: 1, cursors: Object.fromEntries(dialogueContexts.map((context) => [context, 0])), discovered: new Set() };
@@ -106,6 +114,13 @@ function appendTerminalLine(text, context = '', index = null) {
     line.textContent = text;
     terminalOutput.appendChild(line);
     while (terminalOutput.childElementCount > 80) terminalOutput.firstElementChild.remove();
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
+
+function setEndingModalActive(active) {
+    endingBackground.forEach((element) => {
+        element.inert = active;
+    });
 }
 
 function clearTerminalTimers() {
@@ -158,6 +173,11 @@ function queuePuzzleResult(puzzle, choice, repeated) {
 
 // Keydown handler for Escape key (git revert)
 window.addEventListener('keydown', (e) => {
+    if (endingRendered && endingOverlay.style.display !== 'none' && e.key === 'Tab') {
+        e.preventDefault();
+        btnPlayAgain.focus();
+        return;
+    }
     if (e.key === 'Escape' && state.activeIntrusion !== null) {
         clearGeminiTimer();
         if (state.activeIntrusion === 'ceo') {
@@ -236,13 +256,16 @@ btnProduce.addEventListener('click', () => {
 // Tab Handlers
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+        const nextPuzzleId = btn.getAttribute('data-puz');
+        if (nextPuzzleId === activePuzzleId) return;
         clearTerminalTimers();
+        npcCard.hidden = true;
         tabBtns.forEach(b => {
             const isActive = b === btn;
             b.classList.toggle('active', isActive);
             b.setAttribute('aria-selected', String(isActive));
         });
-        activePuzzleId = btn.getAttribute('data-puz');
+        activePuzzleId = nextPuzzleId;
         renderPuzzles();
     });
 });
@@ -260,6 +283,7 @@ function renderPuzzles() {
         btn.setAttribute('aria-label', choice.label);
 
         btn.addEventListener('click', () => {
+            npcCard.hidden = true;
             const choiceSlot = `${currentPuzzle.id}:${choice.key}`;
             const repeated = resolvedChoices.has(choiceSlot);
             if (!repeated) {
@@ -406,9 +430,11 @@ function renderGameState() {
     if (state.endingTriggered && !endingRendered) {
         endingRendered = true;
         clearGeminiTimer();
+        clearTerminalTimers();
+        setEndingModalActive(true);
         endingIncidentCost.textContent = `장애 비용 -$${state.incidentCost}`;
         endingOverlay.style.display = 'flex';
-        document.getElementById('btn-play-again').focus();
+        btnPlayAgain.focus();
     }
 }
 

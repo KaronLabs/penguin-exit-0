@@ -656,6 +656,10 @@ h1::before {
     margin-top: 3px;
 }
 
+.terminal-line {
+    white-space: pre-wrap;
+}
+
 .npc-card {
     display: flex;
     gap: 8px;
