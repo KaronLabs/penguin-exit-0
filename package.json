@@ -1,0 +1,21 @@
+{
+  "name": "penguin_exit_game_v2_commercial",
+  "version": "2.1.0",
+  "type": "module",
+  "description": "Penguin EXIT 0 Commercial Edition v2.1 Engine (Ironclad Acquittal Edition)",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:browser": "playwright test --project=chromium --project=firefox --project=webkit",
+    "test:perf": "playwright test tests/browser/performance.spec.js --project=chromium-perf",
+    "test:all": "npm test && npm run test:browser && npm run test:perf && npm run negative-controls && npm run campaign:build && npm run manifest:generate && npm run evidence:verify && npm run campaign:verify",
+    "negative-controls": "node scripts/run-negative-controls.mjs",
+    "manifest:generate": "node scripts/generate-manifest.mjs",
+    "evidence:verify": "node scripts/verify-evidence.mjs",
+    "report:generate": "node scripts/generate-report.mjs",
+    "campaign:verify": "node scripts/verify-campaign.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "cross-env": "^7.0.3"
+  }
+}

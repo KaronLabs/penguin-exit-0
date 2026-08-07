@@ -1,0 +1,17 @@
+{
+  "key": "10-unit",
+  "command": {
+    "argv": [
+      "npm.cmd",
+      "test"
+    ],
+    "cwd": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial",
+    "startedUtc": "2026-08-06T18:54:08.464Z",
+    "endedUtc": "2026-08-06T18:54:08.465Z",
+    "exitCode": 2,
+    "stdoutPath": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\evidence\\campaigns\\20260807T013000Z-r9-final\\10-unit.stdout.log",
+    "stdoutSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "stderrPath": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\evidence\\campaigns\\20260807T013000Z-r9-final\\10-unit.stderr.log",
+    "stderrSha256": "CAEB7D8C0A272AE221C16721FC19C38FE139EE851DBA24ED952FAC2460F6B4E8"
+  }
+}

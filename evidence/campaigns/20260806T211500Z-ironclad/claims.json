@@ -1,0 +1,19 @@
+{
+  "runId": "20260806T211500Z-ironclad",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "nodeTestCount": 19,
+  "nodeTestPass": 19,
+  "nodeTestFail": 0,
+  "browserProjects": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "browserTestPass": 22,
+  "p95LatencyLimitMs": 20,
+  "p99LatencyLimitMs": 33.3,
+  "longTaskCountLimit": 0,
+  "heapNetGrowthLimitMb": 5,
+  "touchTargetMinHeightPx": 48,
+  "viewport320OverflowPx": 0
+}

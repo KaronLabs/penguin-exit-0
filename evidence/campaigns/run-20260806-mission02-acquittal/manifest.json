@@ -1,0 +1,32 @@
+{
+  "campaignId": "run-20260806-mission02-acquittal",
+  "generatedUtc": "2026-08-06T10:14:27.801Z",
+  "totalFilesCount": 5,
+  "files": [
+    {
+      "filename": "baseline-preflight.log",
+      "sizeBytes": 194,
+      "sha256": "B061FD5C1FB1E6836F180AC51964F8A316D4D3749B74F3351D695C178AF53E78"
+    },
+    {
+      "filename": "performance-test.log",
+      "sizeBytes": 358,
+      "sha256": "C4BD60F60802D0FEC5AD679AC2943427876D719745A463C54990BD948FFEAE17"
+    },
+    {
+      "filename": "performance.json",
+      "sizeBytes": 548,
+      "sha256": "D8A30CD9497BE24F66ED340D741E9AE004596D2E26A2DEFE639DE17EF2CCE848"
+    },
+    {
+      "filename": "playwright-e2e.log",
+      "sizeBytes": 3238,
+      "sha256": "FA213E7BEB9CCE5FD747FFD407698874FF39E5B637631E9762A005441308582F"
+    },
+    {
+      "filename": "unit-tests-tap.log",
+      "sizeBytes": 3690,
+      "sha256": "76744FE151C5805D6571D859AAE4174E9607B8A08F609A7736E936F3D77EBE12"
+    }
+  ]
+}

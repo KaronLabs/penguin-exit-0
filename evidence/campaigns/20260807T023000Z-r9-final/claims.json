@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "runId": "20260807T023000Z-r9-final",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "unit": {
+    "tests": 27,
+    "passed": 27,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "browser": {
+    "chromium": {
+      "passed": 7,
+      "failed": 0
+    },
+    "firefox": {
+      "passed": 7,
+      "failed": 0
+    },
+    "webkit": {
+      "passed": 7,
+      "failed": 0
+    },
+    "exitCode": 0
+  },
+  "performance": {
+    "startedUtc": "2026-08-06T19:09:15.673Z",
+    "endedUtc": "2026-08-06T19:19:15.700Z",
+    "measuredDurationMs": 600027,
+    "environment": {
+      "nodeVersion": "v22.21.1",
+      "platform": "win32",
+      "arch": "x64",
+      "project": "chromium-perf"
+    },
+    "sampleCount": 37805,
+    "rawMinMs": 16.5,
+    "rawMaxMs": 16.800000000046566,
+    "p50LatencyMs": 16.699999999982538,
+    "p95LatencyMs": 16.70000000006985,
+    "p99LatencyMs": 16.800000000017462,
+    "longTaskObserverSupported": true,
+    "longTasksCount": 0,
+    "heapStartMb": 0.6014938354492188,
+    "heapEndMb": 1.9717750549316406,
+    "heapNetGrowthMb": 1.3702812194824219,
+    "totalActionsCount": 8161
+  },
+  "negativeControls": {
+    "evidencePassed": 21,
+    "evidenceFailed": 0,
+    "exitCode": 0,
+    "campaignPassed": 6,
+    "campaignFailed": 0,
+    "campaignExitCode": 0
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 3,
+  "runId": "20260807T002345Z-r10-korean-release",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "candidateInventory": {
+    "fileCount": 39,
+    "pathListSha256": "8144012AC38BFAF33E58292037A7521BDF2850A30360628E258245E6ED114A76",
+    "contentRecordsSha256": "3BF356427AD2E3D56EB39DA734359C702521C60AEC6C83AECE8FDD29E970460C"
+  },
+  "gameCoreSha256": "B3FAD87BD4EEE3C608E4E2944A3572DF272646534D95ADED3A1463EBE6D708A2",
+  "unit": {
+    "tests": 29,
+    "passed": 29,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "browser": {
+    "chromium": {
+      "passed": 13,
+      "failed": 0
+    },
+    "firefox": {
+      "passed": 13,
+      "failed": 0
+    },
+    "webkit": {
+      "passed": 13,
+      "failed": 0
+    },
+    "integrity": true,
+    "reportedFailures": 0,
+    "exitCode": 0
+  },
+  "performance": {
+    "startedUtc": "2026-08-07T00:25:54.964Z",
+    "endedUtc": "2026-08-07T00:35:55.041Z",
+    "measuredDurationMs": 600077,
+    "environment": {
+      "nodeVersion": "v22.21.1",
+      "platform": "win32",
+      "arch": "x64",
+      "project": "chromium-perf"
+    },
+    "sampleCount": 36006,
+    "rawMinMs": 16.5,
+    "rawMaxMs": 16.800000000046566,
+    "p50LatencyMs": 16.699999999982538,
+    "p95LatencyMs": 16.70000000006985,
+    "p99LatencyMs": 16.800000000017462,
+    "longTaskObserverSupported": true,
+    "longTasksCount": 0,
+    "heapStartMb": 0.6344490051269531,
+    "heapEndMb": 2.0620956420898438,
+    "heapNetGrowthMb": 1.4276466369628906,
+    "totalActionsCount": 7184
+  },
+  "negativeControls": {
+    "passed": 21,
+    "total": 21,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "campaignVerifier": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "r9Frozen": {
+    "fileCount": 79,
+    "pathListSha256": "70EC8B9D2538DD3F758CA9CE6EB8DDF55B1289A454246761FA705F1D9A26F1A6",
+    "beforeDigest": "CA05B0E1938B8422D644B4C6F243931A462B4878B17598742916294B2C640CE0",
+    "afterDigest": "CA05B0E1938B8422D644B4C6F243931A462B4878B17598742916294B2C640CE0"
+  },
+  "actualBrowserZoom": {
+    "claimed": false,
+    "equivalentReflow": "3-engine 640x360 equivalent PASS",
+    "limitation": "actual browser chrome zoom not claimed"
+  }
+}

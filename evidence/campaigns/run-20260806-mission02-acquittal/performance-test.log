@@ -1,0 +1,10 @@
+> penguin_exit_game_v2_commercial@2.1.0 test:perf
+> playwright test tests/browser/performance.spec.js --project=chromium
+
+[WebServer] SERVER_READY http://127.0.0.1:4173
+
+Running 1 test using 1 worker
+
+  ok 1 [chromium] › tests\browser\performance.spec.js:15:1 › @performance - Real Frame Latency, Long Task and Heap Measurement (4.8s)
+
+  1 passed (5.9s)

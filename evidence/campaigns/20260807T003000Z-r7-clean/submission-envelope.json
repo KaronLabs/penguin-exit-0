@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260807T003000Z-r7-clean",
+  "timestampUtc": "2026-08-06T15:57:40.243Z",
+  "status": "READY_TO_FREEZE",
+  "target": "penguin_exit_game_v2_commercial",
+  "note": "Envelope hashes payload files only. Envelope is not self-referential.",
+  "baselineZipSha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "payloadHashes": {
+    "ledger.jsonl": "377A886AB4DA0DCE32F4942DE2257339672C07CB1653995042CA08F4E7009258",
+    "claims.json": "55B7DB4DBF4F658769415E824EFAAA9D4AF1736F08EF07718F0F9E564BD8638E",
+    "artifact-manifest.json": "C9DD76CDC8808C648138F18FBABF6480D48306D4208BF86D696F170201D86A83"
+  },
+  "reviewerAccessAssumption": "Reviewer has full filesystem access to c:\\07_LastMoveProject workspace"
+}

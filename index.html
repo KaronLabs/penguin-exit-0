@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>펭귄 EXIT 0 — 상업화 대작전 v2.1</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1><span>펭귄</span> <span class="brand-code">EXIT 0</span></h1>
+        <p class="sub">AI 장애 복구 · SRE 기술 부채 생존기 · 상업화 대작전 v2.1</p>
+    </header>
+
+    <main class="dashboard" aria-label="게임 자원 지표">
+        <section class="card">
+            <div class="card-title">생산량</div>
+            <div id="val-units" class="card-val">0 / 200</div>
+        </section>
+        <section class="card">
+            <div class="card-title">GitHub 스타</div>
+            <div id="val-stars" class="card-val">0 ★</div>
+        </section>
+        <section class="card">
+            <div class="card-title">기술 부채</div>
+            <div id="val-debt" class="card-val">0%</div>
+        </section>
+        <section class="card">
+            <div class="card-title">위협도</div>
+            <div id="val-threat" class="card-val">0 / 100</div>
+        </section>
+        <section class="card">
+            <div class="card-title">참치 캔</div>
+            <div id="val-tuna" class="card-val">0 / 3</div>
+        </section>
+        <section class="card">
+            <div class="card-title">장애 비용</div>
+            <div id="val-cost" class="card-val">-$0</div>
+        </section>
+    </main>
+
+    <!-- AI Intrusion Alarm Banner -->
+    <div id="intrusion-banner" class="intrusion-banner" style="display: none;" role="alert" aria-live="assertive">
+        <div id="intrusion-title" class="intrusion-title">⚠️ AI 코드 침입 감지!</div>
+        <div id="intrusion-msg" class="intrusion-msg">Copilot이 안전하지 않은 코드 블록을 삽입했습니다!</div>
+        <div id="intrusion-actions" class="intrusion-actions">
+            <button id="btn-revert" class="btn-danger btn-touch">git revert (Esc)</button>
+            <button id="btn-ceo-ship" class="btn-success btn-touch" style="display: none;">FORCE SHIP (+1000★, 기술 부채 +30%)</button>
+            <button id="btn-accept-penalty" class="btn-warning btn-touch">페널티 수락 (-500★)</button>
+        </div>
+    </div>
+
+    <!-- Ending Modal Overlay -->
+    <div id="ending-overlay" class="ending-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="ending-process-heading">
+        <div class="ending-dialog">
+            <h2 id="ending-process-heading" class="ending-process-heading">프로세스는 살아남았습니다</h2>
+            <div class="ending-process-code">🎉 PROCESS EXIT CODE: 0</div>
+            <h3 class="ending-financial-heading">회계는 죽었습니다</h3>
+            <div class="ending-financial-code">💸 FINANCIAL EXIT CODE: 1</div>
+            <div class="ending-summary">
+                <div>인수 대금 +$3,000</div>
+                <div>GPU 청구액 -$3,001</div>
+                <div class="ending-net-balance">순 재무 잔액 -$1</div>
+                <div id="ending-incident-cost" class="ending-incident-cost">장애 비용 -$0</div>
+            </div>
+            <button id="btn-play-again" onclick="location.reload()" class="btn-touch btn-play-again">다시 플레이</button>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <section class="panel" aria-label="펭귄 피난처 단계">
+            <h2>펭귄 피난처 단계</h2>
+            <div id="stage-badge" class="stage-badge" style="margin-top: 10px;">Stage 1: Freezing Blizzard (0 Units)</div>
+            <div id="shelter-stage-display" style="font-size: 3.5rem; text-align: center; margin: 15px 0;">🐧📦</div>
+            
+            <button id="btn-produce" class="btn-touch is-produce" style="width: 100%;" aria-label="코드 작성: 생산량 10과 GitHub 스타 150 획득">
+                💻 코드 작성 (+10 유닛 / +150★)
+            </button>
+            
+            <div style="margin-top: 20px;">
+                <h3>현재 업그레이드</h3>
+                <div id="upgrade-list" class="upgrade-list"></div>
+            </div>
+        </section>
+
+        <section class="panel" aria-label="장애 진단 터미널">
+            <h2>장애 진단 터미널</h2>
+            <div class="puzzle-tabs" role="tablist">
+                <button class="tab-btn active" role="tab" aria-selected="true" data-puz="wifi">Wi-Fi 장애</button>
+                <button class="tab-btn" role="tab" aria-selected="false" data-puz="cpu">CPU 장애</button>
+                <button class="tab-btn" role="tab" aria-selected="false" data-puz="ssh">SSH 장애</button>
+            </div>
+            <div id="puzzle-title" style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin: 10px 0;"></div>
+            <div id="puzzle-options"></div>
+        </section>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[WebServer] SERVER_READY http://127.0.0.1:4173
+
+
+Running 21 tests using 1 worker
+
+[1/21] [chromium] › tests\browser\accessibility.spec.js:3:1 › Accessibility - 320px viewport zero horizontal overflow & 48px touch targets
+[2/21] [chromium] › tests\browser\core-route.spec.js:3:1 › Core Route - Happy Path (No upgrade, no penalty)
+[3/21] [chromium] › tests\browser\core-route.spec.js:24:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[4/21] [chromium] › tests\browser\core-route.spec.js:52:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[5/21] [chromium] › tests\browser\core-route.spec.js:103:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[6/21] [chromium] › tests\browser\intrusion.spec.js:3:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[7/21] [chromium] › tests\browser\intrusion.spec.js:40:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[8/21] [firefox] › tests\browser\accessibility.spec.js:3:1 › Accessibility - 320px viewport zero horizontal overflow & 48px touch targets
+[9/21] [firefox] › tests\browser\core-route.spec.js:3:1 › Core Route - Happy Path (No upgrade, no penalty)
+[10/21] [firefox] › tests\browser\core-route.spec.js:24:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[11/21] [firefox] › tests\browser\core-route.spec.js:52:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[12/21] [firefox] › tests\browser\core-route.spec.js:103:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[13/21] [firefox] › tests\browser\intrusion.spec.js:3:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[14/21] [firefox] › tests\browser\intrusion.spec.js:40:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[15/21] [webkit] › tests\browser\accessibility.spec.js:3:1 › Accessibility - 320px viewport zero horizontal overflow & 48px touch targets
+[16/21] [webkit] › tests\browser\core-route.spec.js:3:1 › Core Route - Happy Path (No upgrade, no penalty)
+[17/21] [webkit] › tests\browser\core-route.spec.js:24:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[18/21] [webkit] › tests\browser\core-route.spec.js:52:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[19/21] [webkit] › tests\browser\core-route.spec.js:103:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[20/21] [webkit] › tests\browser\intrusion.spec.js:3:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[21/21] [webkit] › tests\browser\intrusion.spec.js:40:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+  21 passed (50.0s)

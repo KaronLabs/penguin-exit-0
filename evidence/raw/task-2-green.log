@@ -1,0 +1,32 @@
+TASK 2 GREEN EVIDENCE LOG (2026-08-06)
+
+Command: node --test tests/*.test.js
+Exit Code: 0
+
+Output:
+TAP version 13
+ok 1 - Browser & Performance Verification - Evidence Generation
+ok 2 - Full Game Run - Happy Path (No upgrade, no penalty)
+ok 3 - Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars)
+ok 4 - Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars)
+ok 5 - Core State Engine - Initial State Defaults
+ok 6 - Core State Engine - Produce Action 15:1 Ratio Contract
+ok 7 - Core State Engine - Fixed 500 Star Penalty Bounds
+ok 8 - Core State Engine - Upgrade Cap +8 & Slot Max 2
+ok 9 - Core State Engine - Recovery Mode Entry & Exit
+ok 10 - AI Intrusion Guards - Single Intrusion Active & Production Blocked
+ok 11 - AI Intrusion Guards - Single Ending Execution Lock
+ok 12 - Puzzle Content Registry - Fair SRE Diagnostics for WiFi
+ok 13 - Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH
+ok 14 - Remediation P0 - Defer ending on simultaneous intrusion at 200 units
+ok 15 - Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion)
+ok 16 - Remediation P1 - Reject negative tuna amounts
+ok 17 - Remediation P1 - Reject forged upgrade payloads
+ok 18 - Remediation P1 - Threat Meter clamped at max 99
+ok 19 - CEO reject charges exactly 500 stars and clears only CEO intrusion
+ok 20 - generic resolution never applies a hidden star penalty
+
+# tests 20
+# pass 20
+# fail 0
+# duration_ms 166.7577

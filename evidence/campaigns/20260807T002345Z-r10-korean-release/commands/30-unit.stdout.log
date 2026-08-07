@@ -1,0 +1,184 @@
+TAP version 13
+# Subtest: parses ANSI Playwright line reporter output by engine
+ok 1 - parses ANSI Playwright line reporter output by engine
+  ---
+  duration_ms: 3.9146
+  type: 'test'
+  ...
+# Subtest: never converts failed or malformed browser evidence into passing counts
+ok 2 - never converts failed or malformed browser evidence into passing counts
+  ---
+  duration_ms: 1.9788
+  type: 'test'
+  ...
+# Subtest: accepts a fully bound campaign
+ok 3 - accepts a fully bound campaign
+  ---
+  duration_ms: 98.7714
+  type: 'test'
+  ...
+# Subtest: rejects an envelope that omits one required payload hash
+ok 4 - rejects an envelope that omits one required payload hash
+  ---
+  duration_ms: 71.4599
+  type: 'test'
+  ...
+# Subtest: rejects a changed spec instead of merely proving it exists
+ok 5 - rejects a changed spec instead of merely proving it exists
+  ---
+  duration_ms: 75.0205
+  type: 'test'
+  ...
+# Subtest: rejects missing or reordered ledger states
+ok 6 - rejects missing or reordered ledger states
+  ---
+  duration_ms: 70.4466
+  type: 'test'
+  ...
+# Subtest: rejects raw evidence that is not hash-bound by the envelope
+ok 7 - rejects raw evidence that is not hash-bound by the envelope
+  ---
+  duration_ms: 68.736
+  type: 'test'
+  ...
+# Subtest: rejects a report whose bound claims are stale
+ok 8 - rejects a report whose bound claims are stale
+  ---
+  duration_ms: 72.4083
+  type: 'test'
+  ...
+# Subtest: Full Game Run - Happy Path (No upgrade, no penalty)
+ok 9 - Full Game Run - Happy Path (No upgrade, no penalty)
+  ---
+  duration_ms: 1.8758
+  type: 'test'
+  ...
+# Subtest: Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars)
+ok 10 - Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars)
+  ---
+  duration_ms: 0.3174
+  type: 'test'
+  ...
+# Subtest: Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars)
+ok 11 - Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars)
+  ---
+  duration_ms: 0.9233
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Initial State Defaults
+ok 12 - Core State Engine - Initial State Defaults
+  ---
+  duration_ms: 1.3323
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Produce Action 15:1 Ratio Contract
+ok 13 - Core State Engine - Produce Action 15:1 Ratio Contract
+  ---
+  duration_ms: 0.4348
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Fixed 500 Star Penalty Bounds
+ok 14 - Core State Engine - Fixed 500 Star Penalty Bounds
+  ---
+  duration_ms: 0.1491
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Upgrade Cap +8 & Slot Max 2
+ok 15 - Core State Engine - Upgrade Cap +8 & Slot Max 2
+  ---
+  duration_ms: 0.2689
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Recovery Mode Entry & Exit
+ok 16 - Core State Engine - Recovery Mode Entry & Exit
+  ---
+  duration_ms: 0.1798
+  type: 'test'
+  ...
+# Subtest: AI Intrusion Guards - Single Intrusion Active & Production Blocked
+ok 17 - AI Intrusion Guards - Single Intrusion Active & Production Blocked
+  ---
+  duration_ms: 1.1738
+  type: 'test'
+  ...
+# Subtest: AI Intrusion Guards - Single Ending Execution Lock
+ok 18 - AI Intrusion Guards - Single Ending Execution Lock
+  ---
+  duration_ms: 0.1846
+  type: 'test'
+  ...
+# Subtest: 콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존한다
+ok 19 - 콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존한다
+  ---
+  duration_ms: 8.8195
+  type: 'test'
+  ...
+# Subtest: 업그레이드는 관제 배지와 비용·보너스를 보존한다
+ok 20 - 업그레이드는 관제 배지와 비용·보너스를 보존한다
+  ---
+  duration_ms: 0.2693
+  type: 'test'
+  ...
+# Subtest: Puzzle Content Registry - Fair SRE Diagnostics for WiFi
+ok 21 - Puzzle Content Registry - Fair SRE Diagnostics for WiFi
+  ---
+  duration_ms: 0.9236
+  type: 'test'
+  ...
+# Subtest: Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH
+ok 22 - Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH
+  ---
+  duration_ms: 0.1857
+  type: 'test'
+  ...
+# Subtest: Remediation P0 - Defer ending on simultaneous intrusion at 200 units
+ok 23 - Remediation P0 - Defer ending on simultaneous intrusion at 200 units
+  ---
+  duration_ms: 1.4815
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion)
+ok 24 - Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion)
+  ---
+  duration_ms: 0.1966
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Reject negative tuna amounts
+ok 25 - Remediation P1 - Reject negative tuna amounts
+  ---
+  duration_ms: 0.1864
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Reject forged upgrade payloads
+ok 26 - Remediation P1 - Reject forged upgrade payloads
+  ---
+  duration_ms: 0.3162
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Threat Meter clamped at max 99
+ok 27 - Remediation P1 - Threat Meter clamped at max 99
+  ---
+  duration_ms: 0.1749
+  type: 'test'
+  ...
+# Subtest: CEO reject charges exactly 500 stars and clears only CEO intrusion
+ok 28 - CEO reject charges exactly 500 stars and clears only CEO intrusion
+  ---
+  duration_ms: 0.1625
+  type: 'test'
+  ...
+# Subtest: generic resolution never applies a hidden star penalty
+ok 29 - generic resolution never applies a hidden star penalty
+  ---
+  duration_ms: 0.3186
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 563.6752

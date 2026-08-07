@@ -1,0 +1,21 @@
+{
+  "startedUtc": "2026-08-06T10:13:33.446Z",
+  "endedUtc": "2026-08-06T10:13:36.347Z",
+  "environment": {
+    "nodeVersion": "v22.21.1",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "sampleCount": 295,
+  "rawMinMs": 16.5,
+  "rawMaxMs": 16.800000000000182,
+  "p50LatencyMs": 16.699999999999818,
+  "p95LatencyMs": 16.8,
+  "p99LatencyMs": 16.8,
+  "longTaskObserverSupported": true,
+  "longTasksCount": 0,
+  "longTasksEntries": [],
+  "heapStartMb": 1.0707359313964844,
+  "heapEndMb": 2.6382522583007812,
+  "heapNetGrowthMb": 1.5675163269042969
+}

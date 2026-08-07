@@ -1,0 +1,285 @@
+import { createInitialState, reduceGameState } from './game-core.js';
+import { puzzles, upgrades } from './content.js';
+
+let state = createInitialState();
+let activePuzzleId = 'wifi';
+let endingRendered = false;
+let geminiTimerId = null;
+
+// Test exposure for zero-allocation state reset
+window.__resetGameForTest = function() {
+    state = createInitialState();
+    endingRendered = false;
+    clearGeminiTimer();
+    const endingOverlay = document.getElementById('ending-overlay');
+    if (endingOverlay) endingOverlay.style.display = 'none';
+    renderGameState();
+};
+
+// UI Elements
+const valUnits = document.getElementById('val-units');
+const valStars = document.getElementById('val-stars');
+const valDebt = document.getElementById('val-debt');
+const valThreat = document.getElementById('val-threat');
+const valTuna = document.getElementById('val-tuna');
+const valCost = document.getElementById('val-cost');
+
+const intrusionBanner = document.getElementById('intrusion-banner');
+const intrusionTitle = document.getElementById('intrusion-title');
+const intrusionMsg = document.getElementById('intrusion-msg');
+const btnRevert = document.getElementById('btn-revert');
+const btnCeoShip = document.getElementById('btn-ceo-ship');
+const btnAcceptPenalty = document.getElementById('btn-accept-penalty');
+
+const stageBadge = document.getElementById('stage-badge');
+const shelterDisplay = document.getElementById('shelter-stage-display');
+const btnProduce = document.getElementById('btn-produce');
+const upgradeList = document.getElementById('upgrade-list');
+
+const puzzleTitle = document.getElementById('puzzle-title');
+const puzzleOptions = document.getElementById('puzzle-options');
+const tabBtns = document.querySelectorAll('.tab-btn');
+
+const endingOverlay = document.getElementById('ending-overlay');
+const endingIncidentCost = document.getElementById('ending-incident-cost');
+
+// Keydown handler for Escape key (git revert)
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.activeIntrusion !== null) {
+        clearGeminiTimer();
+        if (state.activeIntrusion === 'ceo') {
+            state = reduceGameState(state, { type: 'REJECT_CEO_ORDER' });
+        } else {
+            state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+        }
+        renderGameState();
+        btnProduce.focus();
+    }
+});
+
+function clearGeminiTimer() {
+    if (geminiTimerId !== null) {
+        clearTimeout(geminiTimerId);
+        geminiTimerId = null;
+    }
+}
+
+function syncGeminiTimer() {
+    if (state.activeIntrusion === 'gemini') {
+        if (geminiTimerId === null) {
+            geminiTimerId = setTimeout(() => {
+                geminiTimerId = null;
+                if (state.activeIntrusion === 'gemini') {
+                    state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+                    renderGameState();
+                    btnProduce.focus();
+                }
+            }, 3000);
+        }
+    } else {
+        clearGeminiTimer();
+    }
+}
+
+// Intrusion Resolution Actions
+btnRevert.addEventListener('click', () => {
+    clearGeminiTimer();
+    if (state.activeIntrusion === 'ceo') {
+        state = reduceGameState(state, { type: 'REJECT_CEO_ORDER' });
+    } else {
+        state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+    }
+    renderGameState();
+    btnProduce.focus();
+});
+
+btnCeoShip.addEventListener('click', () => {
+    clearGeminiTimer();
+    state = reduceGameState(state, { type: 'RESOLVE_CEO_SHIP' });
+    renderGameState();
+    btnProduce.focus();
+});
+
+btnAcceptPenalty.addEventListener('click', () => {
+    clearGeminiTimer();
+    state = reduceGameState(state, { type: 'APPLY_AI_PENALTY' });
+    renderGameState();
+    btnProduce.focus();
+});
+
+// Produce & Recover Main Action Handler
+btnProduce.addEventListener('click', () => {
+    if (state.productionUnits >= 200 && state.githubStars < 3000) {
+        state = reduceGameState(state, { type: 'RECOVER' });
+    } else {
+        state = reduceGameState(state, { type: 'PRODUCE' });
+    }
+    renderGameState();
+});
+
+// Tab Handlers
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        tabBtns.forEach(b => {
+            const isActive = b === btn;
+            b.classList.toggle('active', isActive);
+            b.setAttribute('aria-selected', String(isActive));
+        });
+        activePuzzleId = btn.getAttribute('data-puz');
+        renderPuzzles();
+    });
+});
+
+function renderPuzzles() {
+    puzzleOptions.innerHTML = '';
+    const currentPuzzle = puzzles.find(p => p.id === activePuzzleId) || puzzles[0];
+    puzzleTitle.textContent = currentPuzzle.title;
+
+    currentPuzzle.choices.forEach((choice) => {
+        const btn = document.createElement('button');
+        btn.className = 'puzzle-option';
+        btn.textContent = choice.label;
+        btn.setAttribute('aria-label', choice.label);
+
+        btn.addEventListener('click', () => {
+            if (choice.rewardTuna > 0) {
+                state = reduceGameState(state, { type: 'ADD_TUNA', amount: choice.rewardTuna });
+            }
+            if (choice.techDebtPercent > 0) {
+                state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: choice.techDebtPercent });
+            }
+            renderGameState();
+        });
+
+        puzzleOptions.appendChild(btn);
+    });
+}
+
+function renderUpgrades() {
+    upgradeList.innerHTML = '';
+    upgrades.forEach(up => {
+        const isOwned = state.activeUpgrades.some(u => u.id === up.id);
+        const card = document.createElement('div');
+        card.className = 'upgrade-card';
+        card.innerHTML = `
+            <div class="upgrade-copy">
+                <div class="upgrade-name" style="font-weight:600; font-size:0.9rem;">${up.name}</div>
+                <div class="upgrade-description" style="font-size:0.75rem; color:#94a3b8;">${up.description}</div>
+            </div>
+            <button class="btn-touch" ${isOwned || state.githubStars < up.costStars ? 'disabled' : ''}>
+                ${isOwned ? '보유 중' : `구매 (${up.costStars}★)`}
+            </button>
+        `;
+        const buyBtn = card.querySelector('button');
+        if (!isOwned) {
+            buyBtn.addEventListener('click', () => {
+                state = reduceGameState(state, { type: 'BUY_UPGRADE', upgradeId: up.id });
+                renderGameState();
+            });
+        }
+        upgradeList.appendChild(card);
+    });
+}
+
+function renderGameState() {
+    // 1. Metrics
+    valUnits.textContent = `${state.productionUnits} / 200`;
+    valStars.textContent = `${state.githubStars} ★`;
+    valDebt.textContent = `${state.techDebt}%`;
+    valThreat.textContent = `${state.threatMeter} / 100`;
+    valTuna.textContent = `${state.tunaCans} / 3`;
+    valCost.textContent = `-$${state.incidentCost}`;
+
+    // 2. Intrusion Banner State & 4 AI Model Customization
+    if (state.activeIntrusion !== null) {
+        intrusionBanner.style.display = 'block';
+        btnProduce.disabled = true;
+        btnProduce.textContent = 'AI 침입 진행 중 — Esc로 롤백';
+        btnProduce.setAttribute('aria-label', 'AI 침입 대응 중: 생산 작업 잠김');
+        btnProduce.classList.remove('is-produce', 'is-recover', 'is-complete');
+        btnProduce.classList.add('is-locked');
+
+        if (state.activeIntrusion === 'copilot') {
+            intrusionTitle.textContent = '🤖 Copilot 코드 침입!';
+            intrusionMsg.textContent = 'Copilot이 반복되는 나쁜 코드를 생성했습니다! Esc 또는 git revert로 되돌리세요.';
+            btnRevert.textContent = 'git revert (Esc)';
+            btnCeoShip.style.display = 'none';
+        } else if (state.activeIntrusion === 'codex') {
+            intrusionTitle.textContent = '🧠 Codex 타입 침입!';
+            intrusionMsg.textContent = 'Codex가 변수명을 finalFinalV7로 바꿨습니다! unsafe_cast를 수정하세요.';
+            btnRevert.textContent = 'Fix unsafe_cast (Esc)';
+            btnCeoShip.style.display = 'none';
+        } else if (state.activeIntrusion === 'gemini') {
+            intrusionTitle.textContent = '✨ Gemini 응답 지연!';
+            intrusionMsg.textContent = 'Gemini가 응답을 생성 중입니다... 3초 후 자동 해제되며 Esc로도 해제할 수 있습니다.';
+            btnRevert.textContent = 'Dismiss (Esc)';
+            btnCeoShip.style.display = 'none';
+        } else if (state.activeIntrusion === 'ceo') {
+            intrusionTitle.textContent = '💼 CEO 금요일 17:59 배포 지시!';
+            intrusionMsg.textContent = 'CEO가 즉시 프로덕션 배포를 요구합니다!';
+            btnRevert.textContent = 'Reject (-500★)';
+            btnCeoShip.style.display = 'inline-block';
+        }
+    } else {
+        intrusionBanner.style.display = 'none';
+
+        // 3. Produce vs Recover Button State Logic
+        if (state.productionUnits >= 200 && state.githubStars < 3000) {
+            btnProduce.disabled = false;
+            btnProduce.textContent = '🔄 RECOVER (야근 복구 +150★)';
+            btnProduce.setAttribute('aria-label', 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구');
+            btnProduce.classList.remove('is-produce', 'is-complete', 'is-locked');
+            btnProduce.classList.add('is-recover');
+        } else if (state.productionUnits >= 200 && state.githubStars >= 3000) {
+            btnProduce.disabled = true;
+            btnProduce.textContent = '🎉 EXIT 0 달성!';
+            btnProduce.setAttribute('aria-label', 'EXIT 0 달성');
+            btnProduce.classList.remove('is-produce', 'is-recover', 'is-locked');
+            btnProduce.classList.add('is-complete');
+        } else {
+            btnProduce.disabled = false;
+            btnProduce.textContent = '💻 코드 작성 (+10 유닛 / +150★)';
+            btnProduce.setAttribute('aria-label', '코드 작성: 생산량 10과 GitHub 스타 150 획득');
+            btnProduce.classList.remove('is-recover', 'is-complete', 'is-locked');
+            btnProduce.classList.add('is-produce');
+        }
+    }
+
+    // 4. Visual Stage Boundaries (0, 40, 80, 120, 160, 200)
+    if (state.productionUnits >= 200) {
+        stageBadge.textContent = '5단계 · 마이애미 해변의 AGI 재벌 · EXIT 0';
+        shelterDisplay.textContent = '🐧🏖️🍹';
+    } else if (state.productionUnits >= 160) {
+        stageBadge.textContent = '4단계 · 초거대 AI 데이터센터 CEO';
+        shelterDisplay.textContent = '🐧👔🏢';
+    } else if (state.productionUnits >= 120) {
+        stageBadge.textContent = '3단계 · 남극 펭귄 연구소';
+        shelterDisplay.textContent = '🐧🥼🖥️';
+    } else if (state.productionUnits >= 80) {
+        stageBadge.textContent = '2.5단계 · 하이테크 이글루 스타트업';
+        shelterDisplay.textContent = '🐧⛺⚡';
+    } else if (state.productionUnits >= 40) {
+        stageBadge.textContent = '2단계 · 이글루 차고 스타트업';
+        shelterDisplay.textContent = '🐧⛺💻';
+    } else {
+        stageBadge.textContent = '1단계 · 혹한 속 택배 상자';
+        shelterDisplay.textContent = '🐧📦';
+    }
+
+    // 5. Render Sub-components & Gemini Timer Sync
+    renderUpgrades();
+    syncGeminiTimer();
+
+    // 6. Ending Check (One-shot modal rendering, no alert spam!)
+    if (state.endingTriggered && !endingRendered) {
+        endingRendered = true;
+        clearGeminiTimer();
+        endingIncidentCost.textContent = `장애 비용 -$${state.incidentCost}`;
+        endingOverlay.style.display = 'flex';
+        document.getElementById('btn-play-again').focus();
+    }
+}
+
+// Initial Render
+renderPuzzles();
+renderGameState();

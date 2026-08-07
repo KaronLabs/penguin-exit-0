@@ -1,0 +1,30 @@
+{
+  "runId": "20260807T003000Z-r7-clean",
+  "builderRanUtc": "2026-08-06T15:57:40.243Z",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "nodeTestCount": 19,
+  "nodeTestPass": 19,
+  "nodeTestFail": 0,
+  "browserProjects": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "browserTestPerProject": 7,
+  "browserTestTotal": 21,
+  "browserTestPass": 21,
+  "browserTestFail": 0,
+  "perfProject": "chromium-perf",
+  "measuredDurationMs": 600004,
+  "sampleCount": 37802,
+  "p95LatencyMs": 16.70000000006985,
+  "p99LatencyMs": 16.800000000017462,
+  "longTaskCount": 0,
+  "heapNetGrowthMb": 1.3708305358886719,
+  "negativeControlsTotal": 21,
+  "negativeControlsPass": 21,
+  "touchTargetMinHeightPx": 48,
+  "viewport320OverflowPx": 0,
+  "perfStartedUtc": "2026-08-06T12:35:10.593Z",
+  "perfEndedUtc": "2026-08-06T12:45:10.597Z"
+}

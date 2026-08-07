@@ -1,0 +1,8 @@
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"CREATED","timestampUtc":"2026-08-06T15:57:40.243Z","note":"Campaign builder started"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"PREFLIGHT_PASS","timestampUtc":"2026-08-06T15:57:40.243Z","note":"Baseline SHA-256 verified match=true"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"UNIT_PASS","timestampUtc":"2026-08-06T15:57:40.243Z","note":"TAP 19/19 passed"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"BROWSER_PASS","timestampUtc":"2026-08-06T15:57:40.243Z","note":"3-engine 21/21 passed (chromium·firefox·webkit)"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"PERFORMANCE_PASS","timestampUtc":"2026-08-06T12:45:10.597Z","note":"Real 600s CDP run ended at 2026-08-06T12:45:10.597Z. Duration: 600004ms, Samples: 37802, P95: 16.70000000006985ms, P99: 16.800000000017462ms, HeapNet: 1.3708305358886719MiB, LongTasks: 0"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"NEGATIVE_CONTROLS_PASS","timestampUtc":"2026-08-06T15:57:40.243Z","note":"21/21 R7 scenarios passed"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"FINAL_GATE_PASS","timestampUtc":"2026-08-06T15:57:40.243Z","note":"EVIDENCE_GATE=GO from verify-evidence.mjs"}
+{"schemaVersion":1,"runId":"20260807T003000Z-r7-clean","state":"READY_TO_FREEZE","timestampUtc":"2026-08-06T15:57:40.243Z","note":"Campaign sealed"}

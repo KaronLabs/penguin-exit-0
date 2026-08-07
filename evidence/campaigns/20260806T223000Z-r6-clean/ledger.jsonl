@@ -1,0 +1,9 @@
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"CREATED","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"PREFLIGHT_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"RED_RECORDED","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"GREEN_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"BROWSER_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"PERFORMANCE_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"NEGATIVE_CONTROLS_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"FINAL_GATE_PASS","timestampUtc":"2026-08-06T13:25:07.232Z"}
+{"schemaVersion":1,"runId":"20260806T223000Z-r6-clean","state":"READY_TO_FREEZE","timestampUtc":"2026-08-06T13:25:07.232Z"}

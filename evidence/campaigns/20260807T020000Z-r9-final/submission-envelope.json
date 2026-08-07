@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "runId": "20260807T020000Z-r9-final",
+  "payloadHashes": {
+    "artifact-manifest.json": "C4EBB250CC452ADAEABE78E0076C31D927674DF802FE117437722246C0B111FA",
+    "claims.json": "B5CBBF284E8D3332310E9F076209FD13B3306ADCBB6B22DFDBBE639DD537EC05",
+    "ledger.jsonl": "DBE71C4AA03E29637D51F37E3EEDBBDFD6C3BB2E893C05CAB6151EC2616B3E25"
+  },
+  "spec": {
+    "path": "C:\\07_LastMoveProject\\review\\spec_20260807T020000Z-r9-final_mission02_final_acquittal.md",
+    "sizeBytes": 1214,
+    "sha256": "58E9C85CA22EE522132C3DA4E3492379BE90BD33BAC257F4131353DB9F0B0AA4"
+  },
+  "rawEvidence": {
+    "summary": {
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\evidence\\performance\\performance-summary.json",
+      "sha256": "786F381065ADD03E472125DE5D4DF24DD9A3CAE0124917EF97114A17E0400902"
+    },
+    "samples": {
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\evidence\\performance\\frame-samples.json",
+      "sha256": "2E8C3D04FA2F4C7C6E6311043DDEAFECB0DA13071A827C43ADB711F02CD5FE4A"
+    }
+  },
+  "report": {
+    "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\docs\\final-report.md",
+    "sha256": "D1370FCF0BF4088EAD41E22D39BFBCD489B3AE064860A680353FD6C83B8863DF"
+  }
+}

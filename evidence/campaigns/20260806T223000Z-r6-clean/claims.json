@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T223000Z-r6-clean",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "nodeTestCount": 19,
+  "nodeTestPass": 19,
+  "nodeTestFail": 0,
+  "browserProjects": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "browserTestPass": 22,
+  "measuredDurationMs": 600004,
+  "sampleCount": 37802,
+  "p95LatencyMs": 16.7,
+  "p99LatencyMs": 16.8,
+  "longTaskCount": 0,
+  "heapNetGrowthMb": 1.37,
+  "negativeControlsPassedCount": 16,
+  "touchTargetMinHeightPx": 48,
+  "viewport320OverflowPx": 0
+}

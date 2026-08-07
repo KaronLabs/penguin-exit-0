@@ -1,0 +1,8 @@
+{
+  "runId": "20260806T211500Z-ironclad",
+  "timestampUtc": "2026-08-06T12:12:14.454Z",
+  "status": "READY_TO_FREEZE",
+  "target": "penguin_exit_game_v2_commercial",
+  "baselineZipHash": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "reviewerAccessAssumption": "Reviewer has full filesystem access to c:\\07_LastMoveProject workspace"
+}

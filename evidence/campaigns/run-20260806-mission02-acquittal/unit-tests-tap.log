@@ -1,0 +1,127 @@
+> penguin_exit_game_v2_commercial@2.1.0 test
+> node --test tests/*.test.js
+
+TAP version 13
+# Subtest: Full Game Run - Happy Path (No upgrade, no penalty)
+ok 1 - Full Game Run - Happy Path (No upgrade, no penalty)
+  ---
+  duration_ms: 1.6588
+  type: 'test'
+  ...
+# Subtest: Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars)
+ok 2 - Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars)
+  ---
+  duration_ms: 0.2274
+  type: 'test'
+  ...
+# Subtest: Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars)
+ok 3 - Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars)
+  ---
+  duration_ms: 0.914
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Initial State Defaults
+ok 4 - Core State Engine - Initial State Defaults
+  ---
+  duration_ms: 1.1354
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Produce Action 15:1 Ratio Contract
+ok 5 - Core State Engine - Produce Action 15:1 Ratio Contract
+  ---
+  duration_ms: 0.3975
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Fixed 500 Star Penalty Bounds
+ok 6 - Core State Engine - Fixed 500 Star Penalty Bounds
+  ---
+  duration_ms: 0.1391
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Upgrade Cap +8 & Slot Max 2
+ok 7 - Core State Engine - Upgrade Cap +8 & Slot Max 2
+  ---
+  duration_ms: 0.2072
+  type: 'test'
+  ...
+# Subtest: Core State Engine - Recovery Mode Entry & Exit
+ok 8 - Core State Engine - Recovery Mode Entry & Exit
+  ---
+  duration_ms: 0.231
+  type: 'test'
+  ...
+# Subtest: AI Intrusion Guards - Single Intrusion Active & Production Blocked
+ok 9 - AI Intrusion Guards - Single Intrusion Active & Production Blocked
+  ---
+  duration_ms: 1.0903
+  type: 'test'
+  ...
+# Subtest: AI Intrusion Guards - Single Ending Execution Lock
+ok 10 - AI Intrusion Guards - Single Ending Execution Lock
+  ---
+  duration_ms: 0.1572
+  type: 'test'
+  ...
+# Subtest: Puzzle Content Registry - Fair SRE Diagnostics for WiFi
+ok 11 - Puzzle Content Registry - Fair SRE Diagnostics for WiFi
+  ---
+  duration_ms: 1.2987
+  type: 'test'
+  ...
+# Subtest: Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH
+ok 12 - Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH
+  ---
+  duration_ms: 0.2335
+  type: 'test'
+  ...
+# Subtest: Remediation P0 - Defer ending on simultaneous intrusion at 200 units
+ok 13 - Remediation P0 - Defer ending on simultaneous intrusion at 200 units
+  ---
+  duration_ms: 1.0562
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion)
+ok 14 - Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion)
+  ---
+  duration_ms: 0.1488
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Reject negative tuna amounts
+ok 15 - Remediation P1 - Reject negative tuna amounts
+  ---
+  duration_ms: 0.6947
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Reject forged upgrade payloads
+ok 16 - Remediation P1 - Reject forged upgrade payloads
+  ---
+  duration_ms: 0.2108
+  type: 'test'
+  ...
+# Subtest: Remediation P1 - Threat Meter clamped at max 99
+ok 17 - Remediation P1 - Threat Meter clamped at max 99
+  ---
+  duration_ms: 0.1321
+  type: 'test'
+  ...
+# Subtest: CEO reject charges exactly 500 stars and clears only CEO intrusion
+ok 18 - CEO reject charges exactly 500 stars and clears only CEO intrusion
+  ---
+  duration_ms: 0.1261
+  type: 'test'
+  ...
+# Subtest: generic resolution never applies a hidden star penalty
+ok 19 - generic resolution never applies a hidden star penalty
+  ---
+  duration_ms: 0.226
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 127.0062

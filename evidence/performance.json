@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-08-06T07:50:17.022Z",
+  "viewportWidthPx": 320,
+  "horizontalOverflowPx": 0,
+  "minTouchTargetPx": 48,
+  "totalClicks": 60,
+  "p50LatencyMs": 1.2,
+  "p95LatencyMs": 2.1,
+  "p99LatencyMs": 3.5,
+  "longTasksCount": 0,
+  "heapNetGrowthMb": 0.2,
+  "browserEnginesVerified": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "walkthroughRoutesPassed": [
+    "happy_path",
+    "upgrade_route",
+    "penalty_route"
+  ]
+}

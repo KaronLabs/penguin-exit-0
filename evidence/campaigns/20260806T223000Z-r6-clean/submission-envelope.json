@@ -1,0 +1,10 @@
+{
+  "runId": "20260806T223000Z-r6-clean",
+  "timestampUtc": "2026-08-06T13:25:07.232Z",
+  "status": "READY_TO_FREEZE",
+  "target": "penguin_exit_game_v2_commercial",
+  "baselineZipHash": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "manifestHash": "F5A75BDFFCCB305961029C9875DFC781B57C8F9E2358A9A430F823F47DBFEF71",
+  "specPath": "review/spec_20260806_223000_mission02_r6_clean_acquittal.md",
+  "reviewerAccessAssumption": "Reviewer has full filesystem access to c:\\07_LastMoveProject workspace"
+}
