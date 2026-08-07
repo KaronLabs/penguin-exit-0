@@ -39,12 +39,13 @@ async function reachRecoverAndEnding(page, beforeRecovery = null) {
             continue;
         }
         if ([0, 40, 80, 120, 160, 200].includes(state.units)) stages.set(state.units, await page.locator('#stage-badge').innerText());
+        let recoveryHandled = false;
         if (state.units === 200 && state.stars < 3000) {
             recoverName = await produce.getAttribute('aria-label');
-            if (beforeRecovery) await beforeRecovery();
+            if (beforeRecovery) recoveryHandled = await beforeRecovery();
         }
         const aiQuotesBefore = await page.locator('#terminal-output [data-dialogue-context="ai"]').count();
-        await produce.click();
+        if (!recoveryHandled) await produce.click();
         if (await banner.isVisible()) {
             intrusions.push({
                 title: await page.locator('#intrusion-title').innerText(),
@@ -247,15 +248,22 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const observed = await reachRecoverAndEnding(page, async () => {
         await page.emulateMedia({ reducedMotion: 'no-preference' });
-        await page.locator('.puzzle-option').nth(2).click();
-        await page.emulateMedia({ reducedMotion: 'reduce' });
+        return page.evaluate(() => {
+            document.querySelector('.puzzle-option:nth-child(3)').click();
+            document.querySelector('#btn-produce').click();
+            return true;
+        });
     });
     const endingText = await page.locator('#ending-overlay').innerText();
     const terminalAtEnding = await page.locator('#terminal-output').textContent();
-    expect(terminalAtEnding).toContain('archon@stone-igloo:~$ systemctl restart nginx');
-    expect(terminalAtEnding).not.toContain('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    const terminalChildCountAtEnding = await page.locator('#terminal-output > *').count();
+    const terminalLastLineAtEnding = await page.locator('#terminal-output > :last-child').textContent();
+    expect(terminalLastLineAtEnding).toBe('archon@stone-igloo:~$ systemctl restart nginx');
+    expect(terminalChildCountAtEnding).toBeGreaterThan(0);
     await page.clock.runFor(1200);
     expect.soft(await page.locator('#terminal-output').textContent()).toBe(terminalAtEnding);
+    expect.soft(await page.locator('#terminal-output > *').count()).toBe(terminalChildCountAtEnding);
+    expect.soft(await page.locator('#terminal-output > :last-child').textContent()).toBe(terminalLastLineAtEnding);
     await expect.soft(page.locator('#btn-play-again')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect.soft(page.locator('#btn-play-again')).toBeFocused();
