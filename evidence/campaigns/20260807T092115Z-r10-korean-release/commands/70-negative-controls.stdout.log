@@ -1,0 +1,25 @@
+--- STARTING ENHANCED FAIL-CLOSED NEGATIVE CONTROLS SUITE R7 (21 SCENARIOS) ---
+[PASS] 'nc-01-no-duration' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-02-short-duration' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-03-zero-samples' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-04-few-samples' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-05-no-observer' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-06-has-longtasks' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-07-high-heap' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-08-high-p95' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-09-high-p99' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-10-missing-summary' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-11-missing-samples' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-12-manifest-file-tampered' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-13-preflight-hash-tampered' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-14-empty-raw-deltas' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-15-manifest-count-mismatch' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-16-perf-fast-env' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-17-summary-raw-start-mismatch' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-18-samplecount-vs-raw-mismatch' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-19-p95-summary-vs-raw-mismatch' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-20-p99-summary-vs-raw-mismatch' correctly REJECTED with NO_GO/exit 1.
+[PASS] 'nc-21-extra-file-not-in-manifest' correctly REJECTED with NO_GO/exit 1.
+
+NEGATIVE CONTROLS SUITE R7: 21 / 21 PASSED.
+[SUCCESS] Verifier is 100% Fail-Closed verified across all 21 negative control scenarios.

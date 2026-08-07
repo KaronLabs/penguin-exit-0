@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 4,
+  "runId": "20260807T092115Z-r10-korean-release",
+  "v1Sha256": "96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B",
+  "candidateInventory": {
+    "fileCount": 42,
+    "pathListSha256": "4739612399504704AB5C5D2E4A73B766B567A45C85D9ADE0E4C9F1DD5C1D0E7D",
+    "contentRecordsSha256": "F395789DB5D9DA54CBA7E8210B7BC9622ABE3E2EF76E19D46A328DA5772230F2"
+  },
+  "gameCoreSha256": "B3FAD87BD4EEE3C608E4E2944A3572DF272646534D95ADED3A1463EBE6D708A2",
+  "sourceGit": {
+    "branch": "main",
+    "headSha": "0c25f0028b5f29987ca36df1299fd14bf39030c1"
+  },
+  "unit": {
+    "tests": 29,
+    "passed": 29,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "browser": {
+    "chromium": {
+      "passed": 13,
+      "failed": 0
+    },
+    "firefox": {
+      "passed": 13,
+      "failed": 0
+    },
+    "webkit": {
+      "passed": 13,
+      "failed": 0
+    },
+    "integrity": true,
+    "reportedFailures": 0,
+    "exitCode": 0
+  },
+  "performance": {
+    "startedUtc": "2026-08-07T09:24:05.872Z",
+    "endedUtc": "2026-08-07T09:34:05.917Z",
+    "measuredDurationMs": 600045,
+    "environment": {
+      "nodeVersion": "v22.21.1",
+      "platform": "win32",
+      "arch": "x64",
+      "project": "chromium-perf"
+    },
+    "sampleCount": 35986,
+    "rawMinMs": 16.5,
+    "rawMaxMs": 33.40000000002328,
+    "p50LatencyMs": 16.699999999982538,
+    "p95LatencyMs": 16.70000000006985,
+    "p99LatencyMs": 16.800000000017462,
+    "longTaskObserverSupported": true,
+    "longTasksCount": 0,
+    "heapStartMb": 0.6515312194824219,
+    "heapEndMb": 2.100433349609375,
+    "heapNetGrowthMb": 1.4489021301269531,
+    "totalActionsCount": 6972
+  },
+  "negativeControls": {
+    "passed": 21,
+    "total": 21,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "campaignVerifier": {
+    "tests": 6,
+    "passed": 6,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "r9Frozen": {
+    "fileCount": 81,
+    "pathListSha256": "07A6C0FD2EE7403199C5EF58E59E1A110520E37A1B4C24508D0F631A4B2786C3",
+    "beforeDigest": "E877AF431891336E13672E7A929BFA278D1727CE3FC980B51DDBE1082BEAFE5B",
+    "afterDigest": "E877AF431891336E13672E7A929BFA278D1727CE3FC980B51DDBE1082BEAFE5B"
+  },
+  "r10Frozen": {
+    "fileCount": 104,
+    "pathListSha256": "D15195E46AC83C072C5CE14EFA750A5650AD0033CD51CC7ACF2397D03202CC41",
+    "beforeDigest": "E5E3B79C390E27D0E05EE94C5CC614F860218AE8941355DCF8B27D580A065967",
+    "afterDigest": "E5E3B79C390E27D0E05EE94C5CC614F860218AE8941355DCF8B27D580A065967"
+  },
+  "actualBrowserZoom": {
+    "claimed": false,
+    "equivalentReflow": "3-engine 640x360 equivalent PASS",
+    "limitation": "actual browser chrome zoom not claimed"
+  }
+}
