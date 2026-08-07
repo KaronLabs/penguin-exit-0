@@ -22,7 +22,7 @@ async function metrics(page) {
     }));
 }
 
-async function reachRecoverAndEnding(page) {
+async function reachRecoverAndEnding(page, beforeRecovery = null) {
     const produce = page.locator('#btn-produce');
     const banner = page.locator('#intrusion-banner');
     const ending = page.locator('#ending-overlay');
@@ -39,7 +39,10 @@ async function reachRecoverAndEnding(page) {
             continue;
         }
         if ([0, 40, 80, 120, 160, 200].includes(state.units)) stages.set(state.units, await page.locator('#stage-badge').innerText());
-        if (state.units === 200 && state.stars < 3000) recoverName = await produce.getAttribute('aria-label');
+        if (state.units === 200 && state.stars < 3000) {
+            recoverName = await produce.getAttribute('aria-label');
+            if (beforeRecovery) await beforeRecovery();
+        }
         const aiQuotesBefore = await page.locator('#terminal-output [data-dialogue-context="ai"]').count();
         await produce.click();
         if (await banner.isVisible()) {
@@ -241,11 +244,16 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     await page.evaluate(() => window.__resetGameForTest());
     await page.clock.install({ time: new Date('2026-08-07T00:00:00Z') });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.locator('.puzzle-option').nth(2).click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    const observed = await reachRecoverAndEnding(page);
+    const observed = await reachRecoverAndEnding(page, async () => {
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        await page.locator('.puzzle-option').nth(2).click();
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+    });
     const endingText = await page.locator('#ending-overlay').innerText();
     const terminalAtEnding = await page.locator('#terminal-output').textContent();
+    expect(terminalAtEnding).toContain('archon@stone-igloo:~$ systemctl restart nginx');
+    expect(terminalAtEnding).not.toContain('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await page.clock.runFor(1200);
     expect.soft(await page.locator('#terminal-output').textContent()).toBe(terminalAtEnding);
     await expect.soft(page.locator('#btn-play-again')).toBeFocused();
