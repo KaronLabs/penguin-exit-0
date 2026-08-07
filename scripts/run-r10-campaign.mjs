@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { browserCountsAreComplete, parsePassingBrowserCounts } from './campaign-evidence.mjs';
 import {
     FROZEN_GAME_CORE_SHA256,
+    assertCanonicalCampaignSource,
+    assertFrozenSnapshotUnchanged,
     assertR10RunId,
     buildR10PhasePlan,
     claimRun,
@@ -15,6 +17,7 @@ import {
     publishDirectoryAtomically,
     runRecordedCommand,
     sha256File,
+    snapshotR10Frozen,
     tapCounts,
     validatePerformanceEvidence,
     writeJsonExclusive,
@@ -57,6 +60,17 @@ export function snapshotR9Frozen(project, workspace) {
     };
 }
 
+export { assertFrozenSnapshotUnchanged, snapshotR10Frozen };
+
+export function beginOfficialCampaign({ project, workspace, operationsRoot, campaignsRoot, runId }) {
+    assertR10RunId(runId);
+    const sourceBinding = assertCanonicalCampaignSource(project);
+    const r10FrozenBefore = snapshotR10Frozen(project, workspace, runId);
+    if (r10FrozenBefore.fileCount === 0) throw new Error('R10_FROZEN_EVIDENCE_MISSING');
+    const ownership = claimRun({ operationsRoot, campaignsRoot, runId });
+    return { ownership, sourceBinding, r10FrozenBefore };
+}
+
 function read(file) {
     return fs.readFileSync(file, 'utf8');
 }
@@ -80,11 +94,14 @@ export function publishVerifiedOutputs({
     commitMarker,
     commitValue,
     verification,
+    publicationGuard,
 }) {
     if (verification?.status !== 'VERIFIED') throw new Error('OFFICIAL_PUBLISH_REQUIRES_VERIFIED_GATE');
     if ([finalCampaign, finalSpec, finalReceipt, commitMarker].some((target) => fs.existsSync(target))) {
         throw new Error('OFFICIAL_PUBLISH_TARGET_EXISTS');
     }
+    if (typeof publicationGuard !== 'function') throw new Error('OFFICIAL_PUBLISH_REQUIRES_LIVE_FROZEN_GUARD');
+    publicationGuard();
     publishDirectoryAtomically(stagedCampaign, finalCampaign);
     copyExclusive(stagedSpec, finalSpec);
     copyExclusive(stagedReceipt, finalReceipt);
@@ -122,7 +139,9 @@ function buildSpec({ runId, candidate, claims, campaignTarget, createdUtc }) {
         + `- NUL-delimited path digest: ${candidate.pathListSha256}\n`
         + `- path-size-content digest: ${candidate.contentRecordsSha256}\n`
         + `- game-core.js SHA-256: ${claims.gameCoreSha256}\n`
+        + `- canonical Git main HEAD: ${claims.sourceGit.headSha}\n`
         + `- R9 frozen snapshot: ${claims.r9Frozen.fileCount} files, ${claims.r9Frozen.beforeDigest}\n\n`
+        + `- pre-existing R10 frozen snapshot: ${claims.r10Frozen.fileCount} files, ${claims.r10Frozen.beforeDigest}\n\n`
         + `## Executed evidence\n\n`
         + `- Node TAP: ${claims.unit.passed}/${claims.unit.tests}, failed ${claims.unit.failed}, exit ${claims.unit.exitCode}\n`
         + `- Playwright: Chromium ${claims.browser.chromium.passed}/13, Firefox ${claims.browser.firefox.passed}/13, WebKit ${claims.browser.webkit.passed}/13; total 39/39\n`
@@ -193,10 +212,18 @@ export function persistNoGo({ operationDir, runId, reason, commands, cleanRoot }
 }
 
 export function runR10Campaign(runId) {
-    assertR10RunId(runId);
     const campaignsRoot = path.join(projectRoot, 'evidence', 'campaigns');
     const operationsRoot = path.join(projectRoot, '.campaign-operations');
-    const ownership = claimRun({ operationsRoot, campaignsRoot, runId });
+    const entry = beginOfficialCampaign({
+        project: projectRoot,
+        workspace: workspaceRoot,
+        operationsRoot,
+        campaignsRoot,
+        runId,
+    });
+    const ownership = entry.ownership;
+    const sourceBinding = entry.sourceBinding;
+    const r10Before = entry.r10FrozenBefore;
     const cleanRoot = process.platform === 'win32'
         ? path.join(path.parse(projectRoot).root, 'tmp', `penguin-r10-${runId}`)
         : path.join('/tmp', `penguin-r10-${runId}`);
@@ -227,6 +254,7 @@ export function runR10Campaign(runId) {
         fs.mkdirSync(cleanRoot, { recursive: false });
         writeJsonExclusive(path.join(cleanOperationDir, 'candidate-inventory.json'), candidate);
         writeJsonExclusive(path.join(cleanOperationDir, 'r9-before.json'), r9Before);
+        writeJsonExclusive(path.join(cleanOperationDir, 'r10-before.json'), r10Before);
         copyInventory(projectRoot, cleanSource, candidate.files);
         const copiedInventory = collectInventory(cleanSource);
         if (!inventoriesEqual(candidate, copiedInventory)) throw new Error('CLEAN_COPY_INVENTORY_MISMATCH');
@@ -270,6 +298,8 @@ export function runR10Campaign(runId) {
 
         const r9After = snapshotR9Frozen(projectRoot, workspaceRoot);
         if (JSON.stringify(r9After) !== JSON.stringify(r9Before)) throw new Error('R9_FROZEN_EVIDENCE_CHANGED');
+        const r10After = snapshotR10Frozen(projectRoot, workspaceRoot, runId);
+        assertFrozenSnapshotUnchanged(r10Before, r10After, 'R10');
 
         fs.mkdirSync(path.join(stagedCampaign, 'commands'), { recursive: true });
         const stagedSourceSnapshot = path.join(stagedCampaign, 'source-snapshot');
@@ -278,6 +308,8 @@ export function runR10Campaign(runId) {
         copyExclusive(path.join(cleanOperationDir, 'candidate-inventory.json'), path.join(stagedCampaign, 'candidate-inventory.json'));
         fs.writeFileSync(path.join(stagedCampaign, 'r9-before.json'), `${JSON.stringify(r9Before, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
         fs.writeFileSync(path.join(stagedCampaign, 'r9-after.json'), `${JSON.stringify(r9After, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+        fs.writeFileSync(path.join(stagedCampaign, 'r10-before.json'), `${JSON.stringify(r10Before, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+        fs.writeFileSync(path.join(stagedCampaign, 'r10-after.json'), `${JSON.stringify(r10After, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
         copyExclusive(summaryPath, path.join(stagedCampaign, 'performance-summary.json'));
         copyExclusive(samplesPath, path.join(stagedCampaign, 'frame-samples.json'));
         const campaignCommands = commands.map(commandWithArtifactPaths);
@@ -287,7 +319,7 @@ export function runR10Campaign(runId) {
         }
 
         const claims = {
-            schemaVersion: 3,
+            schemaVersion: 4,
             runId,
             v1Sha256: V1_SHA256,
             candidateInventory: {
@@ -296,6 +328,7 @@ export function runR10Campaign(runId) {
                 contentRecordsSha256: candidate.contentRecordsSha256,
             },
             gameCoreSha256,
+            sourceGit: { branch: sourceBinding.branch, headSha: sourceBinding.headSha },
             unit: { ...unit, exitCode: unitCommand.exitCode },
             browser: { ...browser, exitCode: browserCommand.exitCode },
             performance: performanceSummary,
@@ -306,6 +339,12 @@ export function runR10Campaign(runId) {
                 pathListSha256: r9Before.pathListSha256,
                 beforeDigest: r9Before.digest,
                 afterDigest: r9After.digest,
+            },
+            r10Frozen: {
+                fileCount: r10Before.fileCount,
+                pathListSha256: r10Before.pathListSha256,
+                beforeDigest: r10Before.digest,
+                afterDigest: r10After.digest,
             },
             actualBrowserZoom: {
                 claimed: false,
@@ -320,17 +359,17 @@ export function runR10Campaign(runId) {
             copy: new Date(Date.parse(createdUtc) + 2).toISOString(),
         };
         const ledger = [
-            { schemaVersion: 3, runId, state: 'CREATED', timestampUtc: createdUtc, command: null },
-            { schemaVersion: 3, runId, state: 'SOURCE_INVENTORY_PASS', timestampUtc: internalTimes.inventory, command: null },
-            { schemaVersion: 3, runId, state: 'CLEAN_COPY_PASS', timestampUtc: internalTimes.copy, command: null },
+            { schemaVersion: 4, runId, state: 'CREATED', timestampUtc: createdUtc, command: null },
+            { schemaVersion: 4, runId, state: 'SOURCE_INVENTORY_PASS', timestampUtc: internalTimes.inventory, command: null },
+            { schemaVersion: 4, runId, state: 'CLEAN_COPY_PASS', timestampUtc: internalTimes.copy, command: null },
             ...phasePlan.map((phase) => ({
-                schemaVersion: 3,
+                schemaVersion: 4,
                 runId,
                 state: phase.state,
                 timestampUtc: campaignCommands.find((command) => command.key === phase.key).endedUtc,
                 command: campaignCommands.find((command) => command.key === phase.key),
             })),
-            { schemaVersion: 3, runId, state: 'PACKAGE_READY_FOR_GATE', timestampUtc: new Date().toISOString(), command: null },
+            { schemaVersion: 4, runId, state: 'PACKAGE_READY_FOR_GATE', timestampUtc: new Date().toISOString(), command: null },
         ];
         fs.writeFileSync(path.join(stagedCampaign, 'ledger.jsonl'), `${ledger.map(JSON.stringify).join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
 
@@ -339,11 +378,14 @@ export function runR10Campaign(runId) {
         const artifactManifest = collectArtifactManifest(stagedCampaign);
         fs.writeFileSync(path.join(stagedCampaign, 'artifact-manifest.json'), `${JSON.stringify(artifactManifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
         const payloadHashes = Object.fromEntries(
-            ['artifact-manifest.json', 'candidate-inventory.json', 'claims.json', 'ledger.jsonl', 'r9-before.json', 'r9-after.json']
+            [
+                'artifact-manifest.json', 'candidate-inventory.json', 'claims.json', 'ledger.jsonl',
+                'r9-before.json', 'r9-after.json', 'r10-before.json', 'r10-after.json',
+            ]
                 .map((name) => [name, sha256File(path.join(stagedCampaign, name))]),
         );
         const envelope = {
-            schemaVersion: 3,
+            schemaVersion: 4,
             runId,
             payloadHashes,
             source: {
@@ -351,6 +393,8 @@ export function runR10Campaign(runId) {
                 fileCount: candidate.fileCount,
                 pathListSha256: candidate.pathListSha256,
                 contentRecordsSha256: candidate.contentRecordsSha256,
+                gitBranch: sourceBinding.branch,
+                gitHeadSha: sourceBinding.headSha,
             },
             spec: { fileName: path.basename(finalSpec), sizeBytes: fs.statSync(stagedSpec).size, sha256: sha256File(stagedSpec) },
             rawEvidence: {
@@ -364,6 +408,7 @@ export function runR10Campaign(runId) {
         const verifyArgs = (campaignPath, specPath, sourcePath, executionPath) => [
             process.execPath, verifierScript, '--campaign', campaignPath, '--spec', specPath, '--source', sourcePath,
             '--execution-source', executionPath, '--run', runId,
+            '--authority-project', projectRoot, '--authority-workspace', workspaceRoot,
         ];
         const stagedVerify = runRecordedCommand({
             key: '80-r10-staged-gate', argv: verifyArgs(stagedCampaign, stagedSpec, stagedSourceSnapshot, cleanSource), cwd: cleanSource, logsDir: cleanLogs, timeoutMs: 120000,
@@ -377,6 +422,8 @@ export function runR10Campaign(runId) {
         copyExclusive(path.join(cleanOperationDir, 'candidate-inventory.json'), path.join(ownership.operationDir, 'candidate-inventory.json'));
         copyExclusive(path.join(cleanOperationDir, 'r9-before.json'), path.join(ownership.operationDir, 'r9-before.json'));
         fs.writeFileSync(path.join(ownership.operationDir, 'r9-after.json'), `${JSON.stringify(r9After, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+        copyExclusive(path.join(cleanOperationDir, 'r10-before.json'), path.join(ownership.operationDir, 'r10-before.json'));
+        fs.writeFileSync(path.join(ownership.operationDir, 'r10-after.json'), `${JSON.stringify(r10After, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
         const archivedCommands = archiveCommandEvidence(ownership.operationDir, commands);
         const receipt = {
             schemaVersion: 1,
@@ -394,7 +441,9 @@ export function runR10Campaign(runId) {
             spec: { path: finalSpec, sizeBytes: fs.statSync(stagedSpec).size, sha256: sha256File(stagedSpec) },
             candidateInventory: claims.candidateInventory,
             gameCoreSha256,
+            sourceGit: claims.sourceGit,
             r9Frozen: claims.r9Frozen,
+            r10Frozen: claims.r10Frozen,
             commands: archivedCommands,
             limitation: claims.actualBrowserZoom,
             publicationState: 'COMMITTED only when operation SUCCESS.json exists and binds this receipt',
@@ -422,6 +471,12 @@ export function runR10Campaign(runId) {
             commitMarker,
             commitValue,
             verification: stagedVerification,
+            publicationGuard: () => {
+                const liveSource = assertCanonicalCampaignSource(projectRoot);
+                if (liveSource.headSha !== sourceBinding.headSha) throw new Error('CANONICAL_HEAD_CHANGED_AT_PUBLICATION');
+                assertFrozenSnapshotUnchanged(r9Before, snapshotR9Frozen(projectRoot, workspaceRoot), 'R9');
+                assertFrozenSnapshotUnchanged(r10Before, snapshotR10Frozen(projectRoot, workspaceRoot, runId), 'R10');
+            },
         });
         committed = true;
         console.log(`R10_CAMPAIGN_STATUS=VERIFIED run=${runId}`);

@@ -4,6 +4,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import * as campaignLib from '../../scripts/r10-campaign-lib.mjs';
+import * as campaignRunner from '../../scripts/run-r10-campaign.mjs';
 import {
     assertR10RunId,
     claimRun,
@@ -43,6 +46,12 @@ test('R10 run id is exact and duplicate ownership is refused from either origina
     const runId = '20260807T123456Z-r10-korean-release';
     assert.equal(assertR10RunId(runId), runId);
     assert.throws(() => assertR10RunId('20260807T123456Z-r10-korean-release-again'));
+    for (const invalid of [
+        '20260230T123456Z-r10-korean-release',
+        '20261301T123456Z-r10-korean-release',
+        '20260807T240000Z-r10-korean-release',
+        '20260807T126060Z-r10-korean-release',
+    ]) assert.throws(() => assertR10RunId(invalid), /INVALID_RUN_ID/);
 
     const claim = claimRun({ operationsRoot: operations, campaignsRoot: campaigns, runId });
     assert.ok(fs.existsSync(claim.operationDir));
@@ -52,6 +61,95 @@ test('R10 run id is exact and duplicate ownership is refused from either origina
     const second = '20260807T123457Z-r10-korean-release';
     fs.mkdirSync(path.join(campaigns, second), { recursive: true });
     assert.throws(() => claimRun({ operationsRoot: operations, campaignsRoot: campaigns, runId: second }), /DUPLICATE_RUN_REFUSED/);
+});
+
+function git(cwd, ...args) {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
+    assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
+    return result.stdout.trim();
+}
+
+function canonicalGitFixture(t) {
+    const base = tempRoot(t);
+    const repo = path.join(base, 'repo');
+    fs.mkdirSync(repo);
+    git(repo, 'init', '-b', 'main');
+    git(repo, 'config', 'user.name', 'R10 Harness');
+    git(repo, 'config', 'user.email', 'r10@example.invalid');
+    fs.writeFileSync(path.join(repo, 'tracked.txt'), 'sealed\n');
+    git(repo, 'add', 'tracked.txt');
+    git(repo, 'commit', '-m', 'fixture');
+    return { base, repo };
+}
+
+test('official campaign entry accepts only the clean canonical main checkout', (t) => {
+    const { repo } = canonicalGitFixture(t);
+    const binding = campaignLib.assertCanonicalCampaignSource(repo);
+    assert.equal(binding.branch, 'main');
+    assert.match(binding.headSha, /^[a-f0-9]{40}$/);
+
+    fs.writeFileSync(path.join(repo, 'untracked.txt'), 'no');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /dirty|untracked/i);
+    fs.rmSync(path.join(repo, 'untracked.txt'));
+
+    fs.appendFileSync(path.join(repo, 'tracked.txt'), 'changed\n');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /dirty|untracked/i);
+    git(repo, 'restore', 'tracked.txt');
+
+    git(repo, 'checkout', '-b', 'feature');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /main/i);
+    git(repo, 'checkout', 'main');
+
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'secret.js\n');
+    git(repo, 'add', '.gitignore');
+    git(repo, 'commit', '-m', 'ignore fixture secret');
+    fs.writeFileSync(path.join(repo, 'secret.js'), 'ignored but candidate-visible');
+    assert.equal(git(repo, 'status', '--porcelain=v1', '--untracked-files=all'), '');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /tracked|candidate/i);
+    fs.rmSync(path.join(repo, 'secret.js'));
+
+    git(repo, 'update-index', '--skip-worktree', 'tracked.txt');
+    fs.appendFileSync(path.join(repo, 'tracked.txt'), 'hidden working-tree mutation\n');
+    assert.equal(git(repo, 'status', '--porcelain=v1', '--untracked-files=all'), '');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /blob|bytes|size|HEAD/i);
+    fs.rmSync(path.join(repo, 'tracked.txt'));
+    assert.equal(git(repo, 'status', '--porcelain=v1', '--untracked-files=all'), '');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(repo), /inventory|missing|HEAD/i);
+});
+
+test('linked worktrees and rejected sources create no official campaign ownership', (t) => {
+    const { base, repo } = canonicalGitFixture(t);
+    const linked = path.join(base, 'linked');
+    git(repo, 'worktree', 'add', '--detach', linked, 'HEAD');
+    assert.throws(() => campaignLib.assertCanonicalCampaignSource(linked), /worktree|canonical/i);
+
+    fs.writeFileSync(path.join(repo, 'untracked.txt'), 'no');
+    const operationsRoot = path.join(repo, '.campaign-operations');
+    const campaignsRoot = path.join(repo, 'evidence', 'campaigns');
+    assert.throws(() => campaignRunner.beginOfficialCampaign({
+        project: repo,
+        workspace: base,
+        operationsRoot,
+        campaignsRoot,
+        runId: '20260807T123456Z-r10-korean-release',
+    }), /dirty|untracked/i);
+    assert.equal(fs.existsSync(operationsRoot), false);
+    assert.equal(fs.existsSync(campaignsRoot), false);
+});
+
+test('official entry refuses a missing prior R10 evidence set before ownership', (t) => {
+    const { base, repo } = canonicalGitFixture(t);
+    const operationsRoot = path.join(repo, '.campaign-operations');
+    const campaignsRoot = path.join(repo, 'evidence', 'campaigns');
+    assert.throws(() => campaignRunner.beginOfficialCampaign({
+        project: repo,
+        workspace: base,
+        operationsRoot,
+        campaignsRoot,
+        runId: '20260807T123456Z-r10-korean-release',
+    }), /R10.*missing/i);
+    assert.equal(fs.existsSync(operationsRoot), false);
+    assert.equal(fs.existsSync(campaignsRoot), false);
 });
 
 test('candidate inventory is ordered, excludes mutable evidence, and hashes NUL-delimited UTF-8 paths', (t) => {
@@ -233,6 +331,14 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
     fs.mkdirSync(path.join(campaign, 'commands'), { recursive: true });
     fs.writeFileSync(path.join(source, 'game-core.js'), 'fixture-core');
     fs.writeFileSync(path.join(source, 'index.html'), '<main>펭귄</main>');
+    const priorR10 = path.join(source, 'evidence', 'campaigns', '20260807T000000Z-r10-korean-release', 'claims.json');
+    fs.mkdirSync(path.dirname(priorR10), { recursive: true });
+    fs.writeFileSync(priorR10, '{}');
+    git(source, 'init', '-b', 'main');
+    git(source, 'config', 'user.name', 'R10 Harness');
+    git(source, 'config', 'user.email', 'r10@example.invalid');
+    git(source, 'add', '.');
+    git(source, 'commit', '-m', 'authority fixture');
     const candidate = collectInventory(source);
     fs.writeFileSync(path.join(campaign, 'candidate-inventory.json'), JSON.stringify(candidate, null, 2));
 
@@ -288,7 +394,7 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
         'NEGATIVE_CONTROLS_PASS', 'CAMPAIGN_VERIFIER_TESTS_PASS', 'PACKAGE_READY_FOR_GATE',
     ];
     const ledger = states.map((state, index) => ({
-        schemaVersion: 3, runId, state,
+        schemaVersion: 4, runId, state,
         timestampUtc: index < 3
             ? new Date(Date.parse('2026-08-07T00:00:00.000Z') + index * 1000).toISOString()
             : index <= 11 ? commands[index - 3].endedUtc : new Date(cursor + (index - 12) * 1000).toISOString(),
@@ -304,27 +410,39 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
     };
     fs.writeFileSync(path.join(campaign, 'r9-before.json'), JSON.stringify(r9Snapshot, null, 2));
     fs.writeFileSync(path.join(campaign, 'r9-after.json'), JSON.stringify(r9Snapshot, null, 2));
+    const r10Snapshot = campaignRunner.snapshotR10Frozen(source, base, runId);
+    fs.writeFileSync(path.join(campaign, 'r10-before.json'), JSON.stringify(r10Snapshot, null, 2));
+    fs.writeFileSync(path.join(campaign, 'r10-after.json'), JSON.stringify(r10Snapshot, null, 2));
     const claims = {
-        schemaVersion: 3, runId,
+        schemaVersion: 4, runId,
         candidateInventory: { fileCount: candidate.fileCount, pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256 },
         gameCoreSha256: sha256File(path.join(source, 'game-core.js')),
+        sourceGit: { branch: 'main', headSha: git(source, 'rev-parse', 'HEAD') },
         unit: { tests: 29, passed: 29, failed: 0, exitCode: 0 },
         browser: { chromium: { passed: 13, failed: 0 }, firefox: { passed: 13, failed: 0 }, webkit: { passed: 13, failed: 0 }, integrity: true, reportedFailures: 0, exitCode: 0 },
         performance: summary,
         negativeControls: { passed: 21, total: 21, failed: 0, exitCode: 0 },
         campaignVerifier: { tests: 6, passed: 6, failed: 0, exitCode: 0 },
         r9Frozen: { fileCount: 1, pathListSha256: r9Snapshot.pathListSha256, beforeDigest: r9Snapshot.digest, afterDigest: r9Snapshot.digest },
+        r10Frozen: { fileCount: 1, pathListSha256: r10Snapshot.pathListSha256, beforeDigest: r10Snapshot.digest, afterDigest: r10Snapshot.digest },
         actualBrowserZoom: { claimed: false, equivalentReflow: '3-engine 640x360 equivalent PASS', limitation: 'actual browser chrome zoom not claimed' },
     };
     fs.writeFileSync(path.join(campaign, 'claims.json'), JSON.stringify(claims, null, 2));
-    fs.writeFileSync(spec, `# R10\nrun=${runId}\npathDigest=${candidate.pathListSha256}\ncontentDigest=${candidate.contentRecordsSha256}\nactual browser chrome zoom not claimed\n`);
+    fs.writeFileSync(spec, `# R10\nrun=${runId}\npathDigest=${candidate.pathListSha256}\ncontentDigest=${candidate.contentRecordsSha256}\nhead=${claims.sourceGit.headSha}\nr10Digest=${r10Snapshot.digest}\nactual browser chrome zoom not claimed\n`);
     const manifest = collectArtifactManifest(campaign);
     fs.writeFileSync(path.join(campaign, 'artifact-manifest.json'), JSON.stringify(manifest, null, 2));
-    const payloads = ['artifact-manifest.json', 'candidate-inventory.json', 'claims.json', 'ledger.jsonl', 'r9-before.json', 'r9-after.json'];
+    const payloads = [
+        'artifact-manifest.json', 'candidate-inventory.json', 'claims.json', 'ledger.jsonl',
+        'r9-before.json', 'r9-after.json', 'r10-before.json', 'r10-after.json',
+    ];
     const payloadHashes = Object.fromEntries(payloads.map((name) => [name, sha256File(path.join(campaign, name))]));
     fs.writeFileSync(path.join(campaign, 'submission-envelope.json'), JSON.stringify({
-        schemaVersion: 3, runId, payloadHashes,
-        source: { path: 'source-snapshot', fileCount: candidate.fileCount, pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256 },
+        schemaVersion: 4, runId, payloadHashes,
+        source: {
+            path: 'source-snapshot', fileCount: candidate.fileCount,
+            pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256,
+            gitBranch: 'main', gitHeadSha: claims.sourceGit.headSha,
+        },
         spec: { fileName: `spec_${runId}_mission02_r10_korean_release.md`, sizeBytes: fs.statSync(spec).size, sha256: sha256File(spec) },
         rawEvidence: {
             summary: { path: 'performance-summary.json', sha256: sha256File(path.join(campaign, 'performance-summary.json')) },
@@ -332,16 +450,45 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
         },
     }, null, 2));
 
-    const verified = verifyR10Package({ campaignDir: campaign, specPath: spec, sourceRoot: source, executionRoot: execution, expectedRunId: runId, expectedGameCoreSha256: claims.gameCoreSha256 });
+    const verificationArgs = {
+        campaignDir: campaign, specPath: spec, sourceRoot: source, executionRoot: execution,
+        expectedRunId: runId, expectedGameCoreSha256: claims.gameCoreSha256,
+        authorityProjectRoot: source, authorityWorkspaceRoot: base,
+    };
+    assert.throws(() => verifyR10Package({
+        campaignDir: campaign, specPath: spec, sourceRoot: source, executionRoot: execution,
+        expectedRunId: runId, expectedGameCoreSha256: claims.gameCoreSha256,
+    }), /authority/i);
+    const verified = verifyR10Package(verificationArgs);
     assert.equal(verified.status, 'VERIFIED');
+
+    const lateReviewReceipt = path.join(base, 'review', 'deployment_20260807_mission02_r10_late.md');
+    fs.mkdirSync(path.dirname(lateReviewReceipt), { recursive: true });
+    fs.writeFileSync(lateReviewReceipt, 'changed after package creation');
+    assert.throws(() => verifyR10Package(verificationArgs), /authority.*R10|R10.*authority/i);
+    fs.rmSync(lateReviewReceipt);
+
+    const r10AfterPath = path.join(campaign, 'r10-after.json');
+    fs.writeFileSync(r10AfterPath, JSON.stringify({ ...r10Snapshot, digest: sha256Bytes('forged') }, null, 2));
+    fs.writeFileSync(path.join(campaign, 'artifact-manifest.json'), JSON.stringify(collectArtifactManifest(campaign), null, 2));
+    let envelope = JSON.parse(fs.readFileSync(path.join(campaign, 'submission-envelope.json')));
+    for (const name of payloads) envelope.payloadHashes[name] = sha256File(path.join(campaign, name));
+    fs.writeFileSync(path.join(campaign, 'submission-envelope.json'), JSON.stringify(envelope, null, 2));
+    assert.throws(() => verifyR10Package(verificationArgs), /R10.*snapshot|R10.*digest|R10.*differ/i);
+
+    fs.writeFileSync(r10AfterPath, JSON.stringify(r10Snapshot, null, 2));
+    fs.writeFileSync(path.join(campaign, 'artifact-manifest.json'), JSON.stringify(collectArtifactManifest(campaign), null, 2));
+    envelope = JSON.parse(fs.readFileSync(path.join(campaign, 'submission-envelope.json')));
+    for (const name of payloads) envelope.payloadHashes[name] = sha256File(path.join(campaign, name));
+    fs.writeFileSync(path.join(campaign, 'submission-envelope.json'), JSON.stringify(envelope, null, 2));
     ledger[5].command.argv = [process.execPath, 'forged-success.mjs'];
     fs.writeFileSync(path.join(campaign, 'ledger.jsonl'), `${ledger.map(JSON.stringify).join('\n')}\n`);
     fs.writeFileSync(path.join(campaign, 'artifact-manifest.json'), JSON.stringify(collectArtifactManifest(campaign), null, 2));
     const envelopePath = path.join(campaign, 'submission-envelope.json');
-    const envelope = JSON.parse(fs.readFileSync(envelopePath));
+    envelope = JSON.parse(fs.readFileSync(envelopePath));
     for (const name of payloads) envelope.payloadHashes[name] = sha256File(path.join(campaign, name));
     fs.writeFileSync(envelopePath, JSON.stringify(envelope, null, 2));
-    assert.throws(() => verifyR10Package({ campaignDir: campaign, specPath: spec, sourceRoot: source, executionRoot: execution, expectedRunId: runId, expectedGameCoreSha256: claims.gameCoreSha256 }), /argv|command/i);
+    assert.throws(() => verifyR10Package(verificationArgs), /argv|command/i);
     assert.throws(() => verifyR10Package({ campaignDir: campaign, specPath: spec, sourceRoot: source, executionRoot: execution, expectedRunId: 'not-r10', expectedGameCoreSha256: claims.gameCoreSha256 }), /run.id/i);
 });
 
@@ -378,6 +525,133 @@ test('R9 frozen snapshot is an ordered content digest over R9 campaign, operatio
     assert.deepEqual(snapshotR9Frozen(project, workspace), first);
 });
 
+test('pre-existing R10 snapshot binds campaigns, operations, review specs and deployment receipts', (t) => {
+    const base = tempRoot(t);
+    const project = path.join(base, 'project');
+    const workspace = base;
+    const campaignFile = path.join(project, 'evidence', 'campaigns', '20260807T000000Z-r10-korean-release', 'claims.json');
+    const operationFile = path.join(project, '.campaign-operations', '20260807T000000Z-r10-korean-release', 'SUCCESS.json');
+    const specFile = path.join(workspace, 'review', 'spec_20260807T000000Z-r10-korean-release_mission02_r10_korean_release.md');
+    const receiptFile = path.join(workspace, 'review', 'deployment_20260807_mission02_r10_korean_release.md');
+    for (const file of [campaignFile, operationFile, specFile, receiptFile]) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, path.basename(file));
+    }
+    fs.writeFileSync(path.join(workspace, 'review', 'r11-unrelated.md'), 'ignored');
+
+    const first = campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release');
+    assert.equal(first.fileCount, 4);
+    assert.match(first.pathListSha256, /^[A-F0-9]{64}$/);
+    assert.match(first.digest, /^[A-F0-9]{64}$/);
+
+    const disguisedCurrentId = path.join(
+        path.dirname(campaignFile),
+        'injected-20260807T123456Z-r10-korean-release.txt',
+    );
+    fs.writeFileSync(disguisedCurrentId, 'added under a prior campaign');
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+    fs.rmSync(disguisedCurrentId);
+
+    const disguisedReviewSpec = path.join(
+        workspace,
+        'review',
+        'spec_20260807T123456Z-r10-korean-release_injected.md',
+    );
+    fs.writeFileSync(disguisedReviewSpec, 'not the exact current spec');
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+    fs.rmSync(disguisedReviewSpec);
+
+    const disguisedLegacyOperation = path.join(
+        project,
+        '.campaign-operations',
+        '20260807T123456Z-r10-korean-release.json',
+    );
+    fs.writeFileSync(disguisedLegacyOperation, 'not created by the current runner');
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+    fs.rmSync(disguisedLegacyOperation);
+
+    fs.appendFileSync(specFile, 'tampered');
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+    fs.writeFileSync(specFile, path.basename(specFile));
+
+    fs.rmSync(operationFile);
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+    fs.writeFileSync(operationFile, path.basename(operationFile));
+
+    const added = path.join(project, 'evidence', 'campaigns', '20260807T010000Z-r10-korean-release', 'claims.json');
+    fs.mkdirSync(path.dirname(added), { recursive: true });
+    fs.writeFileSync(added, 'added');
+    assert.throws(() => campaignRunner.assertFrozenSnapshotUnchanged(
+        first,
+        campaignRunner.snapshotR10Frozen(project, workspace, '20260807T123456Z-r10-korean-release'),
+        'R10',
+    ), /R10.*CHANGED/i);
+});
+
+test('official entry snapshots prior R10 before claiming the current run and excludes only that run', (t) => {
+    const { base, repo } = canonicalGitFixture(t);
+    const priorCampaign = path.join(repo, 'evidence', 'campaigns', '20260807T000000Z-r10-korean-release', 'claims.json');
+    fs.mkdirSync(path.dirname(priorCampaign), { recursive: true });
+    fs.writeFileSync(priorCampaign, '{}');
+    git(repo, 'add', '-f', 'evidence/campaigns/20260807T000000Z-r10-korean-release/claims.json');
+    git(repo, 'commit', '-m', 'prior evidence');
+    const runId = '20260807T123456Z-r10-korean-release';
+    const operationsRoot = path.join(repo, '.campaign-operations');
+    const campaignsRoot = path.join(repo, 'evidence', 'campaigns');
+    const entry = campaignRunner.beginOfficialCampaign({
+        project: repo,
+        workspace: base,
+        operationsRoot,
+        campaignsRoot,
+        runId,
+    });
+    assert.equal(entry.r10FrozenBefore.fileCount, 1);
+    assert.ok(fs.existsSync(path.join(operationsRoot, runId, 'start-receipt.json')));
+    assert.deepEqual(
+        campaignRunner.snapshotR10Frozen(repo, base, runId),
+        entry.r10FrozenBefore,
+    );
+});
+
+test('the sealed real schema v3 R10 package remains verifiable without live authority arguments', () => {
+    const project = path.resolve('.');
+    const canonicalProject = path.dirname(path.resolve(project, git(project, 'rev-parse', '--git-common-dir')));
+    const workspace = path.dirname(canonicalProject);
+    const runId = '20260807T002345Z-r10-korean-release';
+    const campaignDir = path.join(project, 'evidence', 'campaigns', runId);
+    const specPath = path.join(workspace, 'review', `spec_${runId}_mission02_r10_korean_release.md`);
+    const ledger = fs.readFileSync(path.join(campaignDir, 'ledger.jsonl'), 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+    const executionRoot = ledger.find((entry) => entry.command)?.command.cwd;
+    const result = verifyR10Package({
+        campaignDir,
+        specPath,
+        sourceRoot: path.join(campaignDir, 'source-snapshot'),
+        executionRoot,
+        expectedRunId: runId,
+    });
+    assert.equal(result.status, 'VERIFIED');
+});
+
 test('official spec and campaign cannot be published before the staged package is VERIFIED', (t) => {
     const base = tempRoot(t);
     const stagedCampaign = path.join(base, 'staged-campaign');
@@ -391,12 +665,29 @@ test('official spec and campaign cannot be published before the staged package i
     fs.writeFileSync(path.join(stagedCampaign, 'claims.json'), '{}');
     fs.writeFileSync(stagedSpec, '# spec');
     fs.writeFileSync(stagedReceipt, '{}');
-    const args = { stagedCampaign, stagedSpec, stagedReceipt, finalCampaign, finalSpec, finalReceipt, commitMarker, commitValue: { status: 'VERIFIED' } };
+    const args = {
+        stagedCampaign, stagedSpec, stagedReceipt, finalCampaign, finalSpec, finalReceipt, commitMarker,
+        commitValue: { status: 'VERIFIED' },
+    };
     assert.throws(() => publishVerifiedOutputs({ ...args, verification: { status: 'NO_GO' } }), /VERIFIED/);
     assert.equal(fs.existsSync(finalCampaign), false);
     assert.equal(fs.existsSync(finalSpec), false);
     assert.equal(fs.existsSync(commitMarker), false);
-    publishVerifiedOutputs({ ...args, verification: { status: 'VERIFIED' } });
+    assert.throws(() => publishVerifiedOutputs({
+        ...args,
+        verification: { status: 'VERIFIED' },
+        publicationGuard: () => { throw new Error('R10_FROZEN_EVIDENCE_CHANGED_AT_PUBLICATION'); },
+    }), /R10_FROZEN_EVIDENCE_CHANGED_AT_PUBLICATION/);
+    assert.equal(fs.existsSync(finalCampaign), false);
+    assert.equal(fs.existsSync(finalSpec), false);
+    assert.equal(fs.existsSync(commitMarker), false);
+    let guardCalled = false;
+    publishVerifiedOutputs({
+        ...args,
+        verification: { status: 'VERIFIED' },
+        publicationGuard: () => { guardCalled = true; },
+    });
+    assert.equal(guardCalled, true);
     assert.equal(fs.existsSync(path.join(finalCampaign, 'claims.json')), true);
     assert.equal(fs.readFileSync(finalSpec, 'utf8'), '# spec');
     assert.equal(fs.readFileSync(finalReceipt, 'utf8'), '{}');

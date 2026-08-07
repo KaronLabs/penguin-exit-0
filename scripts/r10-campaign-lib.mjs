@@ -27,10 +27,92 @@ export function sha256File(file) {
 }
 
 export function assertR10RunId(runId) {
-    if (!R10_RUN_ID_RE.test(runId ?? '')) {
+    const match = (runId ?? '').match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z-r10-korean-release$/);
+    if (!match) {
         throw new Error('INVALID_RUN_ID expected=YYYYMMDDTHHMMSSZ-r10-korean-release');
     }
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+    const parts = [yearText, monthText, dayText, hourText, minuteText, secondText].map(Number);
+    const [year, month, day, hour, minute, second] = parts;
+    const timestamp = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (timestamp.getUTCFullYear() !== year
+        || timestamp.getUTCMonth() !== month - 1
+        || timestamp.getUTCDate() !== day
+        || timestamp.getUTCHours() !== hour
+        || timestamp.getUTCMinutes() !== minute
+        || timestamp.getUTCSeconds() !== second) {
+        throw new Error('INVALID_RUN_ID UTC calendar date/time is impossible');
+    }
     return runId;
+}
+
+function gitOutput(projectRoot, args) {
+    const result = spawnSync('git', ['-C', projectRoot, ...args], {
+        encoding: 'utf8',
+        windowsHide: true,
+    });
+    if (result.status !== 0) {
+        throw new Error(`CANONICAL_SOURCE_GIT_ERROR args=${args.join(' ')} stderr=${(result.stderr ?? '').trim()}`);
+    }
+    return (result.stdout ?? '').trim();
+}
+
+function gitBlobSha1(bytes) {
+    const header = Buffer.from(`blob ${bytes.length}\0`, 'utf8');
+    return crypto.createHash('sha1').update(header).update(bytes).digest('hex');
+}
+
+function headCandidateInventory(project) {
+    const files = [];
+    const records = gitOutput(project, ['ls-tree', '-r', '-l', '-z', 'HEAD']).split('\0').filter(Boolean);
+    for (const record of records) {
+        const separator = record.indexOf('\t');
+        if (separator < 0) throw new Error('CANONICAL_HEAD_TREE_INVALID missing path separator');
+        const [mode, type, objectId, sizeText] = record.slice(0, separator).split(/\s+/);
+        const relative = record.slice(separator + 1);
+        if (type !== 'blob' || !mode.startsWith('100')) continue;
+        const segments = relative.split('/');
+        if (EXCLUDED_TOP_LEVEL.has(segments[0]) || EXCLUDED_FILE_NAMES.has(segments.at(-1))) continue;
+        const absolute = path.join(project, ...segments);
+        if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
+            throw new Error(`CANONICAL_HEAD_CANDIDATE_MISSING path=${relative}`);
+        }
+        const bytes = fs.readFileSync(absolute);
+        const expectedSize = Number(sizeText);
+        const actualBlob = gitBlobSha1(bytes);
+        if (bytes.length !== expectedSize || actualBlob !== objectId) {
+            throw new Error(`CANONICAL_HEAD_BLOB_BYTES_MISMATCH path=${relative} expectedSize=${expectedSize} actualSize=${bytes.length}`);
+        }
+        files.push({ path: relative, sizeBytes: bytes.length, sha256: sha256Bytes(bytes) });
+    }
+    return files.sort((left, right) => left.path.localeCompare(right.path, 'en'));
+}
+
+export function assertCanonicalCampaignSource(projectRoot) {
+    const project = fs.realpathSync.native(path.resolve(projectRoot));
+    const dotGit = path.join(project, '.git');
+    if (!fs.existsSync(dotGit) || !fs.statSync(dotGit).isDirectory()) {
+        throw new Error('CANONICAL_SOURCE_REQUIRED linked worktree sources are forbidden');
+    }
+    const topLevel = fs.realpathSync.native(path.resolve(gitOutput(project, ['rev-parse', '--show-toplevel'])));
+    const samePath = process.platform === 'win32'
+        ? topLevel.toLowerCase() === project.toLowerCase()
+        : topLevel === project;
+    if (!samePath) throw new Error(`CANONICAL_SOURCE_REQUIRED project=${project} topLevel=${topLevel}`);
+    const branch = gitOutput(project, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    if (branch !== 'main') throw new Error(`CANONICAL_MAIN_REQUIRED branch=${branch || 'detached'}`);
+    const status = gitOutput(project, ['status', '--porcelain=v1', '--untracked-files=all']);
+    if (status !== '') throw new Error('CANONICAL_SOURCE_DIRTY tracked or untracked changes present');
+    const candidate = collectInventory(project);
+    const headFiles = headCandidateInventory(project);
+    if (candidate.files.length !== headFiles.length
+        || !candidate.files.every((entry, index) => {
+            const head = headFiles[index];
+            return head && entry.path === head.path && entry.sizeBytes === head.sizeBytes && entry.sha256 === head.sha256;
+        })) throw new Error('CANONICAL_CANDIDATE_INVENTORY_DOES_NOT_MATCH_HEAD');
+    const headSha = gitOutput(project, ['rev-parse', '--verify', 'HEAD']);
+    if (!/^[a-f0-9]{40}$/.test(headSha)) throw new Error(`CANONICAL_HEAD_INVALID value=${headSha}`);
+    return { projectRoot: project, branch, headSha };
 }
 
 export function writeJsonExclusive(file, value) {
@@ -80,6 +162,51 @@ export function pathInventorySha256(files) {
 export function contentInventorySha256(files) {
     const records = files.map((entry) => `${entry.path}\0${entry.sizeBytes}\0${entry.sha256}\0`).join('');
     return sha256Bytes(Buffer.from(records, 'utf8'));
+}
+
+function walkFrozenFiles(root, prefix, predicate, output) {
+    if (!fs.existsSync(root)) return;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, 'en'))) {
+        const absolute = path.join(root, entry.name);
+        const relative = `${prefix}/${entry.name}`;
+        if (entry.isDirectory()) walkFrozenFiles(absolute, relative, predicate, output);
+        else if (entry.isFile() && predicate(relative)) {
+            const stat = fs.statSync(absolute);
+            output.push({ path: relative, sizeBytes: stat.size, sha256: sha256File(absolute) });
+        }
+    }
+}
+
+export function snapshotR10Frozen(project, workspace, excludedRunId) {
+    const files = [];
+    const isCurrentRunRoot = (name, prefix) => excludedRunId && (
+        name.startsWith(`${prefix}/${excludedRunId}/`)
+    );
+    walkFrozenFiles(path.join(project, 'evidence', 'campaigns'), 'evidence/campaigns', (name) => (
+        /-r10-/i.test(name) && !isCurrentRunRoot(name, 'evidence/campaigns')
+    ), files);
+    walkFrozenFiles(path.join(project, '.campaign-operations'), '.campaign-operations', (name) => (
+        /-r10-/i.test(name) && !isCurrentRunRoot(name, '.campaign-operations')
+    ), files);
+    walkFrozenFiles(path.join(workspace, 'review'), 'workspace-review', (name) => (
+        /r10/i.test(name)
+        && /(?:spec|receipt|deployment)[-_]/i.test(path.basename(name))
+        && !(excludedRunId && (
+            path.basename(name) === `spec_${excludedRunId}_mission02_r10_korean_release.md`
+            || path.basename(name) === `receipt_${excludedRunId}_campaign.json`
+        ))
+    ), files);
+    files.sort((a, b) => a.path.localeCompare(b.path, 'en'));
+    return {
+        fileCount: files.length,
+        pathListSha256: pathInventorySha256(files),
+        digest: contentInventorySha256(files),
+        files,
+    };
+}
+
+export function assertFrozenSnapshotUnchanged(before, after, label) {
+    if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`${label}_FROZEN_EVIDENCE_CHANGED`);
 }
 
 export function collectInventory(root, options = {}) {
