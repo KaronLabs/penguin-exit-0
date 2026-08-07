@@ -628,3 +628,53 @@ h1::before {
         transition-duration: 0.01ms !important;
     }
 }
+
+.puzzle-description,
+.terminal-output,
+.npc-card,
+.quote-collection {
+    margin-top: 10px;
+}
+
+.puzzle-description,
+.quote-collection {
+    color: #94a3b8;
+    font-size: 0.78rem;
+}
+
+.terminal-output {
+    max-height: 9rem;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid #1e3a5f;
+    background: #07111f;
+    color: #dbeafe;
+    font: 0.76rem/1.45 var(--font-utility);
+}
+
+.terminal-line + .terminal-line {
+    margin-top: 3px;
+}
+
+.npc-card {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px;
+    border: 1px solid #0f766e;
+    background: #062b2b;
+    color: #ccfbf1;
+    font-size: 0.78rem;
+}
+
+.npc-card[hidden] {
+    display: none;
+}
+
+.npc-icon {
+    font-size: 1.4rem;
+}
+
+.npc-card p {
+    margin: 3px 0 0;
+}

@@ -34,18 +34,24 @@ async function reachRecoverAndEnding(page) {
         const state = await metrics(page);
         if (await ending.isVisible()) break;
         if (await banner.isVisible()) {
-            intrusions.push({
-                title: await page.locator('#intrusion-title').innerText(),
-                body: await page.locator('#intrusion-msg').innerText(),
-                produceName: await produce.getAttribute('aria-label')
-            });
             if (await page.locator('#btn-ceo-ship').isVisible()) await page.locator('#btn-revert').click();
             else await page.keyboard.press('Escape');
             continue;
         }
         if ([0, 40, 80, 120, 160, 200].includes(state.units)) stages.set(state.units, await page.locator('#stage-badge').innerText());
         if (state.units === 200 && state.stars < 3000) recoverName = await produce.getAttribute('aria-label');
+        const aiQuotesBefore = await page.locator('#terminal-output [data-dialogue-context="ai"]').count();
         await produce.click();
+        if (await banner.isVisible()) {
+            intrusions.push({
+                title: await page.locator('#intrusion-title').innerText(),
+                body: await page.locator('#intrusion-msg').innerText(),
+                produceName: await produce.getAttribute('aria-label'),
+                aiQuoteDelta: (await page.locator('#terminal-output [data-dialogue-context="ai"]').count()) - aiQuotesBefore
+            });
+            if (await page.locator('#btn-ceo-ship').isVisible()) await page.locator('#btn-revert').click();
+            else await page.keyboard.press('Escape');
+        }
     }
 
     return { stages: [...stages.values()], intrusions, recoverName, endingName: await produce.getAttribute('aria-label') };
@@ -105,9 +111,31 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect(firstFamily(fontProof.body)).toBe('JetBrainsMono Nerd Embedded');
     expect(firstFamily(fontProof.display)).toBe('JetBrainsMono Nerd Embedded');
     expect(firstFamily(fontProof.utility)).toBe('JetBrainsMono Nerd Embedded');
+    await expect(page.locator('#terminal-output')).toHaveAttribute('role', 'log');
+    await expect(page.locator('#terminal-output')).toHaveAttribute('aria-live', 'polite');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/62');
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await expect(page.locator('#terminal-output')).toContainText('archon@stone-igloo:~$ systemctl restart nginx');
+    await expect(page.locator('#terminal-output')).not.toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    await page.waitForTimeout(500);
+    await expect(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    await page.waitForTimeout(600);
+    await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('[data-puz="cpu"]').click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('#terminal-output')).not.toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.locator('[data-puz="wifi"]').click();
+    for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').nth(2).click();
+    await expect.poll(() => page.locator('#terminal-output > *').count()).toBe(80);
+    await expect(page.locator('#terminal-output')).toContainText('아콘> 또 눌렀네. 멱등성 테스트가 아니라 내 인내심 DDoS다.');
 });
 
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     const puzzles = [];
     for (const tabId of ['wifi', 'cpu', 'ssh']) {
@@ -129,11 +157,61 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
         { name: '[ESP] 북극곰 에스프레소 머신', description: '작업당 생산량이 +3 유닛 증가합니다.', button: '구매 (300★)' },
         { name: '[HPC] 바다코끼리 고성능 클러스터', description: '작업당 생산량이 +5 유닛 증가합니다.', button: '구매 (600★)' }
     ]);
+    await page.locator('[data-puz="wifi"]').click();
+    const option = page.locator('.puzzle-option').first();
+    await option.click();
+    await expect(page.locator('#terminal-output')).toContainText('64 bytes from 8.8.8.8');
+    await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
+    await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
+    await option.click();
+    await expect(page.locator('#terminal-output')).toContainText('에러 로그 안 읽냐? 네 눈은 장식이냐, 아니면 CSS냐?');
+    await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v1')))).toMatchObject({
+        version: 1,
+        cursors: { repeat: 1 },
+        discovered: ['repeat:0']
+    });
+    await page.reload();
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
+    await page.locator('[data-puz="wifi"]').click();
+    const debtOption = page.locator('.puzzle-option').nth(2);
+    await debtOption.click();
+    await expect(page.locator('#val-debt')).toHaveText('15%');
+    await debtOption.click();
+    await expect(page.locator('#val-debt')).toHaveText('15%');
+    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-dialogue-index', '1');
+    for (const [caseName, invalidStorage] of [
+        ['malformed JSON', '{'],
+        ['wrong cursor type', JSON.stringify({ version: 1, cursors: 'wrong-type', discovered: [] })],
+        ['out-of-range cursor', JSON.stringify({ version: 1, cursors: { puzzle: 18, repeat: 12, ai: 14, codeReview: 999 }, discovered: [] })],
+        ['duplicate and unknown discovery', JSON.stringify({ version: 1, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: ['repeat:0', 'repeat:0', 'unknown:0'] })],
+        ['wrong version', JSON.stringify({ version: 2, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: [] })]
+    ]) {
+        await page.evaluate((value) => localStorage.setItem('penguin-exit-0:quote-discovery:v1', value), invalidStorage);
+        await page.reload();
+        expect(await page.locator('#quote-collection').innerText(), caseName).toBe('아콘 독설 수집 0/62');
+    }
+    const reducedMotionTerminal = await page.evaluate(() => {
+        document.querySelector('.puzzle-option:nth-child(3)').click();
+        return document.getElementById('terminal-output').textContent;
+    });
+    expect(reducedMotionTerminal).toContain('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    expect(reducedMotionTerminal).toContain('내 할머니도 너보단 코딩을 잘하겠다.');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v1')))).toMatchObject({
+        version: 1,
+        cursors: { puzzle: 1 },
+        discovered: ['puzzle:0']
+    });
 });
 
 test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     const initialName = await page.locator('#btn-produce').getAttribute('aria-label');
+    await page.locator('#btn-produce').click();
+    await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
+    await page.evaluate(() => window.__resetGameForTest());
     const observed = await reachRecoverAndEnding(page);
     const endingText = await page.locator('#ending-overlay').innerText();
 
@@ -143,6 +221,7 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     expect(observed.intrusions.map(({ produceName }) => produceName)).toEqual([
         'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김'
     ]);
+    expect(observed.intrusions.map(({ aiQuoteDelta }) => aiQuoteDelta)).toEqual([1, 1, 1, 1]);
     expect(observed.recoverName).toBe('RECOVER: 생산량 변화 없이 GitHub 스타 150 복구');
     expect(observed.endingName).toBe('EXIT 0 달성');
     expect(endingText).toContain('PROCESS EXIT CODE: 0');
@@ -150,4 +229,7 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     expect(endingText).toContain('+$3,000');
     expect(endingText).toContain('-$3,001');
     expect(endingText).toContain('-$1');
+    expect(endingText).toContain('샘 알트먼의 인수 제안: “우리 최신 AGI가 기름진 참치 뱃살을 원합니다.”');
+    expect(endingText).toContain('신규 직함: Chief Tuna Prompt Engineer (최고 참치 프롬프트 엔지니어)');
+    await expect(page.locator('#terminal-output [data-dialogue-context="ai"]')).toHaveCount(observed.intrusions.length);
 });

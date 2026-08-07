@@ -1,15 +1,24 @@
 import { createInitialState, reduceGameState } from './game-core.js';
-import { puzzles, upgrades } from './content.js';
+import { dialogueDecks, puzzles, upgrades } from './content.js';
 
 let state = createInitialState();
 let activePuzzleId = 'wifi';
 let endingRendered = false;
 let geminiTimerId = null;
+const quoteStorageKey = 'penguin-exit-0:quote-discovery:v1';
+const dialogueContexts = Object.keys(dialogueDecks);
+const resolvedChoices = new Set();
+const pendingTerminalTimers = new Set();
+let quoteDiscovery = loadQuoteDiscovery();
 
 // Test exposure for zero-allocation state reset
 window.__resetGameForTest = function() {
     state = createInitialState();
     endingRendered = false;
+    resolvedChoices.clear();
+    clearTerminalTimers();
+    terminalOutput.replaceChildren();
+    npcCard.hidden = true;
     clearGeminiTimer();
     const endingOverlay = document.getElementById('ending-overlay');
     if (endingOverlay) endingOverlay.style.display = 'none';
@@ -37,11 +46,115 @@ const btnProduce = document.getElementById('btn-produce');
 const upgradeList = document.getElementById('upgrade-list');
 
 const puzzleTitle = document.getElementById('puzzle-title');
+const puzzleDescription = document.getElementById('puzzle-description');
 const puzzleOptions = document.getElementById('puzzle-options');
 const tabBtns = document.querySelectorAll('.tab-btn');
+const terminalOutput = document.getElementById('terminal-output');
+const npcCard = document.getElementById('npc-card');
+const npcIcon = document.getElementById('npc-icon');
+const npcName = document.getElementById('npc-name');
+const npcMessage = document.getElementById('npc-message');
+const quoteCollection = document.getElementById('quote-collection');
 
 const endingOverlay = document.getElementById('ending-overlay');
 const endingIncidentCost = document.getElementById('ending-incident-cost');
+
+function loadQuoteDiscovery() {
+    const empty = { version: 1, cursors: Object.fromEntries(dialogueContexts.map((context) => [context, 0])), discovered: new Set() };
+    try {
+        const saved = JSON.parse(localStorage.getItem(quoteStorageKey));
+        if (!saved || saved.version !== 1 || !saved.cursors || !Array.isArray(saved.discovered)) return empty;
+        for (const context of dialogueContexts) {
+            const cursor = saved.cursors[context];
+            if (!Number.isInteger(cursor) || cursor < 0 || cursor >= dialogueDecks[context].length) return empty;
+            empty.cursors[context] = cursor;
+        }
+        const discovered = new Set();
+        for (const slot of saved.discovered) {
+            const match = /^(puzzle|repeat|ai|codeReview):(\d+)$/.exec(slot);
+            if (!match || Number(match[2]) >= dialogueDecks[match[1]].length || discovered.has(slot)) return empty;
+            discovered.add(slot);
+        }
+        empty.discovered = discovered;
+    } catch {
+        return empty;
+    }
+    return empty;
+}
+
+function saveQuoteDiscovery() {
+    try {
+        localStorage.setItem(quoteStorageKey, JSON.stringify({
+            version: 1,
+            cursors: quoteDiscovery.cursors,
+            discovered: [...quoteDiscovery.discovered].sort()
+        }));
+    } catch {
+        // A full or unavailable localStorage must not interrupt the game.
+    }
+}
+
+function prefersReducedMotion() {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+function appendTerminalLine(text, context = '', index = null) {
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    if (context) line.dataset.dialogueContext = context;
+    if (index !== null) line.dataset.dialogueIndex = String(index);
+    line.textContent = text;
+    terminalOutput.appendChild(line);
+    while (terminalOutput.childElementCount > 80) terminalOutput.firstElementChild.remove();
+}
+
+function clearTerminalTimers() {
+    for (const timerId of pendingTerminalTimers) clearTimeout(timerId);
+    pendingTerminalTimers.clear();
+}
+
+function scheduleTerminal(callback, delay) {
+    if (prefersReducedMotion()) {
+        callback();
+        return;
+    }
+    const timerId = setTimeout(() => {
+        pendingTerminalTimers.delete(timerId);
+        callback();
+    }, delay);
+    pendingTerminalTimers.add(timerId);
+}
+
+function renderQuoteCollection() {
+    quoteCollection.textContent = `아콘 독설 수집 ${quoteDiscovery.discovered.size}/62`;
+}
+
+function appendDialogue(context) {
+    const deck = dialogueDecks[context];
+    const index = quoteDiscovery.cursors[context];
+    quoteDiscovery.cursors[context] = (index + 1) % deck.length;
+    quoteDiscovery.discovered.add(`${context}:${index}`);
+    saveQuoteDiscovery();
+    renderQuoteCollection();
+    appendTerminalLine(`아콘> ${deck[index]}`, context, index);
+}
+
+function showEncounter(encounter) {
+    npcIcon.textContent = encounter.icon;
+    npcName.textContent = encounter.name;
+    npcMessage.textContent = encounter.message;
+    npcCard.hidden = false;
+}
+
+function queuePuzzleResult(puzzle, choice, repeated) {
+    appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`);
+    scheduleTerminal(() => appendTerminalLine(choice.output), 450);
+    scheduleTerminal(() => {
+        if (repeated) appendDialogue('repeat');
+        else if (choice.isFairDiagnostic || choice.key === 'altman') showEncounter(puzzle.encounter);
+        else appendDialogue('puzzle');
+    }, 1050);
+}
 
 // Keydown handler for Escape key (git revert)
 window.addEventListener('keydown', (e) => {
@@ -109,17 +222,21 @@ btnAcceptPenalty.addEventListener('click', () => {
 
 // Produce & Recover Main Action Handler
 btnProduce.addEventListener('click', () => {
+    const wasActiveIntrusion = state.activeIntrusion;
     if (state.productionUnits >= 200 && state.githubStars < 3000) {
         state = reduceGameState(state, { type: 'RECOVER' });
     } else {
         state = reduceGameState(state, { type: 'PRODUCE' });
+        appendDialogue('codeReview');
     }
+    if (wasActiveIntrusion === null && state.activeIntrusion !== null) appendDialogue('ai');
     renderGameState();
 });
 
 // Tab Handlers
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+        clearTerminalTimers();
         tabBtns.forEach(b => {
             const isActive = b === btn;
             b.classList.toggle('active', isActive);
@@ -134,6 +251,7 @@ function renderPuzzles() {
     puzzleOptions.innerHTML = '';
     const currentPuzzle = puzzles.find(p => p.id === activePuzzleId) || puzzles[0];
     puzzleTitle.textContent = currentPuzzle.title;
+    puzzleDescription.textContent = currentPuzzle.description;
 
     currentPuzzle.choices.forEach((choice) => {
         const btn = document.createElement('button');
@@ -142,12 +260,18 @@ function renderPuzzles() {
         btn.setAttribute('aria-label', choice.label);
 
         btn.addEventListener('click', () => {
-            if (choice.rewardTuna > 0) {
-                state = reduceGameState(state, { type: 'ADD_TUNA', amount: choice.rewardTuna });
+            const choiceSlot = `${currentPuzzle.id}:${choice.key}`;
+            const repeated = resolvedChoices.has(choiceSlot);
+            if (!repeated) {
+                resolvedChoices.add(choiceSlot);
+                if (choice.rewardTuna > 0) {
+                    state = reduceGameState(state, { type: 'ADD_TUNA', amount: choice.rewardTuna });
+                }
+                if (choice.techDebtPercent > 0) {
+                    state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: choice.techDebtPercent });
+                }
             }
-            if (choice.techDebtPercent > 0) {
-                state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: choice.techDebtPercent });
-            }
+            queuePuzzleResult(currentPuzzle, choice, repeated);
             renderGameState();
         });
 
@@ -161,16 +285,24 @@ function renderUpgrades() {
         const isOwned = state.activeUpgrades.some(u => u.id === up.id);
         const card = document.createElement('div');
         card.className = 'upgrade-card';
-        card.innerHTML = `
-            <div class="upgrade-copy">
-                <div class="upgrade-name" style="font-weight:600; font-size:0.9rem;">${up.name}</div>
-                <div class="upgrade-description" style="font-size:0.75rem; color:#94a3b8;">${up.description}</div>
-            </div>
-            <button class="btn-touch" ${isOwned || state.githubStars < up.costStars ? 'disabled' : ''}>
-                ${isOwned ? '보유 중' : `구매 (${up.costStars}★)`}
-            </button>
-        `;
-        const buyBtn = card.querySelector('button');
+        const copy = document.createElement('div');
+        copy.className = 'upgrade-copy';
+        const name = document.createElement('div');
+        name.className = 'upgrade-name';
+        name.style.fontWeight = '600';
+        name.style.fontSize = '0.9rem';
+        name.textContent = up.name;
+        const description = document.createElement('div');
+        description.className = 'upgrade-description';
+        description.style.fontSize = '0.75rem';
+        description.style.color = '#94a3b8';
+        description.textContent = up.description;
+        copy.append(name, description);
+        const buyBtn = document.createElement('button');
+        buyBtn.className = 'btn-touch';
+        buyBtn.disabled = isOwned || state.githubStars < up.costStars;
+        buyBtn.textContent = isOwned ? '보유 중' : `구매 (${up.costStars}★)`;
+        card.append(copy, buyBtn);
         if (!isOwned) {
             buyBtn.addEventListener('click', () => {
                 state = reduceGameState(state, { type: 'BUY_UPGRADE', upgradeId: up.id });
@@ -281,5 +413,6 @@ function renderGameState() {
 }
 
 // Initial Render
+renderQuoteCollection();
 renderPuzzles();
 renderGameState();
