@@ -33,12 +33,14 @@ async function observeImpact(page) {
 async function produceUntilIntrusion(page, type) {
     const produce = page.locator('#btn-produce');
     const banner = page.locator('#intrusion-banner');
+    const startsBefore = (await animationStarts(page)).length;
     for (let click = 0; click < 5; click += 1) {
         await produce.click();
         if (await banner.isVisible()) break;
     }
     await expect(banner).toBeVisible();
     await expect(page.locator('body')).toHaveClass(new RegExp(`intrusion-impact--${type}`));
+    await expect.poll(() => page.evaluate(() => window.__intrusionAnimationStarts.length)).toBe(startsBefore + 1);
     await expect.poll(() => page.evaluate(() => window.__intrusionAnimationStarts.at(-1))).toBe(`intrusion-impact-${type}`);
 }
 
