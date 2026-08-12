@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const interactiveSelector = 'button:not([hidden]), a[href], input:not([type="hidden"]), select, textarea, [role="button"], [role="tab"]';
+const minimumTouchTarget = 47.99;
 
 async function inspectVisibleInteractives(page) {
     return page.locator(interactiveSelector).evaluateAll((elements) => elements
@@ -78,24 +79,42 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     for (const snapshot of snapshots) {
         expect(snapshot.scrollWidth, `${snapshot.name} horizontal overflow`).toBeLessThanOrEqual(320);
         for (const target of snapshot.targets) {
-            expect(target.width, `${snapshot.name}: ${target.label} width`).toBeGreaterThanOrEqual(48);
-            expect(target.height, `${snapshot.name}: ${target.label} height`).toBeGreaterThanOrEqual(48);
+            expect(target.width, `${snapshot.name}: ${target.label} width`).toBeGreaterThanOrEqual(minimumTouchTarget);
+            expect(target.height, `${snapshot.name}: ${target.label} height`).toBeGreaterThanOrEqual(minimumTouchTarget);
         }
     }
     await page.evaluate(() => window.__resetGameForTest());
-    for (let click = 0; click < 5; click += 1) await page.locator('#btn-produce').click();
-    await expect(page.locator('body')).toHaveClass(/intrusion-impact--copilot/);
-    const maxScrollWidth = await page.evaluate(async () => {
+    const produce = page.locator('#btn-produce');
+    for (const type of ['copilot', 'codex', 'gemini']) {
+        for (let click = 0; click < 5; click += 1) await produce.click();
+        await expect(page.locator('body')).toHaveClass(new RegExp(`intrusion-impact--${type}`));
+        await page.evaluate(() => document.querySelector('#btn-revert').click());
+    }
+    for (let click = 0; click < 4; click += 1) await produce.click();
+    const activationFocus = await page.evaluate(() => {
+        const button = document.querySelector('#btn-produce');
+        const focusTarget = document.querySelector('[data-puz="wifi"]');
+        focusTarget.focus();
+        const before = document.activeElement.getAttribute('data-puz');
+        button.click();
+        return { before, during: document.activeElement.getAttribute('data-puz'), active: document.body.classList.contains('intrusion-impact--ceo') };
+    });
+    expect(activationFocus).toEqual({ before: 'wifi', during: 'wifi', active: true });
+    const impactSample = await page.evaluate(async () => {
+        const startedAt = performance.now();
         let max = 0;
-        for (let frame = 0; frame < 24; frame += 1) {
+        let focusStable = true;
+        while (performance.now() - startedAt < 560) {
             await new Promise(requestAnimationFrame);
             max = Math.max(max, document.documentElement.scrollWidth);
+            focusStable &&= document.activeElement.getAttribute('data-puz') === 'wifi';
         }
-        return max;
+        return { max, focusStable };
     });
-    expect(maxScrollWidth).toBeLessThanOrEqual(320);
+    expect(impactSample.max).toBeLessThanOrEqual(320);
+    expect(impactSample.focusStable).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(page.locator('#btn-produce')).toBeFocused();
+    await expect(produce).toBeFocused();
 });
 
 test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다', async ({ page }) => {

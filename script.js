@@ -6,6 +6,7 @@ let activePuzzleId = 'wifi';
 let endingRendered = false;
 let geminiTimerId = null;
 let intrusionImpactType = null;
+const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
 const quoteStorageKey = 'penguin-exit-0:quote-discovery:v1';
 const dialogueContexts = Object.keys(dialogueDecks);
 const resolvedChoices = new Set();
@@ -105,7 +106,7 @@ function saveQuoteDiscovery() {
 }
 
 function prefersReducedMotion() {
-    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    return reducedMotionQuery?.matches === true;
 }
 
 function clearIntrusionImpact() {
@@ -118,6 +119,12 @@ function startIntrusionImpact(type) {
     if (prefersReducedMotion()) return;
     document.body.classList.add(`intrusion-impact--${type}`);
     intrusionImpactType = type;
+}
+
+if (reducedMotionQuery) {
+    reducedMotionQuery.addEventListener('change', (event) => {
+        if (event.matches) clearIntrusionImpact();
+    });
 }
 
 function appendTerminalLine(text, context = '', index = null) {
