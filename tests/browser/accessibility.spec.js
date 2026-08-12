@@ -65,11 +65,15 @@ async function visitRepresentativeStates(page, inspect) {
 test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/');
+    if (process.env.ACCESSIBILITY_MUTATION === 'ending-absolute-320') {
+        await page.addStyleTag({ content: '@media (max-width: 320px) { #ending-overlay { position: absolute !important; } }' });
+    }
 
     const snapshots = [];
     await visitRepresentativeStates(page, async (name) => {
         snapshots.push({ name, targets: await inspectVisibleInteractives(page), scrollWidth: await page.evaluate(() => document.documentElement.scrollWidth) });
     });
+    expect(await page.locator('#ending-overlay').evaluate((overlay) => getComputedStyle(overlay).position)).toBe('fixed');
     const h1LineCount = await page.locator('h1').evaluate((heading) => {
         const style = getComputedStyle(heading);
         const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2;
