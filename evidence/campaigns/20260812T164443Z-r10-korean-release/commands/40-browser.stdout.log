@@ -1,0 +1,43 @@
+
+Running 39 tests using 1 worker
+
+[1/39] [chromium] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[2/39] [chromium] › tests\browser\accessibility.spec.js:124:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[3/39] [chromium] › tests\browser\accessibility.spec.js:147:1 › 탭 클릭은 active와 aria-selected를 동기화한다
+[4/39] [chromium] › tests\browser\accessibility.spec.js:159:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[5/39] [chromium] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[6/39] [chromium] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[7/39] [chromium] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[8/39] [chromium] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[9/39] [chromium] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[10/39] [chromium] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[11/39] [chromium] › tests\browser\localization.spec.js:64:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[12/39] [chromium] › tests\browser\localization.spec.js:160:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[13/39] [chromium] › tests\browser\localization.spec.js:239:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+[14/39] [firefox] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[15/39] [firefox] › tests\browser\accessibility.spec.js:124:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[16/39] [firefox] › tests\browser\accessibility.spec.js:147:1 › 탭 클릭은 active와 aria-selected를 동기화한다
+[17/39] [firefox] › tests\browser\accessibility.spec.js:159:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[18/39] [firefox] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[19/39] [firefox] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[20/39] [firefox] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[21/39] [firefox] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[22/39] [firefox] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[23/39] [firefox] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[24/39] [firefox] › tests\browser\localization.spec.js:64:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[25/39] [firefox] › tests\browser\localization.spec.js:160:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[26/39] [firefox] › tests\browser\localization.spec.js:239:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+[27/39] [webkit] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[28/39] [webkit] › tests\browser\accessibility.spec.js:124:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[29/39] [webkit] › tests\browser\accessibility.spec.js:147:1 › 탭 클릭은 active와 aria-selected를 동기화한다
+[30/39] [webkit] › tests\browser\accessibility.spec.js:159:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[31/39] [webkit] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[32/39] [webkit] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[33/39] [webkit] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[34/39] [webkit] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[35/39] [webkit] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[36/39] [webkit] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[37/39] [webkit] › tests\browser\localization.spec.js:64:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[38/39] [webkit] › tests\browser\localization.spec.js:160:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[39/39] [webkit] › tests\browser\localization.spec.js:239:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+  39 passed (2.4m)

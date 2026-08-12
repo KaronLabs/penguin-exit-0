@@ -1,0 +1,14 @@
+
+Running 1 test using 1 worker
+
+[1/1] [chromium-perf] › tests\browser\performance.spec.js:42:1 › @performance - Real 600s Frame Latency, Long Task and CDP Heap Measurement
+[chromium-perf] › tests\browser\performance.spec.js:42:1 › @performance - Real 600s Frame Latency, Long Task and CDP Heap Measurement
+[PERF] Warming up for 30s...
+
+[PERF] Starting workload measurement loop for 600s...
+
+[PERF SUMMARY] Duration: 600074ms, Samples: 36006, P95: 16.70000000006985ms, P99: 16.800000000017462ms, LongTasks: 0, HeapNet: 1.46MB
+
+  Slow test file: [chromium-perf] › tests\browser\performance.spec.js (10.5m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 passed (10.5m)

@@ -1,0 +1,7 @@
+--- STARTING RAW-FIRST FAIL-CLOSED EVIDENCE GATE (R7) ---
+[PASS] 1/5 Baseline preflight hash verified.
+[PASS] 2/5 Raw-first 600s Performance Evidence verified (36006 raw deltas, P95=16.7000ms, P99=16.8000ms, Heap=1.4580MiB).
+[PASS] 3/5 Manifest integrity verified (44 tracked files, totalFilesCount=44).
+[PASS] 4/5 P50 raw/summary consistency verified.
+[PASS] 5/5 Verifier self-integrity check passed (PERF_FAST kill-switch present).
+EVIDENCE_GATE=GO
