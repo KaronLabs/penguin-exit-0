@@ -63,6 +63,18 @@ async function reachRecoverAndEnding(page, beforeRecovery = null) {
 
 test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다', async ({ page }) => {
     await page.goto('/');
+    if (process.env.LOCALIZATION_MUTATION === 'terminal-hierarchy') {
+        await page.addStyleTag({ content: `
+            #terminal-output [data-terminal-kind="command"] { margin-top: 0 !important; }
+            #terminal-output [data-terminal-kind="archon"] {
+                font-size: 0.76rem !important;
+                line-height: 1.45 !important;
+                padding: 0 !important;
+                border-left-width: 0 !important;
+            }
+            #terminal-output [data-terminal-kind="archon"]::before { display: inline !important; }
+        ` });
+    }
     const fontProof = await page.evaluate(async () => {
         const family = 'JetBrainsMono Nerd Embedded';
         const sample = 'iiiiiiiiWWWWWW0011';
@@ -145,7 +157,13 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
                 weight: style.fontWeight,
                 background: style.backgroundColor,
                 borderLeftWidth: style.borderLeftWidth,
+                borderLeftStyle: style.borderLeftStyle,
+                borderLeftColor: style.borderLeftColor,
                 fontSize: style.fontSize,
+                lineHeight: style.lineHeight,
+                marginTop: style.marginTop,
+                padding: style.padding,
+                display: style.display,
                 pseudo: pseudo ? style.content : null
             };
         };
@@ -154,12 +172,17 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect(terminalKinds.command).toMatchObject({ kind: 'command', color: 'rgb(84, 199, 236)', weight: '700' });
     expect(terminalKinds.system).toMatchObject({ kind: 'system', color: 'rgb(148, 163, 184)', weight: '400' });
     expect(terminalKinds.archon).toMatchObject({
-        kind: 'archon', color: 'rgb(255, 228, 232)', weight: '700', background: 'rgb(26, 16, 24)', borderLeftWidth: '3px'
+        kind: 'archon', color: 'rgb(255, 228, 232)', weight: '700', background: 'rgb(26, 16, 24)',
+        borderLeftWidth: '3px', borderLeftStyle: 'solid', borderLeftColor: 'rgb(255, 101, 122)', padding: '8px'
     });
+    expect(terminalKinds.command.marginTop).toBe('8px');
     expect(terminalKinds.archon.background).not.toBe(terminalKinds.command.background);
     expect(terminalKinds.archon.background).not.toBe(terminalKinds.system.background);
-    expect(terminalKinds.archon.fontSize).not.toBe(terminalKinds.system.fontSize);
-    expect(terminalKinds.archonLabel).toMatchObject({ color: 'rgb(246, 184, 63)', pseudo: '"ARCHON // ROAST"' });
+    expect(Number.parseFloat(terminalKinds.archon.fontSize)).toBeGreaterThan(Number.parseFloat(terminalKinds.system.fontSize));
+    expect(Number.parseFloat(terminalKinds.archon.lineHeight) / Number.parseFloat(terminalKinds.archon.fontSize)).toBeCloseTo(1.58, 2);
+    expect(terminalKinds.archonLabel).toMatchObject({
+        color: 'rgb(246, 184, 63)', display: 'block', pseudo: '"ARCHON // ROAST"'
+    });
     await page.evaluate(() => window.__resetGameForTest());
     await page.locator('.puzzle-option').nth(2).click();
     await page.locator('[data-puz="wifi"]').click();
