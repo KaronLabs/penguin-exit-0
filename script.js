@@ -127,11 +127,12 @@ if (reducedMotionQuery) {
     });
 }
 
-function appendTerminalLine(text, context = '', index = null) {
+function appendTerminalLine(text, context = '', index = null, kind = '') {
     const line = document.createElement('div');
     line.className = 'terminal-line';
     if (context) line.dataset.dialogueContext = context;
     if (index !== null) line.dataset.dialogueIndex = String(index);
+    if (kind) line.dataset.terminalKind = kind;
     line.textContent = text;
     terminalOutput.appendChild(line);
     while (terminalOutput.childElementCount > 80) terminalOutput.firstElementChild.remove();
@@ -172,7 +173,7 @@ function appendDialogue(context) {
     quoteDiscovery.discovered.add(`${context}:${index}`);
     saveQuoteDiscovery();
     renderQuoteCollection();
-    appendTerminalLine(`아콘> ${deck[index]}`, context, index);
+    appendTerminalLine(`아콘> ${deck[index]}`, context, index, 'archon');
 }
 
 function showEncounter(encounter) {
@@ -183,8 +184,8 @@ function showEncounter(encounter) {
 }
 
 function queuePuzzleResult(puzzle, choice, repeated) {
-    appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`);
-    scheduleTerminal(() => appendTerminalLine(choice.output), 450);
+    appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`, '', null, 'command');
+    scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
     scheduleTerminal(() => {
         if (repeated) appendDialogue('repeat');
         else if (choice.isFairDiagnostic || choice.key === 'altman') showEncounter(puzzle.encounter);

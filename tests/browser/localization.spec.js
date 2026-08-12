@@ -126,12 +126,46 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     await expect(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await page.waitForTimeout(600);
     await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
+    const commandLine = page.locator('#terminal-output > *').filter({ hasText: 'archon@stone-igloo:~$ systemctl restart nginx' });
+    const systemLine = page.locator('#terminal-output > *').filter({ hasText: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.' });
+    const archonLine = page.locator('#terminal-output > *').filter({ hasText: '내 할머니도 너보단 코딩을 잘하겠다.' });
+    await expect(commandLine).toHaveCount(1);
+    await expect(systemLine).toHaveCount(1);
+    await expect(archonLine).toHaveCount(1);
+    const terminalKinds = await page.locator('#terminal-output').evaluate((terminal) => {
+        const command = [...terminal.children].find((line) => line.textContent.startsWith('archon@stone-igloo:~$'));
+        const system = [...terminal.children].find((line) => line.textContent.includes('Nginx를 재시작했지만'));
+        const archon = [...terminal.children].find((line) => line.textContent.includes('내 할머니도 너보단'));
+        const inspect = (line, pseudo = false) => {
+            const style = getComputedStyle(line, pseudo ? '::before' : null);
+            return {
+                kind: line.dataset.terminalKind,
+                color: style.color,
+                weight: style.fontWeight,
+                background: style.backgroundColor,
+                borderLeftWidth: style.borderLeftWidth,
+                fontSize: style.fontSize,
+                pseudo: pseudo ? style.content : null
+            };
+        };
+        return { command: inspect(command), system: inspect(system), archon: inspect(archon), archonLabel: inspect(archon, true) };
+    });
+    expect(terminalKinds.command).toMatchObject({ kind: 'command', color: 'rgb(84, 199, 236)', weight: '700' });
+    expect(terminalKinds.system).toMatchObject({ kind: 'system', color: 'rgb(148, 163, 184)', weight: '400' });
+    expect(terminalKinds.archon).toMatchObject({
+        kind: 'archon', color: 'rgb(255, 228, 232)', weight: '700', background: 'rgb(26, 16, 24)', borderLeftWidth: '3px'
+    });
+    expect(terminalKinds.archon.background).not.toBe(terminalKinds.command.background);
+    expect(terminalKinds.archon.background).not.toBe(terminalKinds.system.background);
+    expect(terminalKinds.archon.fontSize).not.toBe(terminalKinds.system.fontSize);
+    expect(terminalKinds.archonLabel).toMatchObject({ color: 'rgb(246, 184, 63)', pseudo: '"ARCHON // ROAST"' });
     await page.evaluate(() => window.__resetGameForTest());
     await page.locator('.puzzle-option').nth(2).click();
     await page.locator('[data-puz="wifi"]').click();
     await page.waitForTimeout(1100);
     await expect.soft(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await expect.soft(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveCount(1);
+    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
     await page.evaluate(() => window.__resetGameForTest());
     await page.locator('.puzzle-option').nth(2).click();
     await page.locator('[data-puz="cpu"]').click();
@@ -212,6 +246,7 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await debtOption.click();
     await expect(page.locator('#val-debt')).toHaveText('15%');
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-dialogue-index', '1');
+    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-terminal-kind', 'archon');
     for (const [caseName, invalidStorage] of [
         ['malformed JSON', '{'],
         ['wrong cursor type', JSON.stringify({ version: 1, cursors: 'wrong-type', discovered: [] })],
@@ -242,6 +277,10 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     const initialName = await page.locator('#btn-produce').getAttribute('aria-label');
     await page.locator('#btn-produce').click();
     await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
+    await expect(page.locator('#terminal-output [data-dialogue-context="codeReview"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    for (let click = 0; click < 4; click += 1) await page.locator('#btn-produce').click();
+    await expect(page.locator('#terminal-output [data-dialogue-context="ai"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    await page.locator('#btn-revert').click();
     await page.evaluate(() => window.__resetGameForTest());
     await page.clock.install({ time: new Date('2026-08-07T00:00:00Z') });
     await page.emulateMedia({ reducedMotion: 'no-preference' });

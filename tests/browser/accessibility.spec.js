@@ -73,6 +73,18 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     await visitRepresentativeStates(page, async (name) => {
         snapshots.push({ name, targets: await inspectVisibleInteractives(page), scrollWidth: await page.evaluate(() => document.documentElement.scrollWidth) });
     });
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').first().click();
+    for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').first().click();
+    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveCount(27);
+    await page.evaluate(() => {
+        const userStyle = document.createElement('style');
+        userStyle.textContent = '#terminal-output { letter-spacing: 0.12em !important; word-spacing: 0.16em !important; line-height: 1.5 !important; }';
+        document.head.append(userStyle);
+    });
+    await expect.poll(() => page.locator('#terminal-output').evaluate((terminal) => getComputedStyle(terminal).letterSpacing)).not.toBe('normal');
     expect(await page.locator('#ending-overlay').evaluate((overlay) => getComputedStyle(overlay).position)).toBe('fixed');
     const h1LineCount = await page.locator('h1').evaluate((heading) => {
         const style = getComputedStyle(heading);
@@ -80,6 +92,41 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
         return Math.round(heading.getBoundingClientRect().height / lineHeight);
     });
     expect(h1LineCount).toBe(1);
+    const terminalLayout = await page.locator('#terminal-output').evaluate((terminal) => ({
+        height: terminal.getBoundingClientRect().height,
+        rootScrollWidth: document.documentElement.scrollWidth,
+        scrollWidth: terminal.scrollWidth,
+        clientWidth: terminal.clientWidth
+    }));
+    expect(terminalLayout.height).toBe(240);
+    expect(terminalLayout.rootScrollWidth).toBeLessThanOrEqual(320);
+    expect(terminalLayout.scrollWidth).toBeLessThanOrEqual(terminalLayout.clientWidth);
+    const textSpacingLayout = await page.evaluate(() => {
+        const terminal = document.querySelector('#terminal-output');
+        const npc = document.querySelector('#npc-card');
+        const quotes = document.querySelector('#quote-collection');
+        const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        const terminalRect = terminal.getBoundingClientRect();
+        return {
+            letterSpacing: getComputedStyle(terminal).letterSpacing,
+            wordSpacing: getComputedStyle(terminal).wordSpacing,
+            lineHeight: getComputedStyle(terminal).lineHeight,
+            terminalRight: terminalRect.right,
+            viewportRight: window.innerWidth,
+            npcOverlap: overlaps(terminalRect, npc.getBoundingClientRect()),
+            quoteOverlap: overlaps(terminalRect, quotes.getBoundingClientRect()),
+            rootScrollWidth: document.documentElement.scrollWidth
+        };
+    });
+    expect(textSpacingLayout.letterSpacing).not.toBe('normal');
+    expect(textSpacingLayout.wordSpacing).not.toBe('0px');
+    expect(textSpacingLayout.lineHeight).not.toBe('normal');
+    expect(textSpacingLayout.terminalRight).toBeLessThanOrEqual(textSpacingLayout.viewportRight);
+    expect(textSpacingLayout.rootScrollWidth).toBeLessThanOrEqual(320);
+    expect(textSpacingLayout.npcOverlap).toBe(false);
+    expect(textSpacingLayout.quoteOverlap).toBe(false);
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     for (const snapshot of snapshots) {
         expect(snapshot.scrollWidth, `${snapshot.name} horizontal overflow`).toBeLessThanOrEqual(320);
         for (const target of snapshot.targets) {
@@ -125,6 +172,8 @@ test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능
     await page.setViewportSize({ width: 640, height: 360 });
     await page.goto('/');
 
+    expect(await page.locator('#terminal-output').evaluate((terminal) => terminal.getBoundingClientRect().height)).toBe(160);
+
     await visitRepresentativeStates(page, async () => {});
     const ending = page.locator('#ending-overlay > div');
     const replay = ending.getByRole('button');
@@ -142,6 +191,12 @@ test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능
     expect(await page.locator('#ending-overlay').evaluate((overlay) => getComputedStyle(overlay).position)).toBe('fixed');
     if (layout.scrollHeight > layout.clientHeight) expect(layout.clientHeight).toBeGreaterThan(0);
     expect(await replay.isVisible()).toBe(true);
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.reload();
+    expect(await page.locator('#terminal-output').evaluate((terminal) => terminal.getBoundingClientRect().height)).toBe(224);
+    await page.setViewportSize({ width: 1100, height: 960 });
+    expect(await page.locator('#terminal-output').evaluate((terminal) => terminal.getBoundingClientRect().height)).toBe(288);
 });
 
 test('탭 클릭은 active와 aria-selected를 동기화한다', async ({ page }) => {

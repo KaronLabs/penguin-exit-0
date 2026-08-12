@@ -726,8 +726,8 @@ body.intrusion-impact--ceo > .main-grid {
 }
 
 .terminal-output {
-    max-height: 9rem;
-    overflow: auto;
+    height: clamp(14rem, 30vh, 18rem);
+    overflow-y: auto;
     padding: 8px;
     border: 1px solid #1e3a5f;
     background: #07111f;
@@ -741,6 +741,46 @@ body.intrusion-impact--ceo > .main-grid {
 
 .terminal-line {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.terminal-line[data-terminal-kind="command"] {
+    margin-top: 8px;
+    color: #54c7ec;
+    font-weight: 700;
+}
+
+.terminal-line[data-terminal-kind="system"] {
+    color: #94a3b8;
+    font-weight: 400;
+}
+
+.terminal-line[data-terminal-kind="archon"] {
+    margin: 8px 0;
+    padding: 8px;
+    border-left: 3px solid #ff657a;
+    background: #1a1018;
+    color: #ffe4e8;
+    font: 700 0.82rem/1.58 var(--font-utility);
+}
+
+.terminal-line[data-terminal-kind="archon"]::before {
+    content: "ARCHON // ROAST";
+    display: block;
+    color: #f6b83f;
+}
+
+@media (max-width: 480px) {
+    .terminal-output {
+        height: 15rem;
+    }
+}
+
+@media (max-height: 400px) {
+    .terminal-output {
+        height: 10rem;
+    }
 }
 
 .npc-card {
