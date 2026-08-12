@@ -88,14 +88,16 @@
         <section class="panel" aria-label="장애 진단 터미널">
             <h2>장애 진단 터미널</h2>
             <div class="puzzle-tabs" role="tablist">
-                <button class="tab-btn active" role="tab" aria-selected="true" data-puz="wifi">Wi-Fi 장애</button>
-                <button class="tab-btn" role="tab" aria-selected="false" data-puz="cpu">CPU 장애</button>
-                <button class="tab-btn" role="tab" aria-selected="false" data-puz="ssh">SSH 장애</button>
+                <button id="tab-wifi" class="tab-btn active" role="tab" aria-selected="true" aria-controls="puzzle-panel" tabindex="0" data-puz="wifi">Wi-Fi 장애</button>
+                <button id="tab-cpu" class="tab-btn" role="tab" aria-selected="false" aria-controls="puzzle-panel" tabindex="-1" data-puz="cpu">CPU 장애</button>
+                <button id="tab-ssh" class="tab-btn" role="tab" aria-selected="false" aria-controls="puzzle-panel" tabindex="-1" data-puz="ssh">SSH 장애</button>
             </div>
-            <div id="puzzle-title" style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin: 10px 0;"></div>
-            <div id="puzzle-description" class="puzzle-description"></div>
-            <div id="puzzle-options"></div>
-            <div id="terminal-output" class="terminal-output" role="log" aria-live="polite" aria-label="장애 진단 터미널 출력"></div>
+            <div id="puzzle-panel" role="tabpanel" aria-labelledby="tab-wifi">
+                <div id="puzzle-title" style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin: 10px 0;"></div>
+                <div id="puzzle-description" class="puzzle-description"></div>
+                <div id="puzzle-options"></div>
+            </div>
+            <div id="terminal-output" class="terminal-output" role="log" aria-live="polite" aria-label="장애 진단 터미널 출력" tabindex="0"></div>
             <div id="npc-card" class="npc-card" role="status" aria-live="polite" hidden>
                 <span id="npc-icon" class="npc-icon"></span>
                 <div><strong id="npc-name"></strong><p id="npc-message"></p></div>

@@ -13,7 +13,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 const cliPath = './node_modules/@playwright/test/cli.js';
-const accessibilityArgs = [cliPath, 'test', 'tests/browser/accessibility.spec.js', '--project=chromium'];
+const accessibilityArgs = [
+    cliPath, 'test', 'tests/browser/accessibility.spec.js', '--project=chromium', '--workers=1',
+    '--grep', '탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 동기화한다$',
+];
 
 function get(url) {
     return new Promise((resolve, reject) => {

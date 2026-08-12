@@ -52,6 +52,7 @@ const upgradeList = document.getElementById('upgrade-list');
 const puzzleTitle = document.getElementById('puzzle-title');
 const puzzleDescription = document.getElementById('puzzle-description');
 const puzzleOptions = document.getElementById('puzzle-options');
+const puzzlePanel = document.getElementById('puzzle-panel');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const terminalOutput = document.getElementById('terminal-output');
 const npcCard = document.getElementById('npc-card');
@@ -281,20 +282,36 @@ btnProduce.addEventListener('click', () => {
     if (wasActiveIntrusion === null && state.activeIntrusion !== null) startIntrusionImpact(state.activeIntrusion);
 });
 
-// Tab Handlers
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const nextPuzzleId = btn.getAttribute('data-puz');
-        if (nextPuzzleId === activePuzzleId) return;
+function selectPuzzleTab(btn, moveFocus = false) {
+    const nextPuzzleId = btn.getAttribute('data-puz');
+    if (nextPuzzleId !== activePuzzleId) {
         clearTerminalTimers();
         npcCard.hidden = true;
-        tabBtns.forEach(b => {
-            const isActive = b === btn;
-            b.classList.toggle('active', isActive);
-            b.setAttribute('aria-selected', String(isActive));
-        });
         activePuzzleId = nextPuzzleId;
         renderPuzzles();
+    }
+    tabBtns.forEach(b => {
+        const isActive = b === btn;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', String(isActive));
+        b.tabIndex = isActive ? 0 : -1;
+    });
+    puzzlePanel.setAttribute('aria-labelledby', btn.id);
+    if (moveFocus) btn.focus();
+}
+
+// Tab Handlers
+tabBtns.forEach((btn, index) => {
+    btn.addEventListener('click', () => selectPuzzleTab(btn));
+    btn.addEventListener('keydown', (event) => {
+        let nextIndex;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabBtns.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabBtns.length) % tabBtns.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabBtns.length - 1;
+        else return;
+        event.preventDefault();
+        selectPuzzleTab(tabBtns[nextIndex], true);
     });
 });
 

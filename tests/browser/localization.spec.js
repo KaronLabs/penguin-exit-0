@@ -74,6 +74,8 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
             }
             #terminal-output [data-terminal-kind="archon"]::before { display: inline !important; }
         ` });
+    } else if (process.env.LOCALIZATION_MUTATION === 'archon-label-hidden') {
+        await page.addStyleTag({ content: '#terminal-output [data-terminal-kind="archon"]::before { visibility: hidden !important; }' });
     }
     const fontProof = await page.evaluate(async () => {
         const family = 'JetBrainsMono Nerd Embedded';
@@ -164,6 +166,8 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
                 marginTop: style.marginTop,
                 padding: style.padding,
                 display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
                 pseudo: pseudo ? style.content : null
             };
         };
@@ -181,7 +185,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect(Number.parseFloat(terminalKinds.archon.fontSize)).toBeGreaterThan(Number.parseFloat(terminalKinds.system.fontSize));
     expect(Number.parseFloat(terminalKinds.archon.lineHeight) / Number.parseFloat(terminalKinds.archon.fontSize)).toBeCloseTo(1.58, 2);
     expect(terminalKinds.archonLabel).toMatchObject({
-        color: 'rgb(246, 184, 63)', display: 'block', pseudo: '"ARCHON // ROAST"'
+        color: 'rgb(246, 184, 63)', display: 'block', visibility: 'visible', opacity: '1', pseudo: '"ARCHON // ROAST"'
     });
     await page.evaluate(() => window.__resetGameForTest());
     await page.locator('.puzzle-option').nth(2).click();

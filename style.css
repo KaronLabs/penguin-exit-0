@@ -303,7 +303,8 @@ body.intrusion-impact--ceo > .main-grid {
 
 .btn-touch:focus-visible,
 .tab-btn:focus-visible,
-.puzzle-option:focus-visible {
+.puzzle-option:focus-visible,
+.terminal-output:focus-visible {
     outline: 2px solid var(--signal-cyan);
     outline-offset: 4px;
 }

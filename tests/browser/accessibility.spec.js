@@ -87,6 +87,9 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     const npc = page.locator('#npc-card');
     await expect(npc).toBeVisible();
     await expect(npc).toHaveText(/Walrus DBA/);
+    if (process.env.ACCESSIBILITY_MUTATION === 'npc-quote-overlap-320') {
+        await page.addStyleTag({ content: '#quote-collection { position: relative; top: -35px; }' });
+    }
     await page.evaluate(() => {
         const userStyle = document.createElement('style');
         userStyle.textContent = '#terminal-output { letter-spacing: 0.12em !important; word-spacing: 0.16em !important; line-height: 1.5 !important; }';
@@ -127,6 +130,7 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
             npcWidth: npcRect.width,
             npcHeight: npcRect.height,
             npcIntersectionArea: intersectionArea(terminalRect, npcRect),
+            npcQuoteIntersectionArea: intersectionArea(npcRect, quoteRect),
             quoteOverlap: overlaps(terminalRect, quoteRect),
             rootScrollWidth: document.documentElement.scrollWidth
         };
@@ -139,7 +143,20 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     expect(textSpacingLayout.npcWidth).toBeGreaterThan(0);
     expect(textSpacingLayout.npcHeight).toBeGreaterThan(0);
     expect(textSpacingLayout.npcIntersectionArea).toBe(0);
+    expect(textSpacingLayout.npcQuoteIntersectionArea).toBe(0);
     expect(textSpacingLayout.quoteOverlap).toBe(false);
+
+    const terminal = page.locator('#terminal-output');
+    await page.locator('.puzzle-option').last().focus();
+    await page.keyboard.press('Tab');
+    await expect(terminal).toBeFocused();
+    const scrollTopBeforePageUp = await terminal.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+        return node.scrollTop;
+    });
+    expect(scrollTopBeforePageUp).toBeGreaterThan(0);
+    await page.keyboard.press('PageUp');
+    await expect.poll(() => terminal.evaluate((node) => node.scrollTop)).toBeLessThan(scrollTopBeforePageUp);
     await page.evaluate(() => window.__resetGameForTest());
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     for (const snapshot of snapshots) {
@@ -214,16 +231,38 @@ test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능
     expect(await page.locator('#terminal-output').evaluate((terminal) => terminal.getBoundingClientRect().height)).toBe(288);
 });
 
-test('탭 클릭은 active와 aria-selected를 동기화한다', async ({ page }) => {
+test('탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 동기화한다', async ({ page }) => {
     await page.goto('/');
 
+    const panel = page.locator('#puzzle-panel');
+    await expect(panel).toHaveAttribute('role', 'tabpanel');
     for (const tabId of ['wifi', 'cpu', 'ssh']) {
         const tab = page.locator(`[data-puz="${tabId}"]`);
+        await expect(tab).toHaveAttribute('id', `tab-${tabId}`);
+        await expect(tab).toHaveAttribute('aria-controls', 'puzzle-panel');
         await tab.click();
         expect(await tab.getAttribute('class')).toContain('active');
         expect(await tab.getAttribute('aria-selected')).toBe('true');
+        await expect(tab).toHaveAttribute('tabindex', '0');
+        await expect(panel).toHaveAttribute('aria-labelledby', `tab-${tabId}`);
         expect(await page.locator(`[role="tab"]:not([data-puz="${tabId}"])`).evaluateAll((tabs) => tabs.every((other) => other.getAttribute('aria-selected') === 'false'))).toBe(true);
+        expect(await page.locator(`[role="tab"]:not([data-puz="${tabId}"])`).evaluateAll((tabs) => tabs.every((other) => other.getAttribute('tabindex') === '-1'))).toBe(true);
     }
+
+    const wifi = page.locator('[data-puz="wifi"]');
+    const cpu = page.locator('[data-puz="cpu"]');
+    const ssh = page.locator('[data-puz="ssh"]');
+    await wifi.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(cpu).toBeFocused();
+    await expect(cpu).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('End');
+    await expect(ssh).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(wifi).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(ssh).toBeFocused();
+    await expect(panel).toHaveAttribute('aria-labelledby', 'tab-ssh');
 });
 
 test('reduced-motion은 transition을 제거하면서 게임 조작을 보존한다', async ({ page }) => {
