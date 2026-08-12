@@ -79,6 +79,14 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     await page.locator('.puzzle-option').first().click();
     for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').first().click();
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveCount(27);
+    if (process.env.ACCESSIBILITY_MUTATION === 'npc-overlap-320') {
+        await page.addStyleTag({ content: '#npc-card { transform: translateY(-280px) !important; }' });
+    }
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').first().click();
+    const npc = page.locator('#npc-card');
+    await expect(npc).toBeVisible();
+    await expect(npc).toHaveText(/Walrus DBA/);
     await page.evaluate(() => {
         const userStyle = document.createElement('style');
         userStyle.textContent = '#terminal-output { letter-spacing: 0.12em !important; word-spacing: 0.16em !important; line-height: 1.5 !important; }';
@@ -107,14 +115,19 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
         const quotes = document.querySelector('#quote-collection');
         const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
         const terminalRect = terminal.getBoundingClientRect();
+        const npcRect = npc.getBoundingClientRect();
+        const quoteRect = quotes.getBoundingClientRect();
+        const intersectionArea = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
         return {
             letterSpacing: getComputedStyle(terminal).letterSpacing,
             wordSpacing: getComputedStyle(terminal).wordSpacing,
             lineHeight: getComputedStyle(terminal).lineHeight,
             terminalRight: terminalRect.right,
             viewportRight: window.innerWidth,
-            npcOverlap: overlaps(terminalRect, npc.getBoundingClientRect()),
-            quoteOverlap: overlaps(terminalRect, quotes.getBoundingClientRect()),
+            npcWidth: npcRect.width,
+            npcHeight: npcRect.height,
+            npcIntersectionArea: intersectionArea(terminalRect, npcRect),
+            quoteOverlap: overlaps(terminalRect, quoteRect),
             rootScrollWidth: document.documentElement.scrollWidth
         };
     });
@@ -123,7 +136,9 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     expect(textSpacingLayout.lineHeight).not.toBe('normal');
     expect(textSpacingLayout.terminalRight).toBeLessThanOrEqual(textSpacingLayout.viewportRight);
     expect(textSpacingLayout.rootScrollWidth).toBeLessThanOrEqual(320);
-    expect(textSpacingLayout.npcOverlap).toBe(false);
+    expect(textSpacingLayout.npcWidth).toBeGreaterThan(0);
+    expect(textSpacingLayout.npcHeight).toBeGreaterThan(0);
+    expect(textSpacingLayout.npcIntersectionArea).toBe(0);
     expect(textSpacingLayout.quoteOverlap).toBe(false);
     await page.evaluate(() => window.__resetGameForTest());
     await page.emulateMedia({ reducedMotion: 'no-preference' });
