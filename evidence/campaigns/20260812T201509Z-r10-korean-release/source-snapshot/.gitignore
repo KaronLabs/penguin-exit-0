@@ -1,0 +1,11 @@
+/node_modules/
+/test-results/
+/playwright-report/
+/coverage/
+/.superpowers/
+/.agents/
+/.wrangler/
+/.campaign-operations/
+/debug.log
+/.DS_Store
+/Thumbs.db
