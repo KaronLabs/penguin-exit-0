@@ -165,6 +165,14 @@ async function produceThrough(page, types) {
     }
 }
 
+async function pauseImpactAnimations(page) {
+    return page.addStyleTag({ content: `${impactSelector} { animation-play-state: paused !important; }` });
+}
+
+async function expectActiveImpact(page, type) {
+    await expect(page.locator('body')).toHaveClass(new RegExp(`intrusion-impact--${type}`));
+}
+
 test('AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer', async ({ page, browserName }) => {
     await page.goto('/');
     await observeImpact(page);
@@ -222,7 +230,7 @@ test('AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)', async (
     const eventFiltering = await page.evaluate(() => {
         const body = document.body;
         const banner = document.querySelector('#intrusion-banner');
-        document.querySelector('.main-grid').dispatchEvent(new AnimationEvent('animationend', { bubbles: true, animationName: 'intrusion-impact-copilot' }));
+        banner.querySelector('#intrusion-title').dispatchEvent(new AnimationEvent('animationend', { bubbles: true, animationName: 'intrusion-impact-copilot' }));
         const afterUnrelatedTarget = body.classList.contains('intrusion-impact--copilot');
         banner.dispatchEvent(new AnimationEvent('animationend', { animationName: 'intrusion-impact-ceo' }));
         const afterUnrelatedName = body.classList.contains('intrusion-impact--copilot');
@@ -285,51 +293,70 @@ test('AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)', async (
 
     for (const eventType of ['animationend', 'animationcancel']) {
         await page.evaluate(() => window.__resetGameForTest());
+        const pause = await pauseImpactAnimations(page);
         await produceUntilIntrusion(page, 'copilot');
-        const filtering = await page.evaluate(({ eventType, mutateCancel }) => {
+        await expectActiveImpact(page, 'copilot');
+        const filtering = await page.evaluate(({ eventType, mutateCancel, mutateTargetGuard }) => {
             const body = document.body;
             const banner = document.querySelector('#intrusion-banner');
-            const listenerTarget = mutateCancel ? banner.replaceWith(banner.cloneNode(true)) || document.querySelector('#intrusion-banner') : banner;
+            const listenerTarget = mutateCancel || mutateTargetGuard ? banner.replaceWith(banner.cloneNode(true)) || document.querySelector('#intrusion-banner') : banner;
             const createEvent = (animationName) => new AnimationEvent(eventType, { bubbles: true, animationName });
-            document.querySelector('.main-grid').dispatchEvent(createEvent('intrusion-impact-copilot'));
+            if (mutateTargetGuard) listenerTarget.addEventListener(eventType, (event) => {
+                if (event.animationName === 'intrusion-impact-copilot') body.classList.remove('intrusion-impact--copilot');
+            });
+            listenerTarget.querySelector('#intrusion-title').dispatchEvent(createEvent('intrusion-impact-copilot'));
             const afterUnrelatedTarget = body.classList.contains('intrusion-impact--copilot');
             listenerTarget.dispatchEvent(createEvent('intrusion-impact-ceo'));
             const afterUnrelatedName = body.classList.contains('intrusion-impact--copilot');
             listenerTarget.dispatchEvent(createEvent('intrusion-impact-copilot'));
             return { afterUnrelatedTarget, afterUnrelatedName, afterMatchingEvent: body.classList.contains('intrusion-impact--copilot') };
-        }, { eventType, mutateCancel: eventType === 'animationcancel' && controlledMutation === 'cancel-listener' });
+        }, {
+            eventType,
+            mutateCancel: eventType === 'animationcancel' && controlledMutation === 'cancel-listener',
+            mutateTargetGuard: eventType === 'animationend' && controlledMutation === 'target-guard'
+        });
+        await pause.evaluate((element) => element.remove());
         expect(filtering).toEqual({ afterUnrelatedTarget: true, afterUnrelatedName: true, afterMatchingEvent: false });
     }
 
     await page.evaluate(() => window.__resetGameForTest());
+    const puzzlePause = await pauseImpactAnimations(page);
     await produceUntilIntrusion(page, 'copilot');
     await blockImpactRemoval(page, 'puzzle');
+    await expectActiveImpact(page, 'copilot');
     const puzzleCleanup = await page.evaluate(() => {
         document.querySelector('.puzzle-option').click();
         return document.body.className.includes('intrusion-impact--');
     });
     await restoreImpactRemoval(page, 'puzzle');
+    await puzzlePause.evaluate((element) => element.remove());
     expect(puzzleCleanup).toBe(false);
 
     await page.evaluate(() => window.__resetGameForTest());
+    const ceoShipPause = await pauseImpactAnimations(page);
     await produceThrough(page, ['copilot', 'codex', 'gemini']);
     await produceUntilIntrusion(page, 'ceo');
     await blockImpactRemoval(page, 'ceo-ship');
+    await expectActiveImpact(page, 'ceo');
     const ceoShipCleanup = await page.evaluate(() => {
         document.querySelector('#btn-ceo-ship').click();
         return { active: document.body.className.includes('intrusion-impact--'), ending: document.querySelector('#ending-overlay').style.display };
     });
     await restoreImpactRemoval(page, 'ceo-ship');
+    await ceoShipPause.evaluate((element) => element.remove());
     expect(ceoShipCleanup).toEqual({ active: false, ending: 'flex' });
 
     await page.evaluate(() => window.__resetGameForTest());
+    const penaltyPause = await pauseImpactAnimations(page);
     await produceUntilIntrusion(page, 'copilot');
     await blockImpactRemoval(page, 'penalty');
+    await expectActiveImpact(page, 'copilot');
     const penaltyCleanup = await page.evaluate(() => {
         document.querySelector('#btn-accept-penalty').click();
         return { active: document.body.className.includes('intrusion-impact--'), focus: document.activeElement.id };
     });
     await restoreImpactRemoval(page, 'penalty');
+    await penaltyPause.evaluate((element) => element.remove());
     expect(penaltyCleanup).toEqual({ active: false, focus: 'btn-produce' });
 
     await page.evaluate(() => {
@@ -343,13 +370,16 @@ test('AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)', async (
             return originalSetTimeout(callback, delay, ...args);
         };
     });
+    const geminiPause = await pauseImpactAnimations(page);
     await produceThrough(page, ['copilot', 'codex']);
     await produceUntilIntrusion(page, 'gemini');
     await blockImpactRemoval(page, 'gemini-timer');
+    await expectActiveImpact(page, 'gemini');
     const geminiCleanup = await page.evaluate(() => {
         window.__geminiTimerCallback();
         return { active: document.body.className.includes('intrusion-impact--'), focus: document.activeElement.id };
     });
     await restoreImpactRemoval(page, 'gemini-timer');
+    await geminiPause.evaluate((element) => element.remove());
     expect(geminiCleanup).toEqual({ active: false, focus: 'btn-produce' });
 });
