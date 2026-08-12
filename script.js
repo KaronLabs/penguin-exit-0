@@ -173,7 +173,7 @@ function appendDialogue(context) {
     quoteDiscovery.discovered.add(`${context}:${index}`);
     saveQuoteDiscovery();
     renderQuoteCollection();
-    appendTerminalLine(`아콘> ${deck[index]}`, context, index, 'archon');
+    appendTerminalLine(`아콘 🐧 // ${deck[index]}`, context, index, 'archon');
 }
 
 function showEncounter(encounter) {

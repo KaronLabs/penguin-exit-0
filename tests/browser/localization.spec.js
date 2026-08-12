@@ -132,6 +132,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     await expect(commandLine).toHaveCount(1);
     await expect(systemLine).toHaveCount(1);
     await expect(archonLine).toHaveCount(1);
+    await expect(archonLine).toHaveText('아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.');
     const terminalKinds = await page.locator('#terminal-output').evaluate((terminal) => {
         const command = [...terminal.children].find((line) => line.textContent.startsWith('archon@stone-igloo:~$'));
         const system = [...terminal.children].find((line) => line.textContent.includes('Nginx를 재시작했지만'));
@@ -166,6 +167,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     await expect.soft(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await expect.soft(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveCount(1);
     await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveText(/^아콘 🐧 \/\/ /);
     await page.evaluate(() => window.__resetGameForTest());
     await page.locator('.puzzle-option').nth(2).click();
     await page.locator('[data-puz="cpu"]').click();
@@ -175,7 +177,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     await page.locator('[data-puz="wifi"]').click();
     for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').nth(2).click();
     await expect.poll(() => page.locator('#terminal-output > *').count()).toBe(80);
-    await expect(page.locator('#terminal-output')).toContainText('아콘> 또 눌렀네. 멱등성 테스트가 아니라 내 인내심 DDoS다.');
+    await expect(page.locator('#terminal-output')).toContainText('아콘 🐧 // 또 눌렀네. 멱등성 테스트가 아니라 내 인내심 DDoS다.');
     const terminalViewport = await page.locator('#terminal-output').evaluate((terminal) => {
         const last = terminal.lastElementChild;
         const terminalRect = terminal.getBoundingClientRect();
@@ -188,7 +190,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     });
     expect.soft(terminalViewport.atBottom).toBe(true);
     expect.soft(terminalViewport.lastVisible).toBe(true);
-    expect.soft(terminalViewport.lastText.startsWith('아콘>')).toBe(true);
+    expect.soft(terminalViewport.lastText.startsWith('아콘 🐧 // ')).toBe(true);
 });
 
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
@@ -247,6 +249,7 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await expect(page.locator('#val-debt')).toHaveText('15%');
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-dialogue-index', '1');
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveText(/^아콘 🐧 \/\/ /);
     for (const [caseName, invalidStorage] of [
         ['malformed JSON', '{'],
         ['wrong cursor type', JSON.stringify({ version: 1, cursors: 'wrong-type', discovered: [] })],
@@ -278,8 +281,10 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     await page.locator('#btn-produce').click();
     await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
     await expect(page.locator('#terminal-output [data-dialogue-context="codeReview"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    await expect(page.locator('#terminal-output [data-dialogue-context="codeReview"]')).toHaveText(/^아콘 🐧 \/\/ /);
     for (let click = 0; click < 4; click += 1) await page.locator('#btn-produce').click();
     await expect(page.locator('#terminal-output [data-dialogue-context="ai"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    await expect(page.locator('#terminal-output [data-dialogue-context="ai"]')).toHaveText(/^아콘 🐧 \/\/ /);
     await page.locator('#btn-revert').click();
     await page.evaluate(() => window.__resetGameForTest());
     await page.clock.install({ time: new Date('2026-08-07T00:00:00Z') });
