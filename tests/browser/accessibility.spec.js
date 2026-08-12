@@ -150,6 +150,9 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     await page.locator('.puzzle-option').last().focus();
     await page.keyboard.press('Tab');
     await expect(terminal).toBeFocused();
+    await expect(terminal).toHaveCSS('outline-style', 'solid');
+    await expect(terminal).toHaveCSS('outline-width', '2px');
+    await expect(terminal).toHaveCSS('outline-color', 'rgb(84, 199, 236)');
     const scrollTopBeforePageUp = await terminal.evaluate((node) => {
         node.scrollTop = node.scrollHeight;
         return node.scrollTop;
@@ -235,7 +238,19 @@ test('탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 
     await page.goto('/');
 
     const panel = page.locator('#puzzle-panel');
+    const tablist = page.getByRole('tablist');
+    const wifi = page.locator('[data-puz="wifi"]');
+    const cpu = page.locator('[data-puz="cpu"]');
+    const ssh = page.locator('[data-puz="ssh"]');
+    await expect(tablist).toHaveAccessibleName('장애 진단 터미널');
     await expect(panel).toHaveAttribute('role', 'tabpanel');
+    await expect(wifi).toHaveAttribute('aria-selected', 'true');
+    await expect(wifi).toHaveAttribute('tabindex', '0');
+    await expect(cpu).toHaveAttribute('aria-selected', 'false');
+    await expect(cpu).toHaveAttribute('tabindex', '-1');
+    await expect(ssh).toHaveAttribute('aria-selected', 'false');
+    await expect(ssh).toHaveAttribute('tabindex', '-1');
+    await expect(panel).toHaveAttribute('aria-labelledby', 'tab-wifi');
     for (const tabId of ['wifi', 'cpu', 'ssh']) {
         const tab = page.locator(`[data-puz="${tabId}"]`);
         await expect(tab).toHaveAttribute('id', `tab-${tabId}`);
@@ -249,13 +264,11 @@ test('탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 
         expect(await page.locator(`[role="tab"]:not([data-puz="${tabId}"])`).evaluateAll((tabs) => tabs.every((other) => other.getAttribute('tabindex') === '-1'))).toBe(true);
     }
 
-    const wifi = page.locator('[data-puz="wifi"]');
-    const cpu = page.locator('[data-puz="cpu"]');
-    const ssh = page.locator('[data-puz="ssh"]');
     await wifi.focus();
     await page.keyboard.press('ArrowRight');
     await expect(cpu).toBeFocused();
     await expect(cpu).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#puzzle-title')).toHaveText('장애 #2: 서버 #4 고CPU 경보');
     await page.keyboard.press('End');
     await expect(ssh).toBeFocused();
     await page.keyboard.press('Home');
@@ -263,6 +276,7 @@ test('탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 
     await page.keyboard.press('ArrowLeft');
     await expect(ssh).toBeFocused();
     await expect(panel).toHaveAttribute('aria-labelledby', 'tab-ssh');
+    await expect(page.locator('#puzzle-title')).toHaveText('장애 #3: 골든 티켓 SSH 침입');
 });
 
 test('reduced-motion은 transition을 제거하면서 게임 조작을 보존한다', async ({ page }) => {

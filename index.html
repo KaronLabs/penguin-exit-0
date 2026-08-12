@@ -86,8 +86,8 @@
         </section>
 
         <section class="panel" aria-label="장애 진단 터미널">
-            <h2>장애 진단 터미널</h2>
-            <div class="puzzle-tabs" role="tablist">
+            <h2 id="puzzle-tabs-heading">장애 진단 터미널</h2>
+            <div class="puzzle-tabs" role="tablist" aria-labelledby="puzzle-tabs-heading">
                 <button id="tab-wifi" class="tab-btn active" role="tab" aria-selected="true" aria-controls="puzzle-panel" tabindex="0" data-puz="wifi">Wi-Fi 장애</button>
                 <button id="tab-cpu" class="tab-btn" role="tab" aria-selected="false" aria-controls="puzzle-panel" tabindex="-1" data-puz="cpu">CPU 장애</button>
                 <button id="tab-ssh" class="tab-btn" role="tab" aria-selected="false" aria-controls="puzzle-panel" tabindex="-1" data-puz="ssh">SSH 장애</button>
