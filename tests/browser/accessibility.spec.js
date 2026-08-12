@@ -82,6 +82,20 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
             expect(target.height, `${snapshot.name}: ${target.label} height`).toBeGreaterThanOrEqual(48);
         }
     }
+    await page.evaluate(() => window.__resetGameForTest());
+    for (let click = 0; click < 5; click += 1) await page.locator('#btn-produce').click();
+    await expect(page.locator('body')).toHaveClass(/intrusion-impact--copilot/);
+    const maxScrollWidth = await page.evaluate(async () => {
+        let max = 0;
+        for (let frame = 0; frame < 24; frame += 1) {
+            await new Promise(requestAnimationFrame);
+            max = Math.max(max, document.documentElement.scrollWidth);
+        }
+        return max;
+    });
+    expect(maxScrollWidth).toBeLessThanOrEqual(320);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#btn-produce')).toBeFocused();
 });
 
 test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다', async ({ page }) => {
@@ -102,6 +116,7 @@ test('640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능
     expect(layout.rootScrollWidth).toBeLessThanOrEqual(640);
     expect(['auto', 'scroll']).toContain(layout.overflowY);
     expect(layout.maxHeight).not.toBe('none');
+    expect(await page.locator('#ending-overlay').evaluate((overlay) => getComputedStyle(overlay).position)).toBe('fixed');
     if (layout.scrollHeight > layout.clientHeight) expect(layout.clientHeight).toBeGreaterThan(0);
     expect(await replay.isVisible()).toBe(true);
 });
@@ -135,6 +150,21 @@ test('reduced-motion은 transition을 제거하면서 게임 조작을 보존한
     }
     await page.locator('#btn-produce').click();
     expect(await page.locator('#val-units').innerText()).not.toBe('0 / 200');
+    for (let click = 0; click < 4; click += 1) await page.locator('#btn-produce').click();
+    await expect(page.locator('#intrusion-banner')).toBeVisible();
+    await expect(page.locator('body')).not.toHaveClass(/intrusion-impact--/);
+    const impactStyles = await page.locator('body > header, body > .dashboard, body > .intrusion-banner, body > .main-grid').evaluateAll((targets) => targets.map((target) => {
+        const style = getComputedStyle(target);
+        return { animation: style.animationName, transform: style.transform, willChange: style.willChange };
+    }));
+    for (const style of impactStyles) {
+        expect(style.animation).toBe('none');
+        expect(style.transform).toBe('none');
+        expect(style.willChange).toBe('auto');
+    }
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForTimeout(700);
+    await expect(page.locator('body')).not.toHaveClass(/intrusion-impact--/);
     await page.locator('[data-puz="cpu"]').click();
     expect(await page.locator('[data-puz="cpu"]').getAttribute('class')).toContain('active');
 });

@@ -5,6 +5,7 @@ let state = createInitialState();
 let activePuzzleId = 'wifi';
 let endingRendered = false;
 let geminiTimerId = null;
+let intrusionImpactType = null;
 const quoteStorageKey = 'penguin-exit-0:quote-discovery:v1';
 const dialogueContexts = Object.keys(dialogueDecks);
 const resolvedChoices = new Set();
@@ -13,6 +14,7 @@ let quoteDiscovery = loadQuoteDiscovery();
 
 // Test exposure for zero-allocation state reset
 window.__resetGameForTest = function() {
+    clearIntrusionImpact();
     state = createInitialState();
     endingRendered = false;
     resolvedChoices.clear();
@@ -106,6 +108,18 @@ function prefersReducedMotion() {
     return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 
+function clearIntrusionImpact() {
+    document.body.classList.remove('intrusion-impact--copilot', 'intrusion-impact--codex', 'intrusion-impact--gemini', 'intrusion-impact--ceo');
+    intrusionImpactType = null;
+}
+
+function startIntrusionImpact(type) {
+    clearIntrusionImpact();
+    if (prefersReducedMotion()) return;
+    document.body.classList.add(`intrusion-impact--${type}`);
+    intrusionImpactType = type;
+}
+
 function appendTerminalLine(text, context = '', index = null) {
     const line = document.createElement('div');
     line.className = 'terminal-line';
@@ -179,6 +193,7 @@ window.addEventListener('keydown', (e) => {
         return;
     }
     if (e.key === 'Escape' && state.activeIntrusion !== null) {
+        clearIntrusionImpact();
         clearGeminiTimer();
         if (state.activeIntrusion === 'ceo') {
             state = reduceGameState(state, { type: 'REJECT_CEO_ORDER' });
@@ -203,6 +218,7 @@ function syncGeminiTimer() {
             geminiTimerId = setTimeout(() => {
                 geminiTimerId = null;
                 if (state.activeIntrusion === 'gemini') {
+                    clearIntrusionImpact();
                     state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
                     renderGameState();
                     btnProduce.focus();
@@ -216,6 +232,7 @@ function syncGeminiTimer() {
 
 // Intrusion Resolution Actions
 btnRevert.addEventListener('click', () => {
+    clearIntrusionImpact();
     clearGeminiTimer();
     if (state.activeIntrusion === 'ceo') {
         state = reduceGameState(state, { type: 'REJECT_CEO_ORDER' });
@@ -227,6 +244,7 @@ btnRevert.addEventListener('click', () => {
 });
 
 btnCeoShip.addEventListener('click', () => {
+    clearIntrusionImpact();
     clearGeminiTimer();
     state = reduceGameState(state, { type: 'RESOLVE_CEO_SHIP' });
     renderGameState();
@@ -234,6 +252,7 @@ btnCeoShip.addEventListener('click', () => {
 });
 
 btnAcceptPenalty.addEventListener('click', () => {
+    clearIntrusionImpact();
     clearGeminiTimer();
     state = reduceGameState(state, { type: 'APPLY_AI_PENALTY' });
     renderGameState();
@@ -251,6 +270,7 @@ btnProduce.addEventListener('click', () => {
     }
     if (wasActiveIntrusion === null && state.activeIntrusion !== null) appendDialogue('ai');
     renderGameState();
+    if (wasActiveIntrusion === null && state.activeIntrusion !== null) startIntrusionImpact(state.activeIntrusion);
 });
 
 // Tab Handlers
@@ -283,6 +303,7 @@ function renderPuzzles() {
         btn.setAttribute('aria-label', choice.label);
 
         btn.addEventListener('click', () => {
+            clearIntrusionImpact();
             npcCard.hidden = true;
             const choiceSlot = `${currentPuzzle.id}:${choice.key}`;
             const repeated = resolvedChoices.has(choiceSlot);
@@ -428,6 +449,7 @@ function renderGameState() {
 
     // 6. Ending Check (One-shot modal rendering, no alert spam!)
     if (state.endingTriggered && !endingRendered) {
+        clearIntrusionImpact();
         endingRendered = true;
         clearGeminiTimer();
         clearTerminalTimers();
@@ -437,6 +459,14 @@ function renderGameState() {
         btnPlayAgain.focus();
     }
 }
+
+intrusionBanner.addEventListener('animationend', (event) => {
+    if (event.target === intrusionBanner && event.animationName === `intrusion-impact-${intrusionImpactType}`) clearIntrusionImpact();
+});
+
+intrusionBanner.addEventListener('animationcancel', (event) => {
+    if (event.target === intrusionBanner && event.animationName === `intrusion-impact-${intrusionImpactType}`) clearIntrusionImpact();
+});
 
 // Initial Render
 renderQuoteCollection();

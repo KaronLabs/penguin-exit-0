@@ -167,6 +167,68 @@ h1::before {
     text-align: left;
 }
 
+@keyframes intrusion-impact-copilot {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    25% { transform: translate3d(3px, 0, 0); }
+    50% { transform: translate3d(-3px, 0, 0); }
+    75% { transform: translate3d(3px, 0, 0); }
+}
+
+@keyframes intrusion-impact-codex {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    25% { transform: translate3d(4px, 1px, 0); }
+    50% { transform: translate3d(-4px, -1px, 0); }
+    75% { transform: translate3d(4px, 1px, 0); }
+}
+
+@keyframes intrusion-impact-gemini {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    15%, 25% { transform: translate3d(2px, 0, 0); }
+    35% { transform: translate3d(-2px, 0, 0); }
+    45%, 55% { transform: translate3d(2px, 0, 0); }
+    65% { transform: translate3d(-2px, 0, 0); }
+    75%, 85% { transform: translate3d(2px, 0, 0); }
+}
+
+@keyframes intrusion-impact-ceo {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    25% { transform: translate3d(5px, 1px, 0); }
+    50% { transform: translate3d(-5px, -1px, 0); }
+    75% { transform: translate3d(5px, 1px, 0); }
+}
+
+body.intrusion-impact--copilot > header,
+body.intrusion-impact--copilot > .dashboard,
+body.intrusion-impact--copilot > .intrusion-banner,
+body.intrusion-impact--copilot > .main-grid {
+    animation: intrusion-impact-copilot 320ms linear 1 both;
+    will-change: transform;
+}
+
+body.intrusion-impact--codex > header,
+body.intrusion-impact--codex > .dashboard,
+body.intrusion-impact--codex > .intrusion-banner,
+body.intrusion-impact--codex > .main-grid {
+    animation: intrusion-impact-codex 420ms linear 1 both;
+    will-change: transform;
+}
+
+body.intrusion-impact--gemini > header,
+body.intrusion-impact--gemini > .dashboard,
+body.intrusion-impact--gemini > .intrusion-banner,
+body.intrusion-impact--gemini > .main-grid {
+    animation: intrusion-impact-gemini 650ms linear 1 both;
+    will-change: transform;
+}
+
+body.intrusion-impact--ceo > header,
+body.intrusion-impact--ceo > .dashboard,
+body.intrusion-impact--ceo > .intrusion-banner,
+body.intrusion-impact--ceo > .main-grid {
+    animation: intrusion-impact-ceo 520ms linear 1 both;
+    will-change: transform;
+}
+
 .intrusion-title {
     color: var(--alarm-coral);
     font-family: var(--font-utility);
@@ -626,6 +688,27 @@ h1::before {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+
+    body.intrusion-impact--copilot > header,
+    body.intrusion-impact--copilot > .dashboard,
+    body.intrusion-impact--copilot > .intrusion-banner,
+    body.intrusion-impact--copilot > .main-grid,
+    body.intrusion-impact--codex > header,
+    body.intrusion-impact--codex > .dashboard,
+    body.intrusion-impact--codex > .intrusion-banner,
+    body.intrusion-impact--codex > .main-grid,
+    body.intrusion-impact--gemini > header,
+    body.intrusion-impact--gemini > .dashboard,
+    body.intrusion-impact--gemini > .intrusion-banner,
+    body.intrusion-impact--gemini > .main-grid,
+    body.intrusion-impact--ceo > header,
+    body.intrusion-impact--ceo > .dashboard,
+    body.intrusion-impact--ceo > .intrusion-banner,
+    body.intrusion-impact--ceo > .main-grid {
+        animation: none !important;
+        transform: none !important;
+        will-change: auto !important;
     }
 }
 
