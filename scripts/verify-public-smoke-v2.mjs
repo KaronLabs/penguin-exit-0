@@ -19,7 +19,7 @@ try {
     if (config.schemaVersion === 3) process.stderr.write(`AUDIT_TARGET_REALPATH=${fs.realpathSync(config.auditTargetRealpath)}\n`);
     const receipt = auditAcceptedRun({ configPath });
     const receiptPath = path.resolve(config.auditReceiptPath);
-    const releaseRoot = path.resolve(config.schemaVersion === 3 ? JSON.parse(fs.readFileSync(config.baseConfigPath, 'utf8')).releaseRoot : config.releaseRoot);
+    const releaseRoot = path.resolve(config.schemaVersion === 3 ? config.mutationRootRealpath : config.releaseRoot);
     if (receiptPath === releaseRoot || !receiptPath.startsWith(`${releaseRoot}${path.sep}`)) throw new Error('auditReceiptPath escapes releaseRoot');
     if (fs.existsSync(receiptPath)) throw new Error('auditReceiptPath already exists');
     fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
