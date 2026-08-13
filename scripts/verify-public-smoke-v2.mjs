@@ -9,7 +9,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-    if (argv.length !== 2 || argv[0] !== '--config') throw new Error('usage: verify-public-smoke-v2.mjs --config <path>');
+    if (argv.length !== 2 || argv[0] !== '--config' || argv[1] === '--config') throw new Error('usage: verify-public-smoke-v2.mjs --config <path>');
     return path.resolve(argv[1]);
 }
 
@@ -18,7 +18,7 @@ try {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (config.schemaVersion === 3) process.stderr.write(`AUDIT_TARGET_REALPATH=${fs.realpathSync(config.auditTargetRealpath)}\n`);
     const receipt = auditAcceptedRun({ configPath });
-    const receiptPath = path.resolve(config.auditReceiptPath);
+    const receiptPath = fs.realpathSync(path.dirname(path.resolve(config.auditReceiptPath))) + path.sep + path.basename(config.auditReceiptPath);
     const releaseRoot = path.resolve(config.schemaVersion === 3 ? config.mutationRootRealpath : config.releaseRoot);
     if (receiptPath === releaseRoot || !receiptPath.startsWith(`${releaseRoot}${path.sep}`)) throw new Error('auditReceiptPath escapes releaseRoot');
     if (fs.existsSync(receiptPath)) throw new Error('auditReceiptPath already exists');

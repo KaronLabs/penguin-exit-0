@@ -68,7 +68,6 @@ test('computed visibility requires every primitive rather than a runner supplied
     for (const [name, broken] of [
         ['hidden attribute', { hiddenAttribute: true }],
         ['display', { display: 'none' }],
-        ['position', { position: 'absolute' }],
         ['CSS visibility', { visibility: 'hidden' }],
         ['opacity', { opacity: 0 }],
         ['positive rect', { clientRects: [] }],
@@ -78,6 +77,7 @@ test('computed visibility requires every primitive rather than a runner supplied
     ]) assert.equal(deriveVisibility(visibility(broken)), false, name);
     assert.equal(deriveVisibility(visibility({ position: 'static' })), true, 'position is observed for every element but fixed is ending-specific');
     assert.throws(() => deriveVisibility({ ...visibility(), visible: true }), /visibility/);
+    assertRecursiveSchema(deriveVisibility, visibility(), 'visibility');
 });
 
 test('the contract library exposes explicit validators for every Task 1 evidence boundary', () => {
@@ -92,9 +92,9 @@ test('schema validators fail closed on missing, unknown, and wrong-type config f
     const config = {
         schemaVersion: 2,
         releaseId: '20260813T010203Z-r14-public-smoke-v2',
-        releaseRoot: '/release', acceptedDir: '/release/accepted', failureRoot: '/release/failure',
-        operationReceiptPath: '/release/operation.json', auditReceiptPath: '/release/audit.json', negativeReceiptPath: '/release/negative.json', closureRoot: '/release/closure', closureReceiptPath: '/release/closure.json', actualChromeEvidencePath: '/release/chrome.json', releaseReceiptPath: '/release/final.json', workerStdoutPath: '/release/worker.out', workerStderrPath: '/release/worker.err',
-        campaignDir: '/campaign', campaignSpecPath: '/campaign/spec.md', campaignReceiptPath: '/campaign/receipt.json', campaignRunId: '20260813T010203Z-r10-korean-release', sourceSnapshotDir: '/campaign/source-snapshot', executionSourceDir: '/execution', authorityProjectRoot: '/authority/project', authorityWorkspaceRoot: '/authority', deploymentRecordPath: '/release/deployment.json', immutableUrl: 'https://abcdef12.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: '/node', nodeExeSha256: 'a'.repeat(64), wranglerJsPath: '/wrangler', wranglerJsSha256: 'b'.repeat(64), projectName: 'penguin-exit-0',
+        releaseRoot: '/authority/release', acceptedDir: '/authority/release/accepted', failureRoot: '/authority/release/failure',
+        operationReceiptPath: '/authority/release/operation.json', auditReceiptPath: '/authority/release/audit.json', negativeReceiptPath: '/authority/release/negative.json', closureRoot: '/authority/release/closure', closureReceiptPath: '/authority/release/closure.json', actualChromeEvidencePath: '/authority/release/chrome.json', releaseReceiptPath: '/authority/release/final.json', workerStdoutPath: '/authority/release/worker.out', workerStderrPath: '/authority/release/worker.err',
+        campaignDir: '/authority/project/campaign', campaignSpecPath: '/authority/campaign/spec.md', campaignReceiptPath: '/authority/campaign/receipt.json', campaignRunId: '20260813T010203Z-r10-korean-release', sourceSnapshotDir: '/authority/project/campaign/source-snapshot', executionSourceDir: '/authority/project/execution', authorityProjectRoot: '/authority/project', authorityWorkspaceRoot: '/authority', deploymentRecordPath: '/authority/release/deployment.json', immutableUrl: 'https://abcdef12.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: '/node', nodeExeSha256: 'a'.repeat(64), wranglerJsPath: '/wrangler', wranglerJsSha256: 'b'.repeat(64), projectName: 'penguin-exit-0',
     };
     assert.doesNotThrow(() => smoke.validateOperationConfig(config));
     const missing = { ...config }; delete missing.projectName;
@@ -131,7 +131,7 @@ test('a case rejects exact signature drift and every forbidden error channel', (
             roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.',
             roastKind: 'archon',
             pseudoLabel: '"ARCHON // ROAST"',
-            tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'cpu-tab', terminalRowsPersisted: true },
+            tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true },
         },
         errors: { console: [], page: [], requestFailed: [], http: [], external: [] },
     };
@@ -333,12 +333,12 @@ function buildCase(fixture, engine, originKind, caseIndex) {
     });
     const stages = [
         ['initial', 320, 640, 20],
-        ['progress', 320, 640, 500],
+        ['progress', 320, 640, 350],
         ['ending', 640, 360, 4500],
     ];
     const screenshots = stages.map(([stage, width, height, offset]) => {
         const relativePath = `screenshots/${label}-${stage === 'ending' ? 'ending-640' : `${stage}-320`}.png`;
-        const marker = label === 'firefox-immutable' && stage === 'progress' ? 'chromium-alias-progress-duplicate' : `${label}-${stage}`;
+        const marker = stage === 'progress' && ['chromium-alias', 'firefox-immutable'].includes(label) ? 'shared-progress' : `${label}-${stage}`;
         const pngBytes = png(width, height, marker);
         writeFile(path.join(fixture.acceptedDir, relativePath), pngBytes);
         return {
@@ -688,11 +688,18 @@ function mutateScreenshot(fixture, destinationIndex, sourceIndex, mode) {
     const destination = flat[destinationIndex].screenshot;
     const source = flat[sourceIndex].screenshot;
     const destinationFile = path.join(fixture.acceptedDir, destination.relativePath);
-    const sourceBytes = fs.readFileSync(path.join(fixture.acceptedDir, source.relativePath));
+    const sourceFile = path.join(fixture.acceptedDir, source.relativePath);
+    const destinationBytes = fs.readFileSync(destinationFile);
+    const sourceBytes = fs.readFileSync(sourceFile);
     writeFile(destinationFile, sourceBytes);
     destination.bytes = sourceBytes.length;
     destination.sha256 = sha256(sourceBytes);
-    if (mode === 'copy-binding') destination.oracleSnapshotSha256 = source.oracleSnapshotSha256;
+    if (mode === 'swap-bytes') {
+        writeFile(sourceFile, destinationBytes);
+        source.bytes = destinationBytes.length;
+        source.sha256 = sha256(destinationBytes);
+        [destination.oracleSnapshotSha256, source.oracleSnapshotSha256] = [source.oracleSnapshotSha256, destination.oracleSnapshotSha256];
+    } else destination.oracleSnapshotSha256 = source.oracleSnapshotSha256;
     const events = buildEvents(observations);
     rewriteAccepted(fixture, { observations, events });
 }
@@ -790,18 +797,59 @@ test('a complete accepted fixture authenticates every external authority and all
     assert.equal(sha256File(fixture.config.auditReceiptPath), before, 'exclusive creation never overwrites the receipt');
 });
 
+test('case deadline is measured from that case context creation rather than the operation clock origin', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const record = structuredClone(fixture.cases[0]);
+    record.startedMonotonicMs = 200_000;
+    record.finishedMonotonicMs = 201_000;
+    assert.doesNotThrow(() => smoke.validateCase(record));
+
+    record.finishedMonotonicMs = 320_000;
+    assert.throws(() => smoke.validateCase(record), /case\.duration/);
+});
+
 test('security-sensitive external and audit schemas are recursively exact', (t) => {
     const fixture = createAcceptedFixture(t);
     const claims = readJson(path.join(fixture.campaignDir, 'claims.json'));
     const envelope = readJson(path.join(fixture.campaignDir, 'submission-envelope.json'));
     const campaignReceipt = readJson(fixture.campaignReceiptPath);
     const operationReceipt = readJson(fixture.operationReceiptPath);
+    const derived = {
+        schemaVersion: 3, baseConfigPath: fixture.configPath, baseConfigSha256: sha256File(fixture.configPath), mutationId: 'NC-FIXTURE',
+        mutationRootRealpath: path.join(fixture.temp, 'mutation'), auditTargetRealpath: path.join(fixture.temp, 'mutation', 'accepted'),
+        externalOperationReceiptPath: fixture.operationReceiptPath, auditReceiptPath: path.join(fixture.temp, 'mutation', 'audit.json'),
+    };
     assertRecursiveSchema(smoke.validateOperationConfig, fixture.config, 'operation config');
+    assertRecursiveSchema(smoke.validateDerivedAuditConfig, derived, 'derived audit config');
     assertRecursiveSchema(smoke.validateCampaignClaims, claims, 'campaign claims');
     assertRecursiveSchema(smoke.validateCampaignEnvelope, envelope, 'campaign envelope');
     assertRecursiveSchema(smoke.validateCampaignReceipt, campaignReceipt, 'campaign receipt');
     assertRecursiveSchema(smoke.validateOperationReceipt, operationReceipt, 'operation receipt');
     assertRecursiveSchema(smoke.validateAuditReceipt, expectedAuditReceipt(fixture), 'audit receipt');
+    assertRecursiveSchema(smoke.validateCase, fixture.cases[0], 'case record');
+});
+
+test('derived schema-3 audit selects only its contained copied target and exclusive receipt', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const mutationRoot = path.join(fixture.temp, 'mutation-root');
+    const target = path.join(mutationRoot, 'accepted');
+    fs.mkdirSync(mutationRoot);
+    fs.cpSync(fixture.acceptedDir, target, { recursive: true });
+    const auditReceiptPath = path.join(mutationRoot, 'audit-receipt.json');
+    const derivedPath = path.join(mutationRoot, 'audit-config.json');
+    const derived = {
+        schemaVersion: 3, baseConfigPath: fixture.configPath, baseConfigSha256: sha256File(fixture.configPath), mutationId: 'NC-FIXTURE',
+        mutationRootRealpath: fs.realpathSync(mutationRoot), auditTargetRealpath: fs.realpathSync(target), externalOperationReceiptPath: fixture.operationReceiptPath, auditReceiptPath,
+    };
+    writeJson(derivedPath, derived);
+    const cli = spawnSync(process.execPath, [path.resolve('scripts/verify-public-smoke-v2.mjs'), '--config', derivedPath], { encoding: 'utf8' });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(cli.stderr, `AUDIT_TARGET_REALPATH=${fs.realpathSync(target)}\n`);
+    assert.match(cli.stdout, /^PUBLIC_SMOKE_V2_GATE=6\/6 /);
+    const receipt = readJson(auditReceiptPath);
+    assert.equal(receipt.auditedTargetRealpath, fs.realpathSync(target));
+    assert.equal(receipt.configSha256, sha256File(derivedPath));
+    assert.notEqual(receipt.auditedTargetRealpath, fs.realpathSync(fixture.acceptedDir));
 });
 
 test('full-rehash semantic mutations fail at their stable invariant before frozen receipt hashes', (t) => {
@@ -823,6 +871,11 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
             operation.worker.stderrSha256 = sha256(stderr);
             writeJson(fixture.operationReceiptPath, operation);
         }],
+        ['operation accepted manifest binding', /manifest\.operationReceiptBinding/, (fixture) => {
+            const operation = readJson(fixture.operationReceiptPath);
+            operation.accepted.manifestSha256 = '0'.repeat(64);
+            writeJson(fixture.operationReceiptPath, operation);
+        }],
         ['control plane external authority', /cloudflare\.preDeploymentId/, (fixture) => {
             const stdoutFile = path.join(fixture.acceptedDir, 'control-plane/pre.stdout.bin');
             const rows = JSON.parse(fs.readFileSync(stdoutFile, 'utf8'));
@@ -836,10 +889,33 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
             writeJson(captureFile, capture);
             rewriteAccepted(fixture);
         }],
+        ['control plane recursive schema', /cloudflare\.mid\.capture/, (fixture) => {
+            const captureFile = path.join(fixture.acceptedDir, 'control-plane/mid.command.json');
+            const capture = readJson(captureFile);
+            capture.attacker = true;
+            writeJson(captureFile, capture);
+            rewriteAccepted(fixture);
+        }],
         ['file probe source authority', /fileGate\.finalAlias\.scriptSha256/, (fixture) => {
             const probeFile = path.join(fixture.acceptedDir, 'file-probes/final-alias-5.json');
             const probe = readJson(probeFile);
             probe.results.find((result) => result.path === '/script.js').sha256 = 'f'.repeat(64);
+            writeJson(probeFile, probe);
+            rewriteAccepted(fixture);
+        }],
+        ['file probe recursive schema', /fileGate\.initial\.result/, (fixture) => {
+            const probeFile = path.join(fixture.acceptedDir, 'file-probes/initial-10.json');
+            const probe = readJson(probeFile);
+            delete probe.results[0].contentType;
+            writeJson(probeFile, probe);
+            rewriteAccepted(fixture);
+        }],
+        ['file probe cardinality', /fileGate\.initial\.cardinality/, (fixture) => {
+            const probeFile = path.join(fixture.acceptedDir, 'file-probes/initial-10.json');
+            const probe = readJson(probeFile);
+            probe.results.pop();
+            probe.passed = 9;
+            probe.total = 9;
             writeJson(probeFile, probe);
             rewriteAccepted(fixture);
         }],
@@ -868,6 +944,16 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
             observations[0].errors.requestFailed.push({ url: `${IMMUTABLE_URL}script.js`, method: 'GET', errorText: 'net::ERR_FAILED' });
             rewriteAccepted(fixture, { observations });
         }],
+        ['console error', /errors\.console/, (fixture) => {
+            const observations = structuredClone(fixture.cases);
+            observations[0].errors.console.push({ type: 'error', text: 'fixture error' });
+            rewriteAccepted(fixture, { observations });
+        }],
+        ['page error', /errors\.page/, (fixture) => {
+            const observations = structuredClone(fixture.cases);
+            observations[0].errors.page.push({ name: 'Error', message: 'fixture error', stack: 'fixture stack' });
+            rewriteAccepted(fixture, { observations });
+        }],
         ['HTTP error', /errors\.http/, (fixture) => {
             const observations = structuredClone(fixture.cases);
             observations[0].errors.http.push({ url: `${IMMUTABLE_URL}script.js`, status: 500 });
@@ -883,10 +969,42 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
             deployment.sourceGitHead = 'd'.repeat(40);
             writeJson(fixture.deploymentRecordPath, deployment);
         }],
+        ['source deployment product mismatch', /campaign\.deployment\.productFiles/, (fixture) => {
+            writeFile(path.join(fixture.sourceSnapshot, 'script.js'), 'export const fixtureScript = "mutated";\n');
+            const inventory = walkInventory(fixture.sourceSnapshot);
+            writeJson(path.join(fixture.campaignDir, 'candidate-inventory.json'), inventory);
+            const claims = readJson(path.join(fixture.campaignDir, 'claims.json'));
+            claims.candidateInventory = { fileCount: inventory.fileCount, pathListSha256: inventory.pathListSha256, contentRecordsSha256: inventory.contentRecordsSha256 };
+            writeJson(path.join(fixture.campaignDir, 'claims.json'), claims);
+            const envelopePath = path.join(fixture.campaignDir, 'submission-envelope.json');
+            const envelope = readJson(envelopePath);
+            Object.assign(envelope.source, claims.candidateInventory);
+            envelope.payloadHashes['candidate-inventory.json'] = sha256File(path.join(fixture.campaignDir, 'candidate-inventory.json'));
+            envelope.payloadHashes['claims.json'] = sha256File(path.join(fixture.campaignDir, 'claims.json'));
+            writeJson(envelopePath, envelope);
+            const receipt = readJson(fixture.campaignReceiptPath);
+            receipt.candidateInventory = claims.candidateInventory;
+            receipt.campaign.submissionEnvelopeSha256 = sha256File(envelopePath);
+            writeJson(fixture.campaignReceiptPath, receipt);
+        }],
         ['campaign claims nested meaning', /campaignClaims\.browser\.chromium/, (fixture) => {
             const claims = readJson(path.join(fixture.campaignDir, 'claims.json'));
             claims.browser.chromium.passed = 15;
             rewriteCampaign(fixture, claims);
+        }],
+        ['accepted run recursive schema', /acceptedRun/, (fixture) => {
+            const acceptedFile = path.join(fixture.acceptedDir, 'accepted-run.json');
+            const accepted = readJson(acceptedFile);
+            accepted.tooling.runner.attacker = true;
+            writeJson(acceptedFile, accepted);
+            rewriteAccepted(fixture);
+        }],
+        ['accepted run source authority', /acceptedRun\.productFiles/, (fixture) => {
+            const acceptedFile = path.join(fixture.acceptedDir, 'accepted-run.json');
+            const accepted = readJson(acceptedFile);
+            accepted.productFiles['/script.js'].sha256 = '0'.repeat(64);
+            writeJson(acceptedFile, accepted);
+            rewriteAccepted(fixture);
         }],
     ];
     for (const [name, expected, mutate] of table) {
@@ -924,7 +1042,7 @@ test('PNG signature, IHDR viewport, tuple path, oracle and time bindings are all
         ['malformed signature', /png\.signature|png\.structure/, (fixture, screenshot, file) => writeFile(file, Buffer.from('not a png'))],
         ['wrong IHDR viewport', /png\.viewport/, (fixture, screenshot, file) => writeFile(file, png(321, 640, 'wrong-width'))],
         ['path tuple', /screenshot\.path/, (fixture, screenshot) => { screenshot.relativePath = 'screenshots/wrong.png'; }],
-        ['oracle', /screenshot\.oracleBinding/, (fixture, screenshot) => { screenshot.oracleSnapshotSha256 = 'e'.repeat(64); }],
+        ['oracle', /screenshot\.operationReceiptBinding/, (fixture, screenshot) => { screenshot.oracleSnapshotSha256 = 'e'.repeat(64); }],
         ['timestamp order', /screenshot\.timestamps/, (fixture, screenshot) => { screenshot.captureFinishedUtc = screenshot.captureStartedUtc; }],
     ];
     for (const [name, expected, mutate] of table) {
@@ -978,8 +1096,9 @@ test('config and manifest containment reject escapes, case collisions, and symli
     {
         const root = tempRoot(t);
         writeFile(path.join(root, 'A.bin'), 'a');
-        writeFile(path.join(root, 'a.bin'), 'b');
         const manifest = manifestFor(root);
+        manifest.files.push({ ...manifest.files[0], path: 'a.bin' });
+        manifest.manifestPayloadSha256 = sha256(canonicalJson({ schemaVersion: manifest.schemaVersion, releaseId: manifest.releaseId, files: manifest.files }));
         assert.throws(() => validateManifest(root, manifest), /case.*collision/i);
     }
 });

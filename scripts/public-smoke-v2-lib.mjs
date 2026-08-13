@@ -10,7 +10,10 @@ export const STAGES = Object.freeze(['initial', 'progress', 'ending']);
 
 const PRODUCT_PATHS = Object.freeze(['/', '/content.js', '/game-core.js', '/script.js', '/style.css']);
 const RELEASE_ID = /^[0-9]{8}T[0-9]{6}Z-r14-public-smoke-v2$/;
+const CAMPAIGN_ID = /^[0-9]{8}T[0-9]{6}Z-r10-korean-release$/;
 const SHA256 = /^[a-f0-9]{64}$/;
+const EXTERNAL_SHA256 = /^[A-Fa-f0-9]{64}$/;
+const GIT_SHA1 = /^[a-f0-9]{40}$/;
 const ZERO_SHA256 = '0'.repeat(64);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -55,8 +58,28 @@ function sha(value, invariant) {
     return value;
 }
 
+function externalSha(value, invariant) {
+    if (!EXTERNAL_SHA256.test(string(value, invariant))) fail(invariant, 'must be 64 hex');
+    return value;
+}
+
+function sameHash(left, right) {
+    return typeof left === 'string' && typeof right === 'string' && left.toLowerCase() === right.toLowerCase();
+}
+
 function utc(value, invariant) {
-    if (!Number.isFinite(Date.parse(string(value, invariant)))) fail(invariant, 'must be UTC date');
+    const candidate = string(value, invariant);
+    if (!candidate.endsWith('Z') || !Number.isFinite(Date.parse(candidate))) fail(invariant, 'must be UTC date');
+    return value;
+}
+
+function number(value, invariant) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) fail(invariant, 'must be finite number');
+    return value;
+}
+
+function gitSha(value, invariant) {
+    if (!GIT_SHA1.test(string(value, invariant))) fail(invariant, 'must be 40 lowercase hex');
     return value;
 }
 
@@ -132,29 +155,37 @@ function expectedScreenshotName(label, stage) {
 export function deriveVisibility(raw) {
     const primitiveKeys = ['hiddenAttribute', 'display', 'position', 'visibility', 'opacity', 'clientRects', 'intersectionArea', 'intersectionRatio', 'viewportWidth', 'viewportHeight', 'centerX', 'centerY', 'hitElementId', 'hitIsSelfOrDescendant'];
     const actualKeys = Object.keys(object(raw, 'visibility')).sort();
-    const allowedKeys = [...primitiveKeys, 'visible'].sort();
-    if (actualKeys.some((key) => !allowedKeys.includes(key)) || primitiveKeys.some((key) => !actualKeys.includes(key))) fail('visibility', `keys=${actualKeys.join(',')}`);
-    if (bool(raw.hiddenAttribute, 'visibility.hiddenAttribute')) return false;
-    if (string(raw.display, 'visibility.display') === 'none') return false;
-    if (string(raw.position, 'visibility.position') !== 'fixed') return false;
-    if (['hidden', 'collapse'].includes(string(raw.visibility, 'visibility.visibility'))) return false;
-    if (!(typeof raw.opacity === 'number' && Number.isFinite(raw.opacity) && raw.opacity > 0)) return false;
-    if (!Array.isArray(raw.clientRects) || !raw.clientRects.some((rect) => {
-        exactKeys(rect, ['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'], 'visibility.clientRect');
-        return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width > 0 && rect.height > 0;
-    })) return false;
-    for (const key of ['intersectionArea', 'intersectionRatio', 'viewportWidth', 'viewportHeight']) if (!(typeof raw[key] === 'number' && Number.isFinite(raw[key]) && raw[key] > 0)) return false;
-    if (!(typeof raw.centerX === 'number' && Number.isFinite(raw.centerX) && typeof raw.centerY === 'number' && Number.isFinite(raw.centerY))) return false;
-    string(raw.hitElementId, 'visibility.hitElementId');
-    return bool(raw.hitIsSelfOrDescendant, 'visibility.hitIsSelfOrDescendant');
+    const allowedKeys = [...primitiveKeys].sort();
+    if (actualKeys.length !== allowedKeys.length || actualKeys.some((key, index) => key !== allowedKeys[index])) fail('visibility', `keys=${actualKeys.join(',')}`);
+    bool(raw.hiddenAttribute, 'visibility.hiddenAttribute'); string(raw.display, 'visibility.display'); string(raw.position, 'visibility.position'); string(raw.visibility, 'visibility.visibility'); number(raw.opacity, 'visibility.opacity');
+    if (!Array.isArray(raw.clientRects)) fail('visibility.clientRects');
+    raw.clientRects.forEach((rect) => { exactKeys(rect, ['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left'], 'visibility.clientRect'); for (const key of ['x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left']) number(rect[key], `visibility.clientRect.${key}`); });
+    for (const key of ['intersectionArea', 'intersectionRatio', 'viewportWidth', 'viewportHeight', 'centerX', 'centerY']) number(raw[key], `visibility.${key}`);
+    if (raw.viewportWidth <= 0 || raw.viewportHeight <= 0) fail('visibility.viewport');
+    string(raw.hitElementId, 'visibility.hitElementId'); bool(raw.hitIsSelfOrDescendant, 'visibility.hitIsSelfOrDescendant');
+    return raw.hiddenAttribute === false
+        && raw.display !== 'none'
+        && !['hidden', 'collapse'].includes(raw.visibility)
+        && raw.opacity > 0
+        && raw.clientRects.some((rect) => rect.width > 0 && rect.height > 0)
+        && raw.intersectionArea > 0
+        && raw.intersectionRatio > 0
+        && raw.intersectionRatio <= 1
+        && raw.centerX >= 0
+        && raw.centerX < raw.viewportWidth
+        && raw.centerY >= 0
+        && raw.centerY < raw.viewportHeight
+        && raw.hitElementId.length > 0
+        && raw.hitIsSelfOrDescendant;
 }
 
 function pngDimensions(file, invariant) {
     const data = fs.readFileSync(file);
-    if (data.length < 24 || !data.subarray(0, 8).equals(PNG_SIGNATURE) || data.toString('ascii', 12, 16) !== 'IHDR') fail(invariant, 'invalid PNG');
+    if (data.length < 24 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) fail(`${invariant}.signature`);
+    if (data.readUInt32BE(8) !== 13 || data.toString('ascii', 12, 16) !== 'IHDR') fail(`${invariant}.structure`);
     const width = data.readUInt32BE(16);
     const height = data.readUInt32BE(20);
-    if (!width || !height) fail(invariant, 'zero PNG dimensions');
+    if (!width || !height) fail(`${invariant}.structure`, 'zero PNG dimensions');
     return { width, height };
 }
 
@@ -183,6 +214,7 @@ export function validateManifest(root, manifest) {
         nonNegative(entry.bytes, 'manifest.file.bytes');
         sha(entry.sha256, 'manifest.file.sha256');
         if (files.includes(relative)) fail('manifest.duplicate', relative);
+        if (files.some((file) => file.toLowerCase() === relative.toLowerCase())) fail('manifest.caseCollision', relative);
         const absolute = contained(root, path.join(root, relative), 'manifest.file.path');
         noSymlinkAncestors(absolute, 'manifest.file.path');
         const stat = fs.lstatSync(absolute);
@@ -218,12 +250,26 @@ function validateSignature(value) {
     };
     for (const [key, expectedValue] of Object.entries(expected)) if (value[key] !== expectedValue) fail(`signature.${key}`);
     exactKeys(value.tabs, ['wifiAriaSelected', 'wifiTabIndex', 'cpuAriaSelected', 'cpuTabIndex', 'panelAriaLabelledby', 'terminalRowsPersisted'], 'signature.tabs');
-    if (value.tabs.wifiAriaSelected !== 'false' || value.tabs.wifiTabIndex !== '-1' || value.tabs.cpuAriaSelected !== 'true' || value.tabs.cpuTabIndex !== '0' || value.tabs.panelAriaLabelledby !== 'cpu-tab' || value.tabs.terminalRowsPersisted !== true) fail('signature.tabs');
+    if (value.tabs.wifiAriaSelected !== 'false' || value.tabs.wifiTabIndex !== '-1' || value.tabs.cpuAriaSelected !== 'true' || value.tabs.cpuTabIndex !== '0' || value.tabs.panelAriaLabelledby !== 'tab-cpu' || value.tabs.terminalRowsPersisted !== true) fail('signature.tabs');
 }
 
 function validateErrors(errors) {
     exactKeys(errors, ['console', 'page', 'requestFailed', 'http', 'external'], 'errors');
-    for (const key of Object.keys(errors)) if (!Array.isArray(errors[key]) || errors[key].length !== 0) fail(`errors.${key}`);
+    const schemas = {
+        console: ['type', 'text'],
+        page: ['name', 'message', 'stack'],
+        requestFailed: ['url', 'method', 'errorText'],
+        http: ['url', 'status'],
+        external: ['url', 'method'],
+    };
+    for (const [key, keys] of Object.entries(schemas)) {
+        if (!Array.isArray(errors[key])) fail(`errors.${key}`);
+        errors[key].forEach((entry) => {
+            exactKeys(entry, keys, `errors.${key}.entry`);
+            keys.forEach((field) => field === 'status' ? integer(entry[field], `errors.${key}.${field}`) : string(entry[field], `errors.${key}.${field}`));
+        });
+        if (errors[key].length !== 0) fail(`errors.${key}`);
+    }
 }
 
 function expectedSnapshot(counter, serialized) {
@@ -253,6 +299,23 @@ function validateActions(actions) {
         if (!['locator.click', 'keyboard.press'].includes(action.api)) fail('actions.api');
         string(action.target, 'action.target'); sha(action.preStateSha256, 'action.preStateSha256'); sha(action.postStateSha256, 'action.postStateSha256'); string(action.resultingUrl, 'action.resultingUrl');
     });
+    const expected = [
+        ['locator.click', '#tab-wifi'],
+        ['locator.click', 'role=button[name="3. systemctl restart nginx (무작정 재시작)"]'],
+        ['locator.click', '#tab-cpu'],
+        ['locator.click', '#tab-wifi'],
+        ['locator.click', 'role=button[name="1. ping 8.8.8.8 (안전한 SRE 진단)"]'],
+    ];
+    for (let block = 0; block < 4; block += 1) {
+        for (let click = 0; click < 5; click += 1) expected.push(['locator.click', '#btn-produce']);
+        expected.push(['locator.click', block === 0 ? '#btn-accept-penalty' : '#btn-revert']);
+    }
+    for (let click = 0; click < 7; click += 1) expected.push(['locator.click', '#btn-produce']);
+    expected.push(['keyboard.press', 'Tab'], ['keyboard.press', 'Shift+Tab']);
+    actions.forEach((action, index) => {
+        if (action.api !== expected[index][0] || action.target !== expected[index][1]) fail('actions.contract');
+        if (index > 0 && (Date.parse(action.utc) < Date.parse(actions[index - 1].utc) || action.monotonicMs < actions[index - 1].monotonicMs)) fail('actions.order');
+    });
 }
 
 const INTRUSIONS = Object.freeze([
@@ -274,8 +337,8 @@ function validateIntrusions(value) {
     value.forEach((intrusion, index) => {
         exactKeys(intrusion, ['ordinal', 'type', 'title', 'body', 'triggerActionSeq', 'aiQuoteText', 'aiQuoteKind', 'aiQuotesBefore', 'aiQuotesAfter', 'produceAccessibleName', 'resolutionActionSeq', 'resolutionControlName', 'before', 'after'], 'intrusion');
         const [type, title, body, quote, control] = INTRUSIONS[index];
-        if (intrusion.ordinal !== index + 1 || intrusion.type !== type || intrusion.title !== title || intrusion.body !== body || intrusion.aiQuoteText !== quote || intrusion.aiQuoteKind !== 'archon' || intrusion.aiQuotesBefore !== index || intrusion.aiQuotesAfter !== index + 1 || intrusion.resolutionControlName !== control) fail('intrusion.sequence');
-        integer(intrusion.triggerActionSeq, 'intrusion.triggerActionSeq'); integer(intrusion.resolutionActionSeq, 'intrusion.resolutionActionSeq');
+        if (intrusion.ordinal !== index + 1 || intrusion.type !== type || intrusion.title !== title || intrusion.body !== body || intrusion.aiQuoteText !== quote || intrusion.aiQuoteKind !== 'archon' || intrusion.aiQuotesBefore !== index || intrusion.aiQuotesAfter !== index + 1 || intrusion.produceAccessibleName !== 'AI 침입 대응 중: 생산 작업 잠김' || intrusion.resolutionControlName !== control) fail('intrusion.sequence');
+        integer(intrusion.triggerActionSeq, 'intrusion.triggerActionSeq'); integer(intrusion.resolutionActionSeq, 'intrusion.resolutionActionSeq'); if (intrusion.triggerActionSeq !== 10 + index * 6 || intrusion.resolutionActionSeq !== 11 + index * 6) fail('intrusion.actionSequence');
         exactState(intrusion.before, 'intrusion.before', { units: before[index][0], stars: before[index][1], incidentCost: index === 0 ? 0 : index === 3 ? 500 : 500, activeIntrusion: type });
         exactState(intrusion.after, 'intrusion.after', { units: after[index][0], stars: after[index][1], incidentCost: after[index][2], activeIntrusion: null });
     });
@@ -284,7 +347,7 @@ function validateIntrusions(value) {
 function validatePenalty(value) {
     exactKeys(value, ['actionSeq', 'controlAccessibleName', 'before', 'after', 'starDelta'], 'penalty');
     if (value.controlAccessibleName !== '페널티 수락 (-500★)' || value.starDelta !== -500) fail('penalty.starDelta');
-    integer(value.actionSeq, 'penalty.actionSeq');
+    integer(value.actionSeq, 'penalty.actionSeq'); if (value.actionSeq !== 11) fail('penalty.actionSeq');
     exactState(value.before, 'penalty.before', { units: 50, stars: 750, incidentCost: 0, activeIntrusion: 'copilot' });
     exactState(value.after, 'penalty.after', { units: 50, stars: 250, incidentCost: 500, activeIntrusion: null });
 }
@@ -296,7 +359,7 @@ function validateRecoveries(value) {
         exactKeys(recovery, ['actionSeq', 'controlAccessibleName', 'before', 'after', 'starDelta'], 'recovery');
         const delta = Math.min(150, 3000 - stars);
         if (recovery.controlAccessibleName !== 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구' || recovery.starDelta !== delta) fail('recover.starDelta');
-        integer(recovery.actionSeq, 'recover.actionSeq');
+        integer(recovery.actionSeq, 'recover.actionSeq'); if (recovery.actionSeq !== 30 + index) fail('recover.actionSeq');
         exactState(recovery.before, 'recover.before', { units: 200, stars, incidentCost: 1000, activeIntrusion: null });
         stars += delta;
         exactState(recovery.after, 'recover.after', { units: 200, stars, incidentCost: 1000, activeIntrusion: null });
@@ -306,6 +369,7 @@ function validateRecoveries(value) {
 
 function validateInitial(value) {
     exactKeys(value, ['endingVisibility', 'endingRole', 'endingAriaModal', 'endingAriaLabelledby', 'endingAccessibleName', 'backgroundInert', 'activeElementId', 'produceDisabled', 'produceAccessibleName'], 'initial');
+    string(value.activeElementId, 'initial.activeElementId');
     if (deriveVisibility(value.endingVisibility) || value.endingVisibility.display !== 'none' || value.endingVisibility.position !== 'fixed' || value.endingVisibility.intersectionArea !== 0 || value.endingVisibility.intersectionRatio !== 0 || value.endingVisibility.clientRects.some((rect) => rect.width > 0 && rect.height > 0) || value.endingRole !== 'dialog' || value.endingAriaModal !== 'true' || value.endingAriaLabelledby !== 'ending-process-heading' || value.endingAccessibleName !== '프로세스는 살아남았습니다' || value.activeElementId === 'btn-play-again' || value.produceDisabled !== false || value.produceAccessibleName !== '코드 작성: 생산량 10과 GitHub 스타 150 획득') fail('initial.ending');
     exactKeys(value.backgroundInert, ['header', 'dashboard', 'intrusionBanner', 'mainGrid'], 'initial.backgroundInert');
     if (Object.values(value.backgroundInert).some((inert) => inert !== false)) fail('initial.backgroundInert');
@@ -321,17 +385,28 @@ function validateEnding(value) {
     if (!Array.isArray(value.tokens) || canonicalJson(value.tokens) !== canonicalJson(requiredTokens)) fail('ending.tokens');
 }
 
+function validateScreenshotShape(record, screenshot, index) {
+    exactKeys(screenshot, ['caseLabel', 'stage', 'relativePath', 'viewport', 'requestedOrigin', 'finalUrl', 'oracleSnapshotSha256', 'captureStartedUtc', 'captureFinishedUtc', 'bytes', 'sha256'], 'screenshot');
+    if (screenshot.caseLabel !== record.label || screenshot.stage !== STAGES[index]) fail('screenshot.tuple'); relativeFile(screenshot.relativePath, 'screenshot.relativePath');
+    exactKeys(screenshot.viewport, ['width', 'height'], 'screenshot.viewport'); nonNegative(screenshot.viewport.width, 'screenshot.viewport.width'); nonNegative(screenshot.viewport.height, 'screenshot.viewport.height');
+    string(screenshot.requestedOrigin, 'screenshot.requestedOrigin'); string(screenshot.finalUrl, 'screenshot.finalUrl'); sha(screenshot.oracleSnapshotSha256, 'screenshot.oracleSnapshotSha256'); utc(screenshot.captureStartedUtc, 'screenshot.captureStartedUtc'); utc(screenshot.captureFinishedUtc, 'screenshot.captureFinishedUtc'); nonNegative(screenshot.bytes, 'screenshot.bytes'); sha(screenshot.sha256, 'screenshot.sha256');
+}
+
 function validateCaseFull(record) {
     const keys = ['schemaVersion', 'label', 'engine', 'browserVersion', 'originKind', 'requestedUrl', 'finalUrl', 'attempt', 'startedUtc', 'finishedUtc', 'startedMonotonicMs', 'finishedMonotonicMs', 'actions', 'initial', 'signature', 'quotePersistence', 'npc', 'intrusions', 'penalty', 'recoveries', 'ending', 'errors', 'screenshots'];
     exactKeys(record, keys, 'case');
     if (record.schemaVersion !== SMOKE_SCHEMA_VERSION || !expectedCaseLabels().includes(record.label) || !ENGINES.includes(record.engine) || !ORIGINS.includes(record.originKind) || record.label !== `${record.engine}-${record.originKind}` || record.attempt !== 1) fail('case.identity');
+    string(record.browserVersion, 'case.browserVersion'); string(record.requestedUrl, 'case.requestedUrl'); string(record.finalUrl, 'case.finalUrl');
     utc(record.startedUtc, 'case.startedUtc'); utc(record.finishedUtc, 'case.finishedUtc');
-    if (Date.parse(record.finishedUtc) <= Date.parse(record.startedUtc) || nonNegative(record.finishedMonotonicMs, 'case.finishedMonotonicMs') >= 120000 || nonNegative(record.startedMonotonicMs, 'case.startedMonotonicMs') > record.finishedMonotonicMs) fail('case.duration');
+    const startedMonotonicMs = nonNegative(record.startedMonotonicMs, 'case.startedMonotonicMs');
+    const finishedMonotonicMs = nonNegative(record.finishedMonotonicMs, 'case.finishedMonotonicMs');
+    if (Date.parse(record.finishedUtc) <= Date.parse(record.startedUtc) || startedMonotonicMs > finishedMonotonicMs || finishedMonotonicMs - startedMonotonicMs >= 120000) fail('case.duration');
     validateActions(record.actions); validateInitial(record.initial); validateSignature(record.signature); validatePersistence(record.quotePersistence); validateErrors(record.errors);
     exactKeys(record.npc, ['icon', 'name', 'message', 'visibility'], 'npc');
     if (record.npc.icon !== '🐻' || record.npc.name !== 'Polar Bear DevOps' || record.npc.message !== 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' || !deriveVisibility(record.npc.visibility)) fail('npc');
     validateIntrusions(record.intrusions); validatePenalty(record.penalty); validateRecoveries(record.recoveries); validateEnding(record.ending);
     if (!Array.isArray(record.screenshots) || record.screenshots.length !== 3) fail('screenshots.cardinality');
+    record.screenshots.forEach((screenshot, index) => validateScreenshotShape(record, screenshot, index));
 }
 
 export function validateCase(record, options = {}) {
@@ -354,16 +429,17 @@ function validateUrl(raw, invariant) {
 export function validateBinding(inputs) {
     exactKeys(inputs, ['releaseId', 'deploymentId', 'projectName', 'immutableUrl', 'aliasUrl', 'productFiles'], 'binding');
     if (!RELEASE_ID.test(string(inputs.releaseId, 'binding.releaseId'))) fail('binding.releaseId');
-    if (!/^[a-f0-9-]{16,}$/i.test(string(inputs.deploymentId, 'binding.deploymentId'))) fail('binding.deploymentId');
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(string(inputs.deploymentId, 'binding.deploymentId'))) fail('binding.deploymentId');
     const project = string(inputs.projectName, 'binding.projectName');
     const immutable = validateUrl(inputs.immutableUrl, 'binding.immutableUrl');
     const alias = validateUrl(inputs.aliasUrl, 'binding.aliasUrl');
     if (immutable.origin === alias.origin || alias.hostname !== `${project}.pages.dev` || !new RegExp(`^[a-f0-9]{8}\\.${project.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\.pages\\.dev$`).test(immutable.hostname) || !immutable.hostname.startsWith(`${inputs.deploymentId.slice(0, 8).toLowerCase()}.`)) fail('binding.origins');
     exactKeys(inputs.productFiles, PRODUCT_PATHS, 'binding.productFiles');
+    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css' };
     for (const product of PRODUCT_PATHS) {
         const value = inputs.productFiles[product];
         exactKeys(value, ['bytes', 'mime', 'sha256'], `binding.productFiles.${product}`);
-        nonNegative(value.bytes, `binding.productFiles.${product}.bytes`); string(value.mime, `binding.productFiles.${product}.mime`); sha(value.sha256, `binding.productFiles.${product}.sha256`);
+        if (nonNegative(value.bytes, `binding.productFiles.${product}.bytes`) === 0 || value.mime !== mime[product]) fail(`binding.productFiles.${product}`); sha(value.sha256, `binding.productFiles.${product}.sha256`);
     }
     return inputs;
 }
@@ -379,50 +455,110 @@ export function validateOperationConfig(config) {
     exactKeys(config, OPERATION_CONFIG_KEYS, 'config');
     if (config.schemaVersion !== 2 || !RELEASE_ID.test(string(config.releaseId, 'config.releaseId'))) fail('config.schemaVersion');
     for (const key of OPERATION_CONFIG_KEYS.filter((key) => /(?:Path|Dir|Root)$/.test(key))) canonicalPath(config[key], `config.${key}`);
+    if (!CAMPAIGN_ID.test(string(config.campaignRunId, 'config.campaignRunId'))) fail('config.campaignRunId');
     sha(config.nodeExeSha256, 'config.nodeExeSha256'); sha(config.wranglerJsSha256, 'config.wranglerJsSha256');
     validateUrl(config.immutableUrl, 'config.immutableUrl'); validateUrl(config.aliasUrl, 'config.aliasUrl'); string(config.projectName, 'config.projectName');
+    const release = canonicalPath(config.releaseRoot, 'config.releaseRoot');
+    for (const key of ['acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'deploymentRecordPath']) contained(release, config[key], `config.${key}.containment`);
+    const campaign = contained(config.authorityProjectRoot, config.campaignDir, 'config.campaignDir.containment');
+    contained(campaign, config.sourceSnapshotDir, 'config.sourceSnapshotDir.containment');
+    contained(config.authorityProjectRoot, config.executionSourceDir, 'config.executionSourceDir.containment');
+    contained(config.authorityWorkspaceRoot, config.campaignSpecPath, 'config.campaignSpecPath.containment');
+    contained(config.authorityWorkspaceRoot, config.campaignReceiptPath, 'config.campaignReceiptPath.containment');
+    contained(config.authorityWorkspaceRoot, config.authorityProjectRoot, 'config.authorityProjectRoot.containment');
+    for (const key of OPERATION_CONFIG_KEYS.filter((key) => /(?:Path|Dir|Root)$/.test(key))) noSymlinkAncestors(config[key], `config.${key}.symlink`);
     return config;
 }
 
 export function validateDerivedAuditConfig(config) {
     exactKeys(config, DERIVED_CONFIG_KEYS, 'auditConfig');
     if (config.schemaVersion !== 3) fail('auditConfig.schemaVersion');
-    canonicalPath(config.baseConfigPath, 'auditConfig.baseConfigPath'); sha(config.baseConfigSha256, 'auditConfig.baseConfigSha256'); string(config.mutationId, 'auditConfig.mutationId');
+    canonicalPath(config.baseConfigPath, 'auditConfig.baseConfigPath'); sha(config.baseConfigSha256, 'auditConfig.baseConfigSha256'); if (!string(config.mutationId, 'auditConfig.mutationId')) fail('auditConfig.mutationId');
     canonicalPath(config.mutationRootRealpath, 'auditConfig.mutationRootRealpath'); canonicalPath(config.auditTargetRealpath, 'auditConfig.auditTargetRealpath'); canonicalPath(config.externalOperationReceiptPath, 'auditConfig.externalOperationReceiptPath'); canonicalPath(config.auditReceiptPath, 'auditConfig.auditReceiptPath');
+    for (const key of DERIVED_CONFIG_KEYS.filter((key) => /(?:Path|Realpath)$/.test(key))) noSymlinkAncestors(config[key], `auditConfig.${key}.symlink`);
     return config;
 }
 
 export function validateCampaignClaims(value) {
     const keys = ['schemaVersion', 'runId', 'v1Sha256', 'candidateInventory', 'gameCoreSha256', 'sourceGit', 'unit', 'browser', 'performance', 'negativeControls', 'campaignVerifier', 'r9Frozen', 'r10Frozen', 'actualBrowserZoom'];
     exactKeys(value, keys, 'campaignClaims');
-    if (value.schemaVersion !== 5) fail('campaignClaims.schemaVersion'); string(value.runId, 'campaignClaims.runId'); sha(value.v1Sha256, 'campaignClaims.v1Sha256'); sha(value.gameCoreSha256, 'campaignClaims.gameCoreSha256');
-    exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignClaims.candidateInventory'); nonNegative(value.candidateInventory.fileCount, 'campaignClaims.candidateInventory.fileCount'); sha(value.candidateInventory.pathListSha256, 'campaignClaims.candidateInventory.pathListSha256'); sha(value.candidateInventory.contentRecordsSha256, 'campaignClaims.candidateInventory.contentRecordsSha256');
-    exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignClaims.sourceGit'); string(value.sourceGit.branch, 'campaignClaims.sourceGit.branch'); sha(value.sourceGit.headSha, 'campaignClaims.sourceGit.headSha');
-    for (const key of ['unit', 'campaignVerifier']) { exactKeys(value[key], ['tests', 'passed', 'failed', 'exitCode'], `campaignClaims.${key}`); if (value[key].tests !== value[key].passed || value[key].failed !== 0 || value[key].exitCode !== 0) fail(`campaignClaims.${key}`); }
+    if (value.schemaVersion !== 5) fail('campaignClaims.schemaVersion'); if (!CAMPAIGN_ID.test(string(value.runId, 'campaignClaims.runId'))) fail('campaignClaims.runId'); externalSha(value.v1Sha256, 'campaignClaims.v1Sha256'); externalSha(value.gameCoreSha256, 'campaignClaims.gameCoreSha256');
+    exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignClaims.candidateInventory'); nonNegative(value.candidateInventory.fileCount, 'campaignClaims.candidateInventory.fileCount'); externalSha(value.candidateInventory.pathListSha256, 'campaignClaims.candidateInventory.pathListSha256'); externalSha(value.candidateInventory.contentRecordsSha256, 'campaignClaims.candidateInventory.contentRecordsSha256');
+    exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignClaims.sourceGit'); string(value.sourceGit.branch, 'campaignClaims.sourceGit.branch'); gitSha(value.sourceGit.headSha, 'campaignClaims.sourceGit.headSha');
+    for (const key of ['unit', 'campaignVerifier']) {
+        exactKeys(value[key], ['tests', 'passed', 'failed', 'exitCode'], `campaignClaims.${key}`);
+        for (const count of ['tests', 'passed', 'failed', 'exitCode']) nonNegative(value[key][count], `campaignClaims.${key}.${count}`);
+        if (value[key].tests < 1 || value[key].tests !== value[key].passed || value[key].failed !== 0 || value[key].exitCode !== 0) fail(`campaignClaims.${key}`);
+    }
     exactKeys(value.browser, ['chromium', 'firefox', 'webkit', 'integrity', 'reportedFailures', 'exitCode'], 'campaignClaims.browser');
-    for (const engine of ENGINES) { exactKeys(value.browser[engine], ['passed', 'failed'], `campaignClaims.browser.${engine}`); if (value.browser[engine].passed !== 16 || value.browser[engine].failed !== 0) fail(`campaignClaims.browser.${engine}`); }
+    for (const engine of ENGINES) { exactKeys(value.browser[engine], ['passed', 'failed'], `campaignClaims.browser.${engine}`); integer(value.browser[engine].passed, `campaignClaims.browser.${engine}.passed`); integer(value.browser[engine].failed, `campaignClaims.browser.${engine}.failed`); if (value.browser[engine].passed !== 16 || value.browser[engine].failed !== 0) fail(`campaignClaims.browser.${engine}`); }
     if (value.browser.integrity !== true || value.browser.reportedFailures !== 0 || value.browser.exitCode !== 0) fail('campaignClaims.browser');
+    const performanceKeys = ['startedUtc', 'endedUtc', 'measuredDurationMs', 'environment', 'sampleCount', 'rawMinMs', 'rawMaxMs', 'p50LatencyMs', 'p95LatencyMs', 'p99LatencyMs', 'longTaskObserverSupported', 'longTasksCount', 'heapStartMb', 'heapEndMb', 'heapNetGrowthMb', 'totalActionsCount'];
+    exactKeys(value.performance, performanceKeys, 'campaignClaims.performance');
+    utc(value.performance.startedUtc, 'campaignClaims.performance.startedUtc'); utc(value.performance.endedUtc, 'campaignClaims.performance.endedUtc');
+    for (const key of ['measuredDurationMs', 'sampleCount', 'longTasksCount', 'totalActionsCount']) nonNegative(value.performance[key], `campaignClaims.performance.${key}`);
+    for (const key of ['rawMinMs', 'rawMaxMs', 'p50LatencyMs', 'p95LatencyMs', 'p99LatencyMs', 'heapStartMb', 'heapEndMb', 'heapNetGrowthMb']) number(value.performance[key], `campaignClaims.performance.${key}`);
+    bool(value.performance.longTaskObserverSupported, 'campaignClaims.performance.longTaskObserverSupported');
+    exactKeys(value.performance.environment, ['nodeVersion', 'platform', 'arch', 'project'], 'campaignClaims.performance.environment');
+    for (const key of ['nodeVersion', 'platform', 'arch', 'project']) string(value.performance.environment[key], `campaignClaims.performance.environment.${key}`);
+    exactKeys(value.negativeControls, ['passed', 'total', 'failed', 'exitCode'], 'campaignClaims.negativeControls');
+    for (const key of ['passed', 'total', 'failed', 'exitCode']) nonNegative(value.negativeControls[key], `campaignClaims.negativeControls.${key}`);
+    if (value.negativeControls.passed !== value.negativeControls.total || value.negativeControls.failed !== 0 || value.negativeControls.exitCode !== 0) fail('campaignClaims.negativeControls');
+    for (const key of ['r9Frozen', 'r10Frozen']) {
+        exactKeys(value[key], ['fileCount', 'pathListSha256', 'beforeDigest', 'afterDigest'], `campaignClaims.${key}`);
+        nonNegative(value[key].fileCount, `campaignClaims.${key}.fileCount`); externalSha(value[key].pathListSha256, `campaignClaims.${key}.pathListSha256`); externalSha(value[key].beforeDigest, `campaignClaims.${key}.beforeDigest`); externalSha(value[key].afterDigest, `campaignClaims.${key}.afterDigest`);
+        if (!sameHash(value[key].beforeDigest, value[key].afterDigest)) fail(`campaignClaims.${key}`);
+    }
+    exactKeys(value.actualBrowserZoom, ['claimed', 'equivalentReflow', 'limitation'], 'campaignClaims.actualBrowserZoom');
+    bool(value.actualBrowserZoom.claimed, 'campaignClaims.actualBrowserZoom.claimed'); string(value.actualBrowserZoom.equivalentReflow, 'campaignClaims.actualBrowserZoom.equivalentReflow'); string(value.actualBrowserZoom.limitation, 'campaignClaims.actualBrowserZoom.limitation');
     return value;
 }
 
 export function validateCampaignEnvelope(value) {
     exactKeys(value, ['schemaVersion', 'runId', 'payloadHashes', 'source', 'spec', 'rawEvidence'], 'campaignEnvelope');
-    if (value.schemaVersion !== 5) fail('campaignEnvelope.schemaVersion'); string(value.runId, 'campaignEnvelope.runId');
-    object(value.payloadHashes, 'campaignEnvelope.payloadHashes');
+    if (value.schemaVersion !== 5) fail('campaignEnvelope.schemaVersion'); if (!CAMPAIGN_ID.test(string(value.runId, 'campaignEnvelope.runId'))) fail('campaignEnvelope.runId');
+    const payloadNames = ['artifact-manifest.json', 'candidate-inventory.json', 'claims.json', 'ledger.jsonl', 'r9-before.json', 'r9-after.json', 'r10-before.json', 'r10-after.json'];
+    exactKeys(value.payloadHashes, payloadNames, 'campaignEnvelope.payloadHashes');
+    for (const name of payloadNames) externalSha(value.payloadHashes[name], `campaignEnvelope.payloadHashes.${name}`);
     exactKeys(value.source, ['path', 'fileCount', 'pathListSha256', 'contentRecordsSha256', 'gitBranch', 'gitHeadSha'], 'campaignEnvelope.source');
+    relativeFile(value.source.path, 'campaignEnvelope.source.path'); nonNegative(value.source.fileCount, 'campaignEnvelope.source.fileCount'); externalSha(value.source.pathListSha256, 'campaignEnvelope.source.pathListSha256'); externalSha(value.source.contentRecordsSha256, 'campaignEnvelope.source.contentRecordsSha256'); string(value.source.gitBranch, 'campaignEnvelope.source.gitBranch'); gitSha(value.source.gitHeadSha, 'campaignEnvelope.source.gitHeadSha');
     exactKeys(value.spec, ['fileName', 'sizeBytes', 'sha256'], 'campaignEnvelope.spec');
+    relativeFile(value.spec.fileName, 'campaignEnvelope.spec.fileName'); nonNegative(value.spec.sizeBytes, 'campaignEnvelope.spec.sizeBytes'); externalSha(value.spec.sha256, 'campaignEnvelope.spec.sha256');
     exactKeys(value.rawEvidence, ['summary', 'samples'], 'campaignEnvelope.rawEvidence');
-    for (const key of ['summary', 'samples']) exactKeys(value.rawEvidence[key], ['path', 'sha256'], `campaignEnvelope.rawEvidence.${key}`);
+    for (const key of ['summary', 'samples']) { exactKeys(value.rawEvidence[key], ['path', 'sha256'], `campaignEnvelope.rawEvidence.${key}`); relativeFile(value.rawEvidence[key].path, `campaignEnvelope.rawEvidence.${key}.path`); externalSha(value.rawEvidence[key].sha256, `campaignEnvelope.rawEvidence.${key}.sha256`); }
     return value;
+}
+
+function validateFrozen(value, invariant) {
+    exactKeys(value, ['fileCount', 'pathListSha256', 'beforeDigest', 'afterDigest'], invariant);
+    nonNegative(value.fileCount, `${invariant}.fileCount`); externalSha(value.pathListSha256, `${invariant}.pathListSha256`); externalSha(value.beforeDigest, `${invariant}.beforeDigest`); externalSha(value.afterDigest, `${invariant}.afterDigest`);
+    if (!sameHash(value.beforeDigest, value.afterDigest)) fail(invariant);
+}
+
+function validateCampaignCommand(value) {
+    const keys = ['key', 'argv', 'cwd', 'startedUtc', 'endedUtc', 'timeoutMs', 'timedOut', 'exitCode', 'signal', 'stdoutPath', 'stdoutSha256', 'stderrPath', 'stderrSha256'];
+    exactKeys(value, keys, 'campaignReceipt.command');
+    string(value.key, 'campaignReceipt.command.key'); if (!Array.isArray(value.argv) || value.argv.some((item) => typeof item !== 'string')) fail('campaignReceipt.command.argv');
+    canonicalPath(value.cwd, 'campaignReceipt.command.cwd'); utc(value.startedUtc, 'campaignReceipt.command.startedUtc'); utc(value.endedUtc, 'campaignReceipt.command.endedUtc');
+    nonNegative(value.timeoutMs, 'campaignReceipt.command.timeoutMs'); bool(value.timedOut, 'campaignReceipt.command.timedOut'); integer(value.exitCode, 'campaignReceipt.command.exitCode'); if (value.signal !== null) fail('campaignReceipt.command.signal');
+    relativeFile(value.stdoutPath, 'campaignReceipt.command.stdoutPath'); externalSha(value.stdoutSha256, 'campaignReceipt.command.stdoutSha256'); relativeFile(value.stderrPath, 'campaignReceipt.command.stderrPath'); externalSha(value.stderrSha256, 'campaignReceipt.command.stderrSha256');
+    if (value.timedOut !== false || value.exitCode !== 0 || Date.parse(value.endedUtc) < Date.parse(value.startedUtc)) fail('campaignReceipt.command.status');
 }
 
 export function validateCampaignReceipt(value) {
     const keys = ['schemaVersion', 'runId', 'status', 'createdUtc', 'completedUtc', 'projectRoot', 'cleanRoot', 'campaign', 'spec', 'candidateInventory', 'gameCoreSha256', 'sourceGit', 'r9Frozen', 'r10Frozen', 'commands', 'limitation', 'publicationState'];
     exactKeys(value, keys, 'campaignReceipt');
-    if (value.schemaVersion !== 1 || value.status !== 'VERIFIED') fail('campaignReceipt.status');
+    if (value.schemaVersion !== 1 || value.status !== 'VERIFIED' || !CAMPAIGN_ID.test(string(value.runId, 'campaignReceipt.runId'))) fail('campaignReceipt.status');
+    utc(value.createdUtc, 'campaignReceipt.createdUtc'); utc(value.completedUtc, 'campaignReceipt.completedUtc'); canonicalPath(value.projectRoot, 'campaignReceipt.projectRoot'); canonicalPath(value.cleanRoot, 'campaignReceipt.cleanRoot');
     exactKeys(value.campaign, ['path', 'artifactManifestSha256', 'submissionEnvelopeSha256'], 'campaignReceipt.campaign');
-    exactKeys(value.spec, ['path', 'sizeBytes', 'sha256'], 'campaignReceipt.spec'); exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignReceipt.candidateInventory'); exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignReceipt.sourceGit');
-    if (!Array.isArray(value.commands)) fail('campaignReceipt.commands');
+    canonicalPath(value.campaign.path, 'campaignReceipt.campaign.path'); externalSha(value.campaign.artifactManifestSha256, 'campaignReceipt.campaign.artifactManifestSha256'); externalSha(value.campaign.submissionEnvelopeSha256, 'campaignReceipt.campaign.submissionEnvelopeSha256');
+    exactKeys(value.spec, ['path', 'sizeBytes', 'sha256'], 'campaignReceipt.spec'); canonicalPath(value.spec.path, 'campaignReceipt.spec.path'); nonNegative(value.spec.sizeBytes, 'campaignReceipt.spec.sizeBytes'); externalSha(value.spec.sha256, 'campaignReceipt.spec.sha256');
+    exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignReceipt.candidateInventory'); nonNegative(value.candidateInventory.fileCount, 'campaignReceipt.candidateInventory.fileCount'); externalSha(value.candidateInventory.pathListSha256, 'campaignReceipt.candidateInventory.pathListSha256'); externalSha(value.candidateInventory.contentRecordsSha256, 'campaignReceipt.candidateInventory.contentRecordsSha256');
+    externalSha(value.gameCoreSha256, 'campaignReceipt.gameCoreSha256'); exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignReceipt.sourceGit'); string(value.sourceGit.branch, 'campaignReceipt.sourceGit.branch'); gitSha(value.sourceGit.headSha, 'campaignReceipt.sourceGit.headSha');
+    validateFrozen(value.r9Frozen, 'campaignReceipt.r9Frozen'); validateFrozen(value.r10Frozen, 'campaignReceipt.r10Frozen');
+    if (!Array.isArray(value.commands) || value.commands.length < 1) fail('campaignReceipt.commands'); value.commands.forEach(validateCampaignCommand);
+    exactKeys(value.limitation, ['claimed', 'equivalentReflow', 'limitation'], 'campaignReceipt.limitation'); bool(value.limitation.claimed, 'campaignReceipt.limitation.claimed'); string(value.limitation.equivalentReflow, 'campaignReceipt.limitation.equivalentReflow'); string(value.limitation.limitation, 'campaignReceipt.limitation.limitation');
+    string(value.publicationState, 'campaignReceipt.publicationState');
     return value;
 }
 
@@ -439,26 +575,45 @@ function resolveConfig(configPath) {
     const config = readJson(canonicalConfig, 'config.json');
     if (config.schemaVersion === 2) {
         validateOperationConfig(config);
-        return { base: config, config, configPath: canonicalConfig, target: config.acceptedDir, auditReceiptPath: config.auditReceiptPath, operationReceiptPath: config.operationReceiptPath };
+        const releaseRoot = canonicalPath(config.releaseRoot, 'config.releaseRoot');
+        contained(releaseRoot, config.auditReceiptPath, 'config.auditReceiptPath.containment');
+        return { base: config, config, configPath: canonicalConfig, baseConfigPath: canonicalConfig, target: config.acceptedDir, auditReceiptPath: config.auditReceiptPath, operationReceiptPath: config.operationReceiptPath };
     }
     if (config.schemaVersion !== 3) fail('config.schemaVersion');
     validateDerivedAuditConfig(config);
     const baseConfigPath = canonicalPath(config.baseConfigPath, 'auditConfig.baseConfigPath');
+    noSymlinkAncestors(baseConfigPath, 'auditConfig.baseConfigPath');
     if (sha256File(baseConfigPath) !== sha(config.baseConfigSha256, 'auditConfig.baseConfigSha256')) fail('auditConfig.baseConfigSha256');
     const baseResolved = resolveConfig(baseConfigPath);
+    noSymlinkAncestors(config.mutationRootRealpath, 'auditConfig.mutationRootRealpath'); noSymlinkAncestors(config.auditTargetRealpath, 'auditConfig.auditTargetRealpath');
     const root = fs.realpathSync(config.mutationRootRealpath);
     const target = fs.realpathSync(config.auditTargetRealpath);
     if (target !== path.join(root, 'accepted') || target === fs.realpathSync(baseResolved.target)) fail('auditConfig.auditTargetRealpath');
     if (canonicalPath(config.externalOperationReceiptPath, 'auditConfig.externalOperationReceiptPath') !== canonicalPath(baseResolved.operationReceiptPath, 'auditConfig.externalOperationReceiptPath')) fail('auditConfig.externalOperationReceiptPath');
-    return { base: baseResolved.base, config, configPath: canonicalConfig, target, auditReceiptPath: canonicalPath(config.auditReceiptPath, 'auditConfig.auditReceiptPath'), operationReceiptPath: baseResolved.operationReceiptPath };
+    contained(root, config.auditReceiptPath, 'auditConfig.auditReceiptPath.containment');
+    return { base: baseResolved.base, config, configPath: canonicalConfig, baseConfigPath: baseResolved.baseConfigPath, target, auditReceiptPath: canonicalPath(config.auditReceiptPath, 'auditConfig.auditReceiptPath'), operationReceiptPath: baseResolved.operationReceiptPath };
+}
+
+function validateProcessCapture(value, invariant, campaignVerifier = false) {
+    const keys = ['argv', 'cwd', 'startedUtc', 'finishedUtc', 'startedMonotonicMs', 'finishedMonotonicMs', 'exitCode', 'signal', 'stdoutPath', 'stdoutBytes', 'stdoutSha256', 'stderrPath', 'stderrBytes', 'stderrSha256'];
+    if (campaignVerifier) keys.push('gateLine', 'verifierPath', 'verifierSha256');
+    exactKeys(value, keys, invariant);
+    if (!Array.isArray(value.argv) || value.argv.some((item) => typeof item !== 'string')) fail(`${invariant}.argv`);
+    canonicalPath(value.cwd, `${invariant}.cwd`); utc(value.startedUtc, `${invariant}.startedUtc`); utc(value.finishedUtc, `${invariant}.finishedUtc`);
+    nonNegative(value.startedMonotonicMs, `${invariant}.startedMonotonicMs`); nonNegative(value.finishedMonotonicMs, `${invariant}.finishedMonotonicMs`);
+    if (Date.parse(value.finishedUtc) < Date.parse(value.startedUtc) || value.finishedMonotonicMs < value.startedMonotonicMs) fail(`${invariant}.time`);
+    integer(value.exitCode, `${invariant}.exitCode`); if (value.signal !== null) fail(`${invariant}.signal`); canonicalPath(value.stdoutPath, `${invariant}.stdoutPath`); nonNegative(value.stdoutBytes, `${invariant}.stdoutBytes`); sha(value.stdoutSha256, `${invariant}.stdoutSha256`); canonicalPath(value.stderrPath, `${invariant}.stderrPath`); nonNegative(value.stderrBytes, `${invariant}.stderrBytes`); sha(value.stderrSha256, `${invariant}.stderrSha256`);
+    if (campaignVerifier) { string(value.gateLine, `${invariant}.gateLine`); canonicalPath(value.verifierPath, `${invariant}.verifierPath`); sha(value.verifierSha256, `${invariant}.verifierSha256`); }
 }
 
 export function validateOperationReceipt(receipt) {
     const keys = ['schemaVersion', 'releaseId', 'createdUtc', 'status', 'configPath', 'configSha256', 'orchestratorPath', 'orchestratorSha256', 'campaignVerifier', 'worker', 'accepted', 'screenshotBindings', 'cloudflareReads', 'fileProbes'];
     exactKeys(receipt, keys, 'operationReceipt');
     if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED') fail('operationReceipt.status');
-    string(receipt.releaseId, 'operationReceipt.releaseId'); utc(receipt.createdUtc, 'operationReceipt.createdUtc'); sha(receipt.configSha256, 'operationReceipt.configSha256');
+    if (!RELEASE_ID.test(string(receipt.releaseId, 'operationReceipt.releaseId'))) fail('operationReceipt.releaseId'); utc(receipt.createdUtc, 'operationReceipt.createdUtc'); canonicalPath(receipt.configPath, 'operationReceipt.configPath'); sha(receipt.configSha256, 'operationReceipt.configSha256'); canonicalPath(receipt.orchestratorPath, 'operationReceipt.orchestratorPath'); sha(receipt.orchestratorSha256, 'operationReceipt.orchestratorSha256');
+    validateProcessCapture(receipt.campaignVerifier, 'operationReceipt.campaignVerifier', true); validateProcessCapture(receipt.worker, 'operationReceipt.worker');
     exactKeys(receipt.accepted, ['realpath', 'manifestPath', 'manifestSha256', 'treeDigest', 'publishedUtc', 'eventsPath', 'eventsSha256', 'eventCount', 'finalEventSha256'], 'operationReceipt.accepted');
+    canonicalPath(receipt.accepted.realpath, 'operationReceipt.accepted.realpath'); canonicalPath(receipt.accepted.manifestPath, 'operationReceipt.accepted.manifestPath'); utc(receipt.accepted.publishedUtc, 'operationReceipt.accepted.publishedUtc'); canonicalPath(receipt.accepted.eventsPath, 'operationReceipt.accepted.eventsPath');
     if (receipt.accepted.eventCount !== 278) fail('operationReceipt.accepted.eventCount');
     for (const key of ['manifestSha256', 'treeDigest', 'eventsSha256', 'finalEventSha256']) sha(receipt.accepted[key], `operationReceipt.accepted.${key}`);
     if (!Array.isArray(receipt.screenshotBindings) || receipt.screenshotBindings.length !== 18) fail('operationReceipt.screenshotBindings');
@@ -466,15 +621,19 @@ export function validateOperationReceipt(receipt) {
         exactKeys(binding, ['case', 'stage', 'path', 'pngSha256', 'oracleSha256', 'captureStartUtc', 'captureEndUtc'], 'operationReceipt.screenshotBinding');
         if (!expectedCaseLabels().includes(binding.case) || !STAGES.includes(binding.stage)) fail('operationReceipt.screenshotBinding.tuple');
         relativeFile(binding.path, 'operationReceipt.screenshotBinding.path'); sha(binding.pngSha256, 'operationReceipt.screenshotBinding.pngSha256'); sha(binding.oracleSha256, 'operationReceipt.screenshotBinding.oracleSha256'); utc(binding.captureStartUtc, 'operationReceipt.screenshotBinding.captureStartUtc'); utc(binding.captureEndUtc, 'operationReceipt.screenshotBinding.captureEndUtc');
+        if (Date.parse(binding.captureEndUtc) <= Date.parse(binding.captureStartUtc)) fail('operationReceipt.screenshotBinding.timestamps');
     });
     exactKeys(receipt.cloudflareReads, ['pre', 'mid', 'post'], 'operationReceipt.cloudflareReads');
     for (const phase of ['pre', 'mid', 'post']) {
         const read = receipt.cloudflareReads[phase];
         exactKeys(read, ['capturePath', 'captureSha256', 'deploymentId'], `operationReceipt.cloudflareReads.${phase}`);
-        string(read.capturePath, `operationReceipt.cloudflareReads.${phase}.capturePath`); sha(read.captureSha256, `operationReceipt.cloudflareReads.${phase}.captureSha256`); string(read.deploymentId, `operationReceipt.cloudflareReads.${phase}.deploymentId`);
+        relativeFile(read.capturePath, `operationReceipt.cloudflareReads.${phase}.capturePath`); sha(read.captureSha256, `operationReceipt.cloudflareReads.${phase}.captureSha256`); string(read.deploymentId, `operationReceipt.cloudflareReads.${phase}.deploymentId`);
+        if (read.capturePath !== `control-plane/${phase}.command.json`) fail(`operationReceipt.cloudflareReads.${phase}.capturePath`);
     }
     exactKeys(receipt.fileProbes, ['initialPath', 'initialSha256', 'initialPassed', 'initialTotal', 'finalAliasPath', 'finalAliasSha256', 'finalAliasPassed', 'finalAliasTotal'], 'operationReceipt.fileProbes');
     if (receipt.fileProbes.initialPassed !== 10 || receipt.fileProbes.initialTotal !== 10 || receipt.fileProbes.finalAliasPassed !== 5 || receipt.fileProbes.finalAliasTotal !== 5) fail('operationReceipt.fileProbes');
+    relativeFile(receipt.fileProbes.initialPath, 'operationReceipt.fileProbes.initialPath'); relativeFile(receipt.fileProbes.finalAliasPath, 'operationReceipt.fileProbes.finalAliasPath');
+    if (receipt.fileProbes.initialPath !== 'file-probes/initial-10.json' || receipt.fileProbes.finalAliasPath !== 'file-probes/final-alias-5.json') fail('operationReceipt.fileProbes.path');
     for (const key of ['initialSha256', 'finalAliasSha256']) sha(receipt.fileProbes[key], `operationReceipt.fileProbes.${key}`);
     return receipt;
 }
@@ -482,18 +641,32 @@ export function validateOperationReceipt(receipt) {
 function validateDeploymentRecord(record) {
     exactKeys(record, ['schemaVersion', 'projectName', 'deploymentId', 'environment', 'branch', 'sourceGitHead', 'immutableUrl', 'aliasUrl', 'productFiles', 'capturedUtc'], 'deploymentRecord');
     if (record.schemaVersion !== 1 || record.environment !== 'Production' || record.branch !== 'main') fail('deploymentRecord.identity');
-    string(record.projectName, 'deploymentRecord.projectName'); string(record.deploymentId, 'deploymentRecord.deploymentId'); sha(record.sourceGitHead, 'deploymentRecord.sourceGitHead'); utc(record.capturedUtc, 'deploymentRecord.capturedUtc');
+    string(record.projectName, 'deploymentRecord.projectName'); string(record.deploymentId, 'deploymentRecord.deploymentId'); gitSha(record.sourceGitHead, 'deploymentRecord.sourceGitHead'); utc(record.capturedUtc, 'deploymentRecord.capturedUtc');
     validateBinding({ releaseId: '20260813T010203Z-r14-public-smoke-v2', deploymentId: record.deploymentId, projectName: record.projectName, immutableUrl: record.immutableUrl, aliasUrl: record.aliasUrl, productFiles: record.productFiles });
     return record;
 }
 
 function validateEvents(events, receipt) {
     if (events.length !== 278) fail('events.cardinality');
+    const schedule = [{ type: 'operation-start', case: null }];
+    for (const caseLabel of expectedCaseLabels()) {
+        schedule.push({ type: 'case-start', case: caseLabel }, { type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel });
+        for (let index = 0; index < 3; index += 1) schedule.push({ type: 'trusted-input', case: caseLabel });
+        schedule.push({ type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel });
+        for (let index = 3; index < 38; index += 1) schedule.push({ type: 'trusted-input', case: caseLabel });
+        schedule.push({ type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel }, { type: 'case-finish', case: caseLabel });
+    }
+    schedule.push({ type: 'operation-finish', case: null });
     let previous = ZERO_SHA256;
-    const perCase = new Map(expectedCaseLabels().map((label) => [label, { start: 0, finish: 0, inputs: 0, oracle: 0, screenshots: 0 }]));
+    const perCase = new Map(expectedCaseLabels().map((label) => [label, { start: 0, finish: 0, inputs: 0, oracle: 0, screenshots: 0, actionSeq: 0, stages: [], lastMonotonic: -1 }]));
+    const eventMap = new Map();
+    const trusted = new Map(expectedCaseLabels().map((label) => [label, []]));
+    const boundaries = new Map(expectedCaseLabels().map((label) => [label, {}]));
     events.forEach((event, index) => {
         exactKeys(event, ['seq', 'previousEventSha256', 'eventSha256', 'utc', 'monotonicMs', 'type', 'case', 'payload'], 'event');
         if (event.seq !== index + 1 || event.previousEventSha256 !== previous) fail('events.chain');
+        if (event.type !== schedule[index].type || event.case !== schedule[index].case) fail('events.type');
+        utc(event.utc, 'events.utc'); nonNegative(event.monotonicMs, 'events.monotonicMs'); string(event.type, 'events.type'); if (event.case !== null) string(event.case, 'events.case'); object(event.payload, 'events.payload');
         const calculated = sha256Bytes(canonicalJson({ seq: event.seq, previousEventSha256: event.previousEventSha256, utc: event.utc, monotonicMs: event.monotonicMs, type: event.type, case: event.case, payload: event.payload }));
         if (event.eventSha256 !== calculated) fail('events.hash');
         if (index === 0) {
@@ -507,69 +680,297 @@ function validateEvents(events, receipt) {
         } else {
             const count = perCase.get(event.case);
             if (!count) fail('events.case');
-            if (event.type === 'case-start') { exactKeys(event.payload, ['engine', 'originKind', 'requestedUrl'], 'events.caseStart.payload'); count.start++; }
-            else if (event.type === 'trusted-input') { exactKeys(event.payload, ['actionSeq', 'api', 'target', 'preStateSha256', 'postStateSha256', 'resultingUrl'], 'events.trustedInput.payload'); count.inputs++; }
-            else if (event.type === 'screenshot-oracle') { exactKeys(event.payload, ['stage', 'oracleSha256'], 'events.screenshotOracle.payload'); count.oracle++; }
-            else if (event.type === 'screenshot-written') { exactKeys(event.payload, ['stage', 'path', 'pngSha256', 'oracleSha256'], 'events.screenshotWritten.payload'); count.screenshots++; }
-            else if (event.type === 'case-finish') { exactKeys(event.payload, ['actionCount', 'finalUrl'], 'events.caseFinish.payload'); if (event.payload.actionCount !== 38) fail('events.caseFinish.payload'); count.finish++; }
+            if (event.monotonicMs < count.lastMonotonic) fail('events.monotonicOrder'); count.lastMonotonic = event.monotonicMs;
+            if (event.type === 'case-start') { exactKeys(event.payload, ['engine', 'originKind', 'requestedUrl'], 'events.caseStart.payload'); if (event.payload.engine !== event.case.split('-')[0] || event.payload.originKind !== event.case.split('-')[1]) fail('events.caseStart.payload'); string(event.payload.requestedUrl, 'events.caseStart.requestedUrl'); boundaries.get(event.case).start = event; count.start++; }
+            else if (event.type === 'trusted-input') { exactKeys(event.payload, ['actionSeq', 'api', 'target', 'preStateSha256', 'postStateSha256', 'resultingUrl'], 'events.trustedInput.payload'); count.actionSeq++; if (event.payload.actionSeq !== count.actionSeq) fail('events.actionSequence'); string(event.payload.api, 'events.trustedInput.api'); string(event.payload.target, 'events.trustedInput.target'); sha(event.payload.preStateSha256, 'events.trustedInput.preStateSha256'); sha(event.payload.postStateSha256, 'events.trustedInput.postStateSha256'); string(event.payload.resultingUrl, 'events.trustedInput.resultingUrl'); trusted.get(event.case).push(event); count.inputs++; }
+            else if (event.type === 'screenshot-oracle') { exactKeys(event.payload, ['stage', 'oracleSha256'], 'events.screenshotOracle.payload'); if (!STAGES.includes(event.payload.stage)) fail('events.screenshotOracle.stage'); sha(event.payload.oracleSha256, 'events.screenshotOracle.oracleSha256'); count.stages.push(`oracle:${event.payload.stage}`); eventMap.set(`${event.case}\0oracle\0${event.payload.stage}`, event); count.oracle++; }
+            else if (event.type === 'screenshot-written') { exactKeys(event.payload, ['stage', 'path', 'pngSha256', 'oracleSha256'], 'events.screenshotWritten.payload'); if (!STAGES.includes(event.payload.stage)) fail('events.screenshotWritten.stage'); relativeFile(event.payload.path, 'events.screenshotWritten.path'); sha(event.payload.pngSha256, 'events.screenshotWritten.pngSha256'); sha(event.payload.oracleSha256, 'events.screenshotWritten.oracleSha256'); count.stages.push(`written:${event.payload.stage}`); eventMap.set(`${event.case}\0written\0${event.payload.stage}`, event); count.screenshots++; }
+            else if (event.type === 'case-finish') { exactKeys(event.payload, ['actionCount', 'finalUrl'], 'events.caseFinish.payload'); if (event.payload.actionCount !== 38) fail('events.caseFinish.payload'); string(event.payload.finalUrl, 'events.caseFinish.finalUrl'); boundaries.get(event.case).finish = event; count.finish++; }
             else fail('events.type');
         }
         previous = event.eventSha256;
     });
-    for (const count of perCase.values()) if (count.start !== 1 || count.finish !== 1 || count.inputs !== 38 || count.oracle !== 3 || count.screenshots !== 3) fail('events.schedule');
-    if (previous !== receipt.accepted.finalEventSha256) fail('events.finalEventSha256');
+    const expectedStages = ['oracle:initial', 'written:initial', 'oracle:progress', 'written:progress', 'oracle:ending', 'written:ending'];
+    for (const count of perCase.values()) if (count.start !== 1 || count.finish !== 1 || count.inputs !== 38 || count.oracle !== 3 || count.screenshots !== 3 || canonicalJson(count.stages) !== canonicalJson(expectedStages)) fail('events.schedule');
+    return { finalEventSha256: previous, eventMap, trusted, boundaries };
 }
 
-export function validateAuditReceipt(receipt) {
+function relativeAcceptedPath(root, relative, invariant) {
+    const normalized = relativeFile(relative, invariant);
+    const absolute = contained(root, path.join(root, ...normalized.split('/')), invariant);
+    noSymlinkAncestors(absolute, invariant);
+    const stat = fs.lstatSync(absolute);
+    if (!stat.isFile() || stat.isSymbolicLink()) fail(invariant, 'must be a regular file');
+    return absolute;
+}
+
+function validateProductFiles(value, invariant) {
+    exactKeys(value, PRODUCT_PATHS, invariant);
+    for (const publicPath of PRODUCT_PATHS) {
+        const record = value[publicPath];
+        exactKeys(record, ['bytes', 'mime', 'sha256'], `${invariant}.${publicPath}`);
+        nonNegative(record.bytes, `${invariant}.${publicPath}.bytes`); string(record.mime, `${invariant}.${publicPath}.mime`); sha(record.sha256, `${invariant}.${publicPath}.sha256`);
+    }
+}
+
+function expectedProductsFromSource(sourceRoot) {
+    const result = {};
+    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css' };
+    for (const publicPath of PRODUCT_PATHS) {
+        const relative = publicPath === '/' ? 'index.html' : publicPath.slice(1);
+        const absolute = contained(sourceRoot, path.join(sourceRoot, relative), `campaign.source.${relative}`);
+        noSymlinkAncestors(absolute, `campaign.source.${relative}`);
+        const stat = fs.lstatSync(absolute);
+        if (!stat.isFile() || stat.isSymbolicLink()) fail(`campaign.source.${relative}`);
+        result[publicPath] = { bytes: stat.size, mime: mime[publicPath], sha256: sha256File(absolute) };
+    }
+    return result;
+}
+
+function authenticateCampaign(config) {
+    const claimsPath = contained(config.campaignDir, path.join(config.campaignDir, 'claims.json'), 'campaign.claims.path');
+    const envelopePath = contained(config.campaignDir, path.join(config.campaignDir, 'submission-envelope.json'), 'campaign.envelope.path');
+    const candidatePath = contained(config.campaignDir, path.join(config.campaignDir, 'candidate-inventory.json'), 'campaign.candidate.path');
+    const claims = validateCampaignClaims(readJson(claimsPath, 'campaign.claims.json'));
+    const envelope = validateCampaignEnvelope(readJson(envelopePath, 'campaign.envelope.json'));
+    const receipt = validateCampaignReceipt(readJson(config.campaignReceiptPath, 'campaign.receipt.json'));
+    if (claims.runId !== config.campaignRunId || envelope.runId !== config.campaignRunId || receipt.runId !== config.campaignRunId) fail('campaign.runId');
+    if (receipt.campaign.path !== canonicalPath(config.campaignDir, 'campaign.path') || receipt.spec.path !== canonicalPath(config.campaignSpecPath, 'campaign.spec.path')) fail('campaign.receipt.paths');
+    if (!sameHash(receipt.campaign.artifactManifestSha256, sha256File(path.join(config.campaignDir, 'artifact-manifest.json'))) || !sameHash(receipt.campaign.submissionEnvelopeSha256, sha256File(envelopePath))) fail('campaign.receipt.hashes');
+    if (receipt.spec.sizeBytes !== fs.statSync(config.campaignSpecPath).size || !sameHash(receipt.spec.sha256, sha256File(config.campaignSpecPath)) || envelope.spec.fileName !== path.basename(config.campaignSpecPath) || envelope.spec.sizeBytes !== receipt.spec.sizeBytes || !sameHash(envelope.spec.sha256, receipt.spec.sha256)) fail('campaign.spec.binding');
+    for (const [name, expectedHash] of Object.entries(envelope.payloadHashes)) if (!sameHash(sha256File(path.join(config.campaignDir, name)), expectedHash)) fail(`campaign.envelope.payloadHashes.${name}`);
+    for (const value of Object.values(envelope.rawEvidence)) if (!sameHash(sha256File(path.join(config.campaignDir, value.path)), value.sha256)) fail('campaign.rawEvidence');
+    const candidate = readJson(candidatePath, 'campaign.candidate.json');
+    exactKeys(candidate, ['schemaVersion', 'algorithm', 'pathEncoding', 'fileCount', 'pathListSha256', 'contentRecordsSha256', 'files'], 'campaign.candidateInventory');
+    if (candidate.schemaVersion !== 1 || candidate.algorithm !== 'SHA-256' || candidate.pathEncoding !== 'UTF-8 NUL-terminated ordered path records' || !Array.isArray(candidate.files) || candidate.files.length !== candidate.fileCount) fail('campaign.candidateInventory');
+    candidate.files.forEach((entry, index) => {
+        exactKeys(entry, ['path', 'sizeBytes', 'sha256'], 'campaign.candidateInventory.file'); relativeFile(entry.path, 'campaign.candidateInventory.file.path'); nonNegative(entry.sizeBytes, 'campaign.candidateInventory.file.sizeBytes'); externalSha(entry.sha256, 'campaign.candidateInventory.file.sha256');
+        if (index > 0 && candidate.files[index - 1].path.localeCompare(entry.path, 'en') >= 0) fail('campaign.candidateInventory.order');
+        const source = contained(config.sourceSnapshotDir, path.join(config.sourceSnapshotDir, ...entry.path.split('/')), 'campaign.candidateInventory.file.path'); noSymlinkAncestors(source, 'campaign.candidateInventory.file.symlink'); const stat = fs.lstatSync(source);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== entry.sizeBytes || !sameHash(sha256File(source), entry.sha256)) fail('campaign.sourceSnapshot.file');
+    });
+    if (canonicalJson(walkFiles(config.sourceSnapshotDir)) !== canonicalJson(candidate.files.map((entry) => entry.path))) fail('campaign.sourceSnapshot.fileSet');
+    const measured = {
+        fileCount: candidate.files.length,
+        pathListSha256: sha256Bytes(Buffer.from(candidate.files.map((entry) => `${entry.path}\0`).join(''), 'utf8')),
+        contentRecordsSha256: sha256Bytes(Buffer.from(candidate.files.map((entry) => `${entry.path}\0${entry.sizeBytes}\0${entry.sha256}\0`).join(''), 'utf8')),
+    };
+    const authority = { fileCount: candidate.fileCount, pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256 };
+    if (measured.fileCount !== authority.fileCount || !sameHash(measured.pathListSha256, authority.pathListSha256) || !sameHash(measured.contentRecordsSha256, authority.contentRecordsSha256)) fail('campaign.sourceSnapshot.inventory');
+    for (const binding of [claims.candidateInventory, { fileCount: envelope.source.fileCount, pathListSha256: envelope.source.pathListSha256, contentRecordsSha256: envelope.source.contentRecordsSha256 }, receipt.candidateInventory]) if (binding.fileCount !== authority.fileCount || !sameHash(binding.pathListSha256, authority.pathListSha256) || !sameHash(binding.contentRecordsSha256, authority.contentRecordsSha256)) fail('campaign.sourceSnapshot.inventory');
+    if (envelope.source.path !== path.relative(config.campaignDir, config.sourceSnapshotDir).split(path.sep).join('/') || envelope.source.gitBranch !== claims.sourceGit.branch || envelope.source.gitHeadSha !== claims.sourceGit.headSha || canonicalJson(receipt.sourceGit) !== canonicalJson(claims.sourceGit)) fail('campaign.sourceGit');
+    if (claims.sourceGit.branch !== 'main' || receipt.projectRoot !== canonicalPath(config.authorityProjectRoot, 'campaign.projectRoot') || receipt.cleanRoot !== canonicalPath(config.executionSourceDir, 'campaign.cleanRoot')) fail('campaign.authorityRoots');
+    if (!sameHash(receipt.gameCoreSha256, claims.gameCoreSha256) || !sameHash(sha256File(path.join(config.sourceSnapshotDir, 'game-core.js')), claims.gameCoreSha256)) fail('campaign.gameCoreSha256');
+    if (canonicalJson(receipt.r9Frozen) !== canonicalJson(claims.r9Frozen) || canonicalJson(receipt.r10Frozen) !== canonicalJson(claims.r10Frozen) || canonicalJson(receipt.limitation) !== canonicalJson(claims.actualBrowserZoom)) fail('campaign.receipt.claimsBinding');
+    for (const command of receipt.commands) {
+        if (command.cwd !== canonicalPath(config.executionSourceDir, 'campaign.command.cwd')) fail('campaign.receipt.command.cwd');
+        const stdout = relativeAcceptedPath(config.campaignDir, command.stdoutPath, 'campaign.receipt.command.stdoutPath');
+        const stderr = relativeAcceptedPath(config.campaignDir, command.stderrPath, 'campaign.receipt.command.stderrPath');
+        if (!sameHash(sha256File(stdout), command.stdoutSha256) || !sameHash(sha256File(stderr), command.stderrSha256)) fail('campaign.receipt.command.stream');
+    }
+    return { claims, envelope, receipt, productFiles: expectedProductsFromSource(config.sourceSnapshotDir) };
+}
+
+function validateExternalCaptureFiles(capture, invariant) {
+    noSymlinkAncestors(capture.stdoutPath, `${invariant}.stdout.symlink`); noSymlinkAncestors(capture.stderrPath, `${invariant}.stderr.symlink`);
+    const stdout = fs.readFileSync(capture.stdoutPath); const stderr = fs.readFileSync(capture.stderrPath);
+    if (stdout.length !== capture.stdoutBytes || sha256Bytes(stdout) !== capture.stdoutSha256) fail(`${invariant}.stdout`);
+    if (stderr.length !== capture.stderrBytes || sha256Bytes(stderr) !== capture.stderrSha256) fail(`${invariant}.stderr`);
+    return { stdout, stderr };
+}
+
+function authenticateProcessCaptures(config, operation, configPath) {
+    if (operation.configPath !== canonicalPath(configPath, 'operationReceipt.configPath')) fail('operationReceipt.configPath');
+    const verifierPath = path.join(config.sourceSnapshotDir, 'scripts', 'verify-r10-campaign.mjs');
+    const orchestratorPath = path.join(config.sourceSnapshotDir, 'scripts', 'run-public-smoke-v2-operation.mjs');
+    const runnerPath = path.join(config.sourceSnapshotDir, 'scripts', 'run-public-smoke-v2.mjs');
+    if (operation.orchestratorPath !== orchestratorPath || operation.orchestratorSha256 !== sha256File(orchestratorPath) || operation.campaignVerifier.verifierPath !== verifierPath || operation.campaignVerifier.verifierSha256 !== sha256File(verifierPath)) fail('operationReceipt.scriptBinding');
+    const verifierArgv = [config.nodeExePath, verifierPath, '--campaign', config.campaignDir, '--spec', config.campaignSpecPath, '--source', config.sourceSnapshotDir, '--execution-source', config.executionSourceDir, '--run', config.campaignRunId, '--authority-project', config.authorityProjectRoot, '--authority-workspace', config.authorityWorkspaceRoot];
+    const workerArgv = [config.nodeExePath, runnerPath, '--config', configPath];
+    if (canonicalJson(operation.campaignVerifier.argv) !== canonicalJson(verifierArgv) || operation.campaignVerifier.cwd !== canonicalPath(config.authorityProjectRoot, 'campaignVerifier.cwd')) fail('operationReceipt.campaignVerifier.argv');
+    if (canonicalJson(operation.worker.argv) !== canonicalJson(workerArgv) || operation.worker.cwd !== canonicalPath(config.authorityProjectRoot, 'worker.cwd')) fail('operationReceipt.worker.argv');
+    contained(config.releaseRoot, operation.campaignVerifier.stdoutPath, 'campaignVerifier.stdoutPath'); contained(config.releaseRoot, operation.campaignVerifier.stderrPath, 'campaignVerifier.stderrPath');
+    if (operation.worker.stdoutPath !== canonicalPath(config.workerStdoutPath, 'worker.stdoutPath') || operation.worker.stderrPath !== canonicalPath(config.workerStderrPath, 'worker.stderrPath')) fail('worker.streamPath');
+    const verifier = validateExternalCaptureFiles(operation.campaignVerifier, 'campaignVerifier');
+    const worker = validateExternalCaptureFiles(operation.worker, 'worker');
+    if (operation.campaignVerifier.exitCode !== 0 || operation.campaignVerifier.signal !== null || verifier.stderr.length !== 0 || verifier.stdout.toString('utf8') !== 'R10_CAMPAIGN_GATE=VERIFIED\n' || operation.campaignVerifier.gateLine !== 'R10_CAMPAIGN_GATE=VERIFIED') fail('campaignVerifier.gateLine');
+    if (operation.worker.exitCode !== 0 || operation.worker.signal !== null || worker.stderr.length !== 0) fail('worker.stderr');
+}
+
+function validateWranglerCapture(root, relative, phase, config, deployment) {
+    const captureFile = relativeAcceptedPath(root, relative, `cloudflare.${phase}.capturePath`);
+    const capture = readJson(captureFile, `cloudflare.${phase}.capture`);
+    exactKeys(capture, ['schemaVersion', 'phase', 'argv', 'cwd', 'startedUtc', 'finishedUtc', 'exitCode', 'nodeSha256', 'wranglerSha256', 'stdoutPath', 'stdoutBytes', 'stdoutSha256', 'stderrPath', 'stderrBytes', 'stderrSha256'], `cloudflare.${phase}.capture`);
+    if (capture.schemaVersion !== 1 || capture.phase !== phase) fail(`cloudflare.${phase}.capture`);
+    const argv = [config.nodeExePath, config.wranglerJsPath, 'pages', 'deployment', 'list', '--project-name', config.projectName, '--environment', 'production', '--json'];
+    if (canonicalJson(capture.argv) !== canonicalJson(argv) || capture.cwd !== canonicalPath(config.authorityProjectRoot, `cloudflare.${phase}.cwd`) || capture.nodeSha256 !== config.nodeExeSha256 || capture.wranglerSha256 !== config.wranglerJsSha256) fail(`cloudflare.${phase}.command`);
+    utc(capture.startedUtc, `cloudflare.${phase}.startedUtc`); utc(capture.finishedUtc, `cloudflare.${phase}.finishedUtc`); if (Date.parse(capture.finishedUtc) < Date.parse(capture.startedUtc)) fail(`cloudflare.${phase}.time`); integer(capture.exitCode, `cloudflare.${phase}.exitCode`);
+    if (capture.stdoutPath !== `control-plane/${phase}.stdout.bin` || capture.stderrPath !== `control-plane/${phase}.stderr.bin`) fail(`cloudflare.${phase}.streamPath`);
+    const stdoutFile = relativeAcceptedPath(root, capture.stdoutPath, `cloudflare.${phase}.stdoutPath`); const stderrFile = relativeAcceptedPath(root, capture.stderrPath, `cloudflare.${phase}.stderrPath`);
+    const stdout = fs.readFileSync(stdoutFile); const stderr = fs.readFileSync(stderrFile);
+    nonNegative(capture.stdoutBytes, `cloudflare.${phase}.stdoutBytes`); sha(capture.stdoutSha256, `cloudflare.${phase}.stdoutSha256`); nonNegative(capture.stderrBytes, `cloudflare.${phase}.stderrBytes`); sha(capture.stderrSha256, `cloudflare.${phase}.stderrSha256`);
+    if (stdout.length !== capture.stdoutBytes || sha256Bytes(stdout) !== capture.stdoutSha256 || stderr.length !== capture.stderrBytes || sha256Bytes(stderr) !== capture.stderrSha256 || capture.exitCode !== 0 || stderr.length !== 0) fail(`cloudflare.${phase}.streams`);
+    let rows; try { rows = JSON.parse(stdout.toString('utf8')); } catch { fail(`cloudflare.${phase}.stdoutJson`); }
+    if (!Array.isArray(rows) || rows.length < 1) fail(`cloudflare.${phase}.records`);
+    rows.forEach((record) => {
+        exactKeys(record, ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build'], `cloudflare.${phase}.record`);
+        for (const key of ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build']) string(record[key], `cloudflare.${phase}.record.${key}`);
+    });
+    const first = rows[0];
+    if (first.Id !== deployment.deploymentId || first.Environment !== 'Production' || first.Branch !== 'main' || first.Deployment !== deployment.immutableUrl || first.Source !== deployment.sourceGitHead.slice(0, 7)) fail(`cloudflare.${phase}DeploymentId`);
+    return { capture, captureFile };
+}
+
+function validateProbe(root, relative, phase, expectedOrigins, campaign, deployment) {
+    const invariantPhase = phase === 'final-alias' ? 'finalAlias' : phase;
+    const file = relativeAcceptedPath(root, relative, `fileGate.${invariantPhase}.path`);
+    const probe = readJson(file, `fileGate.${invariantPhase}.json`);
+    exactKeys(probe, ['schemaVersion', 'phase', 'startedUtc', 'finishedUtc', 'expectedSourceGitHead', 'expectedDeploymentId', 'results', 'passed', 'total'], `fileGate.${invariantPhase}`);
+    if (probe.schemaVersion !== 2 || probe.phase !== phase || probe.expectedSourceGitHead !== campaign.claims.sourceGit.headSha || probe.expectedDeploymentId !== deployment.deploymentId) fail(`fileGate.${invariantPhase}.binding`);
+    utc(probe.startedUtc, `fileGate.${invariantPhase}.startedUtc`); utc(probe.finishedUtc, `fileGate.${invariantPhase}.finishedUtc`); if (Date.parse(probe.finishedUtc) < Date.parse(probe.startedUtc)) fail(`fileGate.${invariantPhase}.time`);
+    const expected = expectedOrigins.flatMap((originKind) => PRODUCT_PATHS.map((publicPath) => [originKind, publicPath]));
+    if (!Array.isArray(probe.results) || probe.results.length !== expected.length || probe.passed !== expected.length || probe.total !== expected.length) fail(`fileGate.${invariantPhase}.cardinality`);
+    probe.results.forEach((result, index) => {
+        exactKeys(result, ['originKind', 'path', 'requestedUrl', 'finalUrl', 'redirects', 'status', 'contentType', 'mime', 'bodyPath', 'bytes', 'sha256', 'startedUtc', 'finishedUtc', 'transportError'], `fileGate.${invariantPhase}.result`);
+        const [originKind, publicPath] = expected[index];
+        const baseUrl = originKind === 'immutable' ? deployment.immutableUrl : deployment.aliasUrl;
+        const expectedUrl = new URL(publicPath === '/' ? '/' : publicPath.slice(1), baseUrl).href;
+        if (result.originKind !== originKind || result.path !== publicPath || result.requestedUrl !== expectedUrl || result.finalUrl !== expectedUrl || result.status !== 200 || result.transportError !== null) fail(`fileGate.${invariantPhase}.identity`);
+        if (!Array.isArray(result.redirects) || result.redirects.length !== 0) fail(`fileGate.${invariantPhase}.redirects`);
+        string(result.contentType, `fileGate.${invariantPhase}.contentType`); string(result.mime, `fileGate.${invariantPhase}.mime`); if (result.mime !== campaign.productFiles[publicPath].mime) fail(`fileGate.${invariantPhase}.mime`);
+        nonNegative(result.bytes, `fileGate.${invariantPhase}.bytes`); sha(result.sha256, `fileGate.${invariantPhase}.sha256`); utc(result.startedUtc, `fileGate.${invariantPhase}.startedUtc`); utc(result.finishedUtc, `fileGate.${invariantPhase}.finishedUtc`); if (Date.parse(result.finishedUtc) < Date.parse(result.startedUtc)) fail(`fileGate.${invariantPhase}.time`);
+        const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('.', '-');
+        const expectedPrefix = phase === 'initial' ? `initial-${originKind}` : 'final-alias';
+        if (result.bodyPath !== `file-probes/bodies/${expectedPrefix}-${token}.bin`) fail(`fileGate.${invariantPhase}.bodyPath`);
+        const body = relativeAcceptedPath(root, result.bodyPath, `fileGate.${invariantPhase}.bodyPath`);
+        if (fs.statSync(body).size !== result.bytes || sha256File(body) !== result.sha256 || result.bytes !== campaign.productFiles[publicPath].bytes || result.sha256 !== campaign.productFiles[publicPath].sha256) fail(`fileGate.${invariantPhase}.${publicPath === '/script.js' ? 'scriptSha256' : 'sourceBytes'}`);
+    });
+    return { probe, file };
+}
+
+function validateAcceptedRunSchema(accepted) {
+    exactKeys(accepted, ['schemaVersion', 'releaseId', 'campaignRunId', 'sourceGitHead', 'deploymentId', 'immutableUrl', 'aliasUrl', 'startedUtc', 'finishedUtc', 'startedMonotonicMs', 'finishedMonotonicMs', 'engines', 'originKinds', 'attemptsPerCase', 'retries', 'skips', 'caseLabels', 'observationsPath', 'eventsPath', 'screenshotCount', 'productFiles', 'tooling'], 'acceptedRun');
+    if (accepted.schemaVersion !== SMOKE_SCHEMA_VERSION || !RELEASE_ID.test(string(accepted.releaseId, 'acceptedRun.releaseId')) || !CAMPAIGN_ID.test(string(accepted.campaignRunId, 'acceptedRun.campaignRunId'))) fail('acceptedRun.identity');
+    gitSha(accepted.sourceGitHead, 'acceptedRun.sourceGitHead'); string(accepted.deploymentId, 'acceptedRun.deploymentId'); validateUrl(accepted.immutableUrl, 'acceptedRun.immutableUrl'); validateUrl(accepted.aliasUrl, 'acceptedRun.aliasUrl'); utc(accepted.startedUtc, 'acceptedRun.startedUtc'); utc(accepted.finishedUtc, 'acceptedRun.finishedUtc'); nonNegative(accepted.startedMonotonicMs, 'acceptedRun.startedMonotonicMs'); nonNegative(accepted.finishedMonotonicMs, 'acceptedRun.finishedMonotonicMs');
+    if (Date.parse(accepted.finishedUtc) < Date.parse(accepted.startedUtc) || accepted.finishedMonotonicMs < accepted.startedMonotonicMs || accepted.finishedMonotonicMs - accepted.startedMonotonicMs >= 900000) fail('acceptedRun.duration');
+    for (const key of ['attemptsPerCase', 'retries', 'skips', 'screenshotCount']) integer(accepted[key], `acceptedRun.${key}`); relativeFile(accepted.observationsPath, 'acceptedRun.observationsPath'); relativeFile(accepted.eventsPath, 'acceptedRun.eventsPath');
+    sameArray(accepted.engines, ENGINES, 'acceptedRun.engines'); sameArray(accepted.originKinds, ORIGINS, 'acceptedRun.originKinds'); sameArray(accepted.caseLabels, expectedCaseLabels(), 'acceptedRun.caseLabels');
+    validateProductFiles(accepted.productFiles, 'acceptedRun.productFiles'); exactKeys(accepted.tooling, ['runner', 'library', 'playwright'], 'acceptedRun.tooling');
+    for (const key of ['runner', 'library', 'playwright']) { exactKeys(accepted.tooling[key], ['path', 'version', 'sha256'], `acceptedRun.tooling.${key}`); relativeFile(accepted.tooling[key].path, `acceptedRun.tooling.${key}.path`); string(accepted.tooling[key].version, `acceptedRun.tooling.${key}.version`); sha(accepted.tooling[key].sha256, `acceptedRun.tooling.${key}.sha256`); }
+}
+
+function validateScreenshot(record, root, screenshot, index, eventMap) {
+    validateScreenshotShape(record, screenshot, index);
+    const stage = STAGES[index]; const expectedPath = `screenshots/${expectedScreenshotName(record.label, stage)}`; const expectedViewport = stage === 'ending' ? { width: 640, height: 360 } : { width: 320, height: 640 };
+    if (screenshot.caseLabel !== record.label || screenshot.stage !== stage || screenshot.relativePath !== expectedPath) fail('screenshot.path');
+    exactKeys(screenshot.viewport, ['width', 'height'], 'screenshot.viewport'); if (screenshot.viewport.width !== expectedViewport.width || screenshot.viewport.height !== expectedViewport.height) fail('screenshot.viewport');
+    if (screenshot.requestedOrigin !== new URL(record.requestedUrl).origin || screenshot.finalUrl !== record.finalUrl) fail('screenshot.origin');
+    sha(screenshot.oracleSnapshotSha256, 'screenshot.oracleSnapshotSha256'); utc(screenshot.captureStartedUtc, 'screenshot.captureStartedUtc'); utc(screenshot.captureFinishedUtc, 'screenshot.captureFinishedUtc'); if (Date.parse(screenshot.captureFinishedUtc) <= Date.parse(screenshot.captureStartedUtc)) fail('screenshot.timestamps');
+    nonNegative(screenshot.bytes, 'screenshot.bytes'); sha(screenshot.sha256, 'screenshot.sha256'); const file = relativeAcceptedPath(root, screenshot.relativePath, 'screenshot.path');
+    if (fs.statSync(file).size !== screenshot.bytes || sha256File(file) !== screenshot.sha256) fail('screenshot.hash'); validatePngEvidence(file, screenshot.viewport, 'png');
+    const oracle = eventMap.get(`${record.label}\0oracle\0${stage}`); const written = eventMap.get(`${record.label}\0written\0${stage}`);
+    if (!oracle || oracle.payload.oracleSha256 !== screenshot.oracleSnapshotSha256 || oracle.utc !== screenshot.captureStartedUtc) fail('screenshot.oracleBinding');
+    if (!written || written.payload.path !== screenshot.relativePath || written.payload.pngSha256 !== screenshot.sha256 || written.payload.oracleSha256 !== screenshot.oracleSnapshotSha256 || written.utc !== screenshot.captureFinishedUtc) fail('screenshot.eventBinding');
+}
+
+export function validateAuditReceipt(receipt, expected) {
     const keys = ['schemaVersion', 'releaseId', 'status', 'createdUtc', 'auditedTargetRealpath', 'configSha256', 'operationReceiptSha256', 'acceptedManifestSha256', 'eventsSha256', 'finalEventSha256', 'deploymentId', 'passedCases', 'totalCases', 'controlPlaneReads', 'initialFileGate', 'finalAliasGate', 'screenshotBindings'];
     exactKeys(receipt, keys, 'auditReceipt');
     if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED' || receipt.passedCases !== 6 || receipt.totalCases !== 6 || receipt.controlPlaneReads !== 3) fail('auditReceipt.summary');
+    if (!RELEASE_ID.test(string(receipt.releaseId, 'auditReceipt.releaseId'))) fail('auditReceipt.releaseId'); utc(receipt.createdUtc, 'auditReceipt.createdUtc'); canonicalPath(receipt.auditedTargetRealpath, 'auditReceipt.auditedTargetRealpath'); string(receipt.deploymentId, 'auditReceipt.deploymentId');
     exactKeys(receipt.initialFileGate, ['passed', 'total'], 'auditReceipt.initialFileGate'); exactKeys(receipt.finalAliasGate, ['passed', 'total'], 'auditReceipt.finalAliasGate');
     if (receipt.initialFileGate.passed !== 10 || receipt.initialFileGate.total !== 10 || receipt.finalAliasGate.passed !== 5 || receipt.finalAliasGate.total !== 5) fail('auditReceipt.gates');
     for (const key of ['configSha256', 'operationReceiptSha256', 'acceptedManifestSha256', 'eventsSha256', 'finalEventSha256']) sha(receipt[key], `auditReceipt.${key}`);
     if (!Array.isArray(receipt.screenshotBindings) || receipt.screenshotBindings.length !== 18) fail('auditReceipt.screenshotBindings');
+    receipt.screenshotBindings.forEach((binding) => {
+        exactKeys(binding, ['case', 'stage', 'path', 'pngSha256', 'oracleSha256', 'captureStartUtc', 'captureEndUtc'], 'auditReceipt.screenshotBinding');
+        if (!expectedCaseLabels().includes(binding.case) || !STAGES.includes(binding.stage)) fail('auditReceipt.screenshotBinding.tuple'); relativeFile(binding.path, 'auditReceipt.screenshotBinding.path'); sha(binding.pngSha256, 'auditReceipt.screenshotBinding.pngSha256'); sha(binding.oracleSha256, 'auditReceipt.screenshotBinding.oracleSha256'); utc(binding.captureStartUtc, 'auditReceipt.screenshotBinding.captureStartUtc'); utc(binding.captureEndUtc, 'auditReceipt.screenshotBinding.captureEndUtc'); if (Date.parse(binding.captureEndUtc) <= Date.parse(binding.captureStartUtc)) fail('auditReceipt.screenshotBinding.timestamps');
+    });
+    const expectedTuples = expectedCaseLabels().flatMap((caseLabel) => STAGES.map((stage) => `${caseLabel}\0${stage}\0screenshots/${expectedScreenshotName(caseLabel, stage)}`));
+    const actualTuples = receipt.screenshotBindings.map((binding) => `${binding.case}\0${binding.stage}\0${binding.path}`);
+    sameArray(actualTuples, expectedTuples, 'auditReceipt.screenshotBindings');
+    if (expected !== undefined && canonicalJson({ ...receipt, createdUtc: expected.createdUtc }) !== canonicalJson(expected)) fail('auditReceipt.binding');
     return receipt;
 }
 
 export function auditAcceptedRun(options) {
     const resolved = resolveConfig(options.configPath ?? options);
+    const config = resolved.base;
     const operationReceiptPath = canonicalPath(resolved.operationReceiptPath, 'operationReceipt.path');
     const operationBytesHash = sha256File(operationReceiptPath);
     const operation = validateOperationReceipt(readJson(operationReceiptPath, 'operationReceipt.json'));
-    if (operation.releaseId !== resolved.base.releaseId || operation.configSha256 !== sha256File(resolved.configPath) || fs.realpathSync(operation.accepted.realpath) !== fs.realpathSync(resolved.target)) fail('operationReceipt.binding');
-    const deployment = validateDeploymentRecord(readJson(resolved.base.deploymentRecordPath, 'deploymentRecord.json'));
-    if (deployment.projectName !== resolved.base.projectName || deployment.immutableUrl !== resolved.base.immutableUrl || deployment.aliasUrl !== resolved.base.aliasUrl) fail('deploymentRecord.configBinding');
-    for (const phase of ['pre', 'mid', 'post']) if (operation.cloudflareReads[phase].deploymentId !== deployment.deploymentId) fail(`cloudflare.${phase}DeploymentId`);
+    if (operation.releaseId !== config.releaseId || operation.configSha256 !== sha256File(resolved.baseConfigPath)) fail('operationReceipt.binding');
+    authenticateProcessCaptures(config, operation, resolved.baseConfigPath);
+    const campaign = authenticateCampaign(config);
+    const deployment = validateDeploymentRecord(readJson(config.deploymentRecordPath, 'deploymentRecord.json'));
+    if (deployment.projectName !== config.projectName || deployment.immutableUrl !== config.immutableUrl || deployment.aliasUrl !== config.aliasUrl) fail('deploymentRecord.configBinding');
+    if (deployment.sourceGitHead !== campaign.claims.sourceGit.headSha) fail('campaign.deployment.sourceGitHead');
+    if (canonicalJson(deployment.productFiles) !== canonicalJson(campaign.productFiles)) fail('campaign.deployment.productFiles');
+    if (sha256File(config.nodeExePath) !== config.nodeExeSha256 || sha256File(config.wranglerJsPath) !== config.wranglerJsSha256) fail('config.toolingSha256');
     const root = fs.realpathSync(resolved.target);
+    if (resolved.config.schemaVersion === 2 && fs.realpathSync(operation.accepted.realpath) !== root) fail('operationReceipt.accepted.realpath');
     const manifestPath = path.join(root, 'artifact-manifest.json');
     const eventsPath = path.join(root, 'runner-events.jsonl');
-    if (canonicalPath(operation.accepted.manifestPath, 'operationReceipt.manifestPath') !== manifestPath || canonicalPath(operation.accepted.eventsPath, 'operationReceipt.eventsPath') !== eventsPath) fail('operationReceipt.acceptedPaths');
-    const manifest = validateManifest(root, readJson(manifestPath, 'manifest.json'));
-    validateAcceptedManifest(manifest);
+    noSymlinkAncestors(root, 'accepted.symlink'); noSymlinkAncestors(manifestPath, 'manifest.symlink'); noSymlinkAncestors(eventsPath, 'events.symlink');
+    if (resolved.config.schemaVersion === 2 && (canonicalPath(operation.accepted.manifestPath, 'operationReceipt.manifestPath') !== manifestPath || canonicalPath(operation.accepted.eventsPath, 'operationReceipt.eventsPath') !== eventsPath)) fail('operationReceipt.acceptedPaths');
     const manifestHash = sha256File(manifestPath);
-    if (manifestHash !== operation.accepted.manifestSha256 || manifest.releaseId !== resolved.base.releaseId) fail('manifest.operationReceiptBinding');
     const eventsHash = sha256File(eventsPath);
-    if (eventsHash !== operation.accepted.eventsSha256) fail('events.operationReceiptBinding');
-    const events = fs.readFileSync(eventsPath, 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line));
-    validateEvents(events, operation);
+    const eventText = fs.readFileSync(eventsPath, 'utf8'); if (!eventText.endsWith('\n')) fail('events.termination');
+    const events = eventText.slice(0, -1).split('\n').map((line) => JSON.parse(line));
+    const eventValidation = validateEvents(events, operation);
+    if (events[0].payload.releaseId !== config.releaseId) fail('events.operationStart.releaseId');
     const accepted = readJson(path.join(root, 'accepted-run.json'), 'acceptedRun.json');
-    exactKeys(accepted, ['schemaVersion', 'releaseId', 'campaignRunId', 'sourceGitHead', 'deploymentId', 'immutableUrl', 'aliasUrl', 'startedUtc', 'finishedUtc', 'startedMonotonicMs', 'finishedMonotonicMs', 'engines', 'originKinds', 'attemptsPerCase', 'retries', 'skips', 'caseLabels', 'observationsPath', 'eventsPath', 'screenshotCount', 'productFiles', 'tooling'], 'acceptedRun');
-    if (accepted.schemaVersion !== SMOKE_SCHEMA_VERSION || accepted.releaseId !== resolved.base.releaseId || accepted.deploymentId !== deployment.deploymentId || accepted.immutableUrl !== deployment.immutableUrl || accepted.aliasUrl !== deployment.aliasUrl || accepted.attemptsPerCase !== 1 || accepted.retries !== 0 || accepted.skips !== 0 || accepted.screenshotCount !== 18) fail('acceptedRun.summary');
-    sameArray(accepted.engines, ENGINES, 'acceptedRun.engines'); sameArray(accepted.originKinds, ORIGINS, 'acceptedRun.originKinds'); sameArray(accepted.caseLabels, expectedCaseLabels(), 'acceptedRun.caseLabels');
-    const observationsPath = path.join(root, 'observations.json');
-    if (canonicalPath(accepted.observationsPath, 'acceptedRun.observationsPath') !== observationsPath) fail('acceptedRun.observationsPath');
+    validateAcceptedRunSchema(accepted);
+    if (accepted.releaseId !== config.releaseId || accepted.campaignRunId !== config.campaignRunId || accepted.sourceGitHead !== deployment.sourceGitHead || accepted.deploymentId !== deployment.deploymentId || accepted.immutableUrl !== deployment.immutableUrl || accepted.aliasUrl !== deployment.aliasUrl || accepted.attemptsPerCase !== 1 || accepted.retries !== 0 || accepted.skips !== 0 || accepted.screenshotCount !== 18) fail('acceptedRun.summary');
+    if (canonicalJson(accepted.productFiles) !== canonicalJson(campaign.productFiles)) fail('acceptedRun.productFiles');
+    if (accepted.tooling.runner.sha256 !== sha256File(path.join(config.sourceSnapshotDir, accepted.tooling.runner.path)) || accepted.tooling.library.sha256 !== sha256File(path.join(config.sourceSnapshotDir, accepted.tooling.library.path))) fail('acceptedRun.tooling');
+    if (accepted.observationsPath !== 'observations.json' || accepted.eventsPath !== 'runner-events.jsonl') fail('acceptedRun.paths');
+    const observationsPath = relativeAcceptedPath(root, accepted.observationsPath, 'acceptedRun.observationsPath');
+    if (relativeAcceptedPath(root, accepted.eventsPath, 'acceptedRun.eventsPath') !== eventsPath) fail('acceptedRun.eventsPath');
     const cases = readJson(observationsPath, 'observations.json');
     if (!Array.isArray(cases) || cases.length !== 6) fail('observations.cardinality');
     const labels = cases.map((record) => record.label);
     if (canonicalJson(labels) !== canonicalJson(expectedCaseLabels())) fail('observations.matrix');
-    cases.forEach(validateCaseFull);
+    cases.forEach((record, caseIndex) => {
+        validateCaseFull(record);
+        const expectedUrl = record.originKind === 'immutable' ? deployment.immutableUrl : deployment.aliasUrl;
+        if (record.requestedUrl !== expectedUrl || record.finalUrl !== expectedUrl) fail('case.url');
+        const boundary = eventValidation.boundaries.get(record.label);
+        if (boundary.start.payload.requestedUrl !== record.requestedUrl || boundary.start.utc !== record.startedUtc || boundary.start.monotonicMs !== record.startedMonotonicMs || boundary.finish.payload.finalUrl !== record.finalUrl || boundary.finish.utc !== record.finishedUtc || boundary.finish.monotonicMs !== record.finishedMonotonicMs) fail('events.caseBoundaryBinding');
+        if (Date.parse(record.startedUtc) < Date.parse(accepted.startedUtc) || Date.parse(record.finishedUtc) > Date.parse(accepted.finishedUtc) || record.startedMonotonicMs < accepted.startedMonotonicMs || record.finishedMonotonicMs > accepted.finishedMonotonicMs) fail('case.operationTime');
+        if (caseIndex > 0 && (Date.parse(record.startedUtc) < Date.parse(cases[caseIndex - 1].finishedUtc) || record.startedMonotonicMs < cases[caseIndex - 1].finishedMonotonicMs)) fail('case.order');
+        record.actions.forEach((action, actionIndex) => {
+            if (action.resultingUrl !== record.finalUrl || (actionIndex > 0 && action.preStateSha256 !== record.actions[actionIndex - 1].postStateSha256)) fail('actions.stateChain');
+            const event = eventValidation.trusted.get(record.label)[actionIndex];
+            if (!event || canonicalJson(event.payload) !== canonicalJson({ actionSeq: action.seq, api: action.api, target: action.target, preStateSha256: action.preStateSha256, postStateSha256: action.postStateSha256, resultingUrl: action.resultingUrl }) || event.utc !== action.utc || event.monotonicMs !== action.monotonicMs) fail('events.actionBinding');
+        });
+        record.screenshots.forEach((screenshot, screenshotIndex) => validateScreenshot(record, root, screenshot, screenshotIndex, eventValidation.eventMap));
+    });
+    const initialProbe = validateProbe(root, operation.fileProbes.initialPath, 'initial', ['immutable', 'alias'], campaign, deployment);
+    const pre = validateWranglerCapture(root, operation.cloudflareReads.pre.capturePath, 'pre', config, deployment);
+    const mid = validateWranglerCapture(root, operation.cloudflareReads.mid.capturePath, 'mid', config, deployment);
+    const post = validateWranglerCapture(root, operation.cloudflareReads.post.capturePath, 'post', config, deployment);
+    const finalProbe = validateProbe(root, operation.fileProbes.finalAliasPath, 'final-alias', ['alias'], campaign, deployment);
+    if (Date.parse(operation.campaignVerifier.finishedUtc) > Date.parse(initialProbe.probe.startedUtc)) fail('campaignVerifier.order');
+    if (Date.parse(operation.worker.startedUtc) > Date.parse(initialProbe.probe.startedUtc) || Date.parse(operation.worker.finishedUtc) < Date.parse(operation.accepted.publishedUtc) || operation.worker.finishedMonotonicMs - operation.worker.startedMonotonicMs >= 900000) fail('worker.order');
+    if (Date.parse(initialProbe.probe.finishedUtc) > Date.parse(pre.capture.startedUtc) || Date.parse(pre.capture.finishedUtc) > Date.parse(cases[0].startedUtc)) fail('cloudflare.pre.order');
+    if (Date.parse(cases[2].finishedUtc) > Date.parse(mid.capture.startedUtc) || Date.parse(mid.capture.finishedUtc) > Date.parse(cases[3].startedUtc)) fail('cloudflare.mid.order');
+    if (Date.parse(cases[5].finishedUtc) > Date.parse(post.capture.startedUtc) || Date.parse(post.capture.finishedUtc) > Date.parse(finalProbe.probe.startedUtc)) fail('cloudflare.post.order');
+    if (Date.parse(finalProbe.probe.finishedUtc) > Date.parse(operation.accepted.publishedUtc) || Date.parse(operation.accepted.publishedUtc) > Date.parse(operation.worker.finishedUtc) || Date.parse(operation.worker.finishedUtc) > Date.parse(operation.createdUtc)) fail('operationReceipt.publicationOrder');
+    for (const phase of ['pre', 'mid', 'post']) if (operation.cloudflareReads[phase].deploymentId !== deployment.deploymentId) fail(`cloudflare.${phase}DeploymentId`);
+    if (operation.cloudflareReads.pre.captureSha256 !== sha256File(pre.captureFile) || operation.cloudflareReads.mid.captureSha256 !== sha256File(mid.captureFile) || operation.cloudflareReads.post.captureSha256 !== sha256File(post.captureFile)) fail('cloudflare.operationReceiptBinding');
+    if (operation.fileProbes.initialSha256 !== sha256File(initialProbe.file) || operation.fileProbes.finalAliasSha256 !== sha256File(finalProbe.file)) fail('fileGate.operationReceiptBinding');
     const screenshotBindings = cases.flatMap((record) => record.screenshots.map((screenshot) => ({ case: screenshot.caseLabel, stage: screenshot.stage, path: screenshot.relativePath, pngSha256: screenshot.sha256, oracleSha256: screenshot.oracleSnapshotSha256, captureStartUtc: screenshot.captureStartedUtc, captureEndUtc: screenshot.captureFinishedUtc })));
     if (canonicalJson(screenshotBindings) !== canonicalJson(operation.screenshotBindings)) fail('screenshot.operationReceiptBinding');
-    if (canonicalJson(accepted.productFiles) !== canonicalJson(deployment.productFiles)) fail('acceptedRun.productFiles');
+    if (eventsHash !== operation.accepted.eventsSha256 || eventValidation.finalEventSha256 !== operation.accepted.finalEventSha256) fail('events.operationReceiptBinding');
+    const manifest = validateManifest(root, readJson(manifestPath, 'manifest.json')); validateAcceptedManifest(manifest);
+    if (manifestHash !== operation.accepted.manifestSha256 || manifest.releaseId !== config.releaseId) fail('manifest.operationReceiptBinding');
+    const treeDigest = sha256Bytes(canonicalJson({ files: manifest.files, manifestSha256: manifestHash }));
+    if (operation.accepted.treeDigest !== treeDigest) fail('manifest.treeDigest');
     const receipt = {
-        schemaVersion: 1, releaseId: resolved.base.releaseId, status: 'VERIFIED', createdUtc: new Date().toISOString(), auditedTargetRealpath: root,
+        schemaVersion: 1, releaseId: config.releaseId, status: 'VERIFIED', createdUtc: new Date().toISOString(), auditedTargetRealpath: root,
         configSha256: sha256File(resolved.configPath), operationReceiptSha256: operationBytesHash, acceptedManifestSha256: manifestHash, eventsSha256: eventsHash,
-        finalEventSha256: operation.accepted.finalEventSha256, deploymentId: accepted.deploymentId, passedCases: 6, totalCases: 6, controlPlaneReads: 3,
+        finalEventSha256: eventValidation.finalEventSha256, deploymentId: accepted.deploymentId, passedCases: 6, totalCases: 6, controlPlaneReads: 3,
         initialFileGate: { passed: 10, total: 10 }, finalAliasGate: { passed: 5, total: 5 }, screenshotBindings,
     };
     validateAuditReceipt(receipt);
