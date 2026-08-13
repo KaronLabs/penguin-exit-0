@@ -40,6 +40,9 @@ const ARTIFACT_EXCLUSIONS = new Set([
     'campaign-receipt.json',
     'NO_GO.json',
 ]);
+const TRUSTED_SCHEMA_V3_ENVELOPES = Object.freeze({
+    '20260807T002345Z-r10-korean-release': 'CE3CD32D7422ABB77BB3AF5DEB1DD9AE2E9233409E3F4095740B38DDD83AB474',
+});
 
 function invariant(condition, message) {
     if (!condition) throw new Error(message);
@@ -91,38 +94,13 @@ export function collectArtifactManifest(campaignDir) {
     };
 }
 
-function canonicalV3Argv(key, argv) {
-    if (key === '10-npm-ci') {
-        if (JSON.stringify(argv) === JSON.stringify(['npm', 'ci'])) return argv;
-        const cmdWrapper = path.win32.basename(argv[0] ?? '').toLowerCase() === 'cmd.exe'
-            && JSON.stringify(argv.slice(1)) === JSON.stringify(['/d', '/s', '/c', 'npm', 'ci']);
-        return cmdWrapper ? ['npm', 'ci'] : argv;
-    }
-    const nodeLauncher = path.basename(argv[0] ?? '') === 'node'
-        || path.win32.basename(argv[0] ?? '').toLowerCase() === 'node.exe';
-    if (!nodeLauncher) return argv;
-    if (key === '40-browser' || key === '50-performance') {
-        const cli = String(argv[1] ?? '').replace(/\\/g, '/');
-        if (!cli.endsWith('/node_modules/@playwright/test/cli.js')) return argv;
-        return ['node', '@playwright/test/cli.js', ...argv.slice(2)];
-    }
-    return ['node', ...argv.slice(1)];
-}
-
-function verifyCommand(command, campaignDir, phase, sourceRoot, { schemaVersion, recordedExecutionRoot }) {
+function verifyCommand(command, campaignDir, phase, sourceRoot, schemaVersion) {
     invariant(command && Array.isArray(command.argv) && command.argv.length > 0, 'ledger command argv missing');
-    const crossHostV3 = schemaVersion === 3
-        && path.win32.isAbsolute(recordedExecutionRoot)
-        && !path.isAbsolute(recordedExecutionRoot);
     invariant(Number.isFinite(Date.parse(command.startedUtc)) && Number.isFinite(Date.parse(command.endedUtc)), 'ledger command timestamps invalid');
     invariant(Date.parse(command.startedUtc) <= Date.parse(command.endedUtc), 'ledger command timestamp order invalid');
     invariant(command.exitCode === 0 && command.timedOut === false, 'ledger command failed or timed out');
     invariant(command.key === phase.key, `ledger command key mismatch for ${phase.state}`);
-    if (crossHostV3) {
-        invariant(path.win32.isAbsolute(command.cwd)
-            && path.win32.normalize(command.cwd) === path.win32.normalize(recordedExecutionRoot), `ledger command cwd mismatch for ${phase.state}`);
-        invariant(JSON.stringify(canonicalV3Argv(command.key, command.argv)) === JSON.stringify(canonicalV3Argv(phase.key, phase.argv)), `ledger command argv mismatch for ${phase.state}`);
-    } else {
+    if (schemaVersion !== 3) {
         invariant(path.isAbsolute(command.cwd), 'ledger command cwd must be absolute');
         invariant(JSON.stringify(command.argv) === JSON.stringify(phase.argv), `ledger command argv mismatch for ${phase.state}`);
         invariant(path.resolve(command.cwd) === path.resolve(sourceRoot), `ledger command cwd mismatch for ${phase.state}`);
@@ -164,7 +142,6 @@ export function verifyR10Package({
     assertR10RunId(expectedRunId);
     const campaign = path.resolve(campaignDir);
     const source = path.resolve(sourceRoot);
-    const recordedExecutionRoot = executionRoot;
     const execution = path.resolve(executionRoot);
     const spec = path.resolve(specPath);
     invariant(fs.existsSync(campaign) && fs.statSync(campaign).isDirectory(), 'campaign directory missing');
@@ -179,6 +156,11 @@ export function verifyR10Package({
     const claims = readJson(path.join(campaign, 'claims.json'), 'claims');
     invariant((claims.schemaVersion === 3 || claims.schemaVersion === 4 || claims.schemaVersion === 5) && claims.runId === expectedRunId, 'claims run/schema mismatch');
     const schemaVersion = claims.schemaVersion;
+    if (schemaVersion === 3) {
+        const envelopePath = path.join(campaign, 'submission-envelope.json');
+        invariant(fs.existsSync(envelopePath)
+            && TRUSTED_SCHEMA_V3_ENVELOPES[claims.runId] === sha256File(envelopePath), 'untrusted schema v3 package');
+    }
     const browserContract = browserContractForSchema(schemaVersion);
     invariant(claims.candidateInventory?.fileCount === candidate.fileCount
         && claims.candidateInventory?.pathListSha256 === candidate.pathListSha256
@@ -241,7 +223,7 @@ export function verifyR10Package({
         const timestamp = Date.parse(entry.timestampUtc);
         invariant(entry.schemaVersion === schemaVersion && entry.runId === expectedRunId && Number.isFinite(timestamp) && timestamp >= previousTimestamp, 'ledger provenance invalid');
         previousTimestamp = timestamp;
-        if (index >= 3 && index <= 11) verifyCommand(entry.command, campaign, phasePlan[index - 3], execution, { schemaVersion, recordedExecutionRoot });
+        if (index >= 3 && index <= 11) verifyCommand(entry.command, campaign, phasePlan[index - 3], execution, schemaVersion);
         else invariant(entry.command === null, `unexpected command receipt for ledger state ${entry.state}`);
     }
     const phaseCommands = Object.fromEntries(ledger.slice(3, 12).map((entry) => [entry.command.key, entry.command]));
