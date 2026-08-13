@@ -505,6 +505,27 @@ test('R10 phase plan runs every mutating tool only in clean source and never inv
     assert.ok(plan.every((phase) => !phase.argv.join(' ').includes('test:all')));
     assert.ok(plan.every((phase) => !phase.argv.join(' ').includes('campaign:build')));
     assert.ok(plan.find((phase) => phase.key === '50-performance').timeoutMs >= 780000);
+
+    const legacySummary = '# tests 29\n# pass 29\n# fail 0\n';
+    const node24UnitSummary = 'success lines\nℹ tests 29\nℹ suites 0\nℹ pass 29\nℹ fail 0\nℹ duration_ms 502.5497\n';
+    const node24VerifierSummary = 'ℹ tests 6\r\nℹ suites 0\r\nℹ pass 6\r\nℹ fail 0\r\n';
+    assert.deepEqual(campaignLib.tapCounts(legacySummary), { tests: 29, passed: 29, failed: 0 });
+    assert.deepEqual(campaignLib.tapCounts(node24UnitSummary), { tests: 29, passed: 29, failed: 0 });
+    assert.deepEqual(campaignLib.tapCounts(node24VerifierSummary), { tests: 6, passed: 6, failed: 0 });
+
+    for (const invalidSummary of [
+        '',
+        '# tests 29\n# pass 29\n',
+        '# tests 28\n# pass 29\n# fail 0\n',
+        'ℹ tests 29\nℹ pass 28\nℹ fail 0\n',
+        'ℹ tests 29\nℹ pass 29\nℹ fail 1\n',
+        '# tests 29\n# tests 29\n# pass 29\n# fail 0\n',
+        '# tests 29\nℹ tests 29\n# pass 29\n# fail 0\n',
+        '# tests 29\nℹ tests 6\n# pass 29\n# fail 0\n',
+        '\u001b[32mℹ tests 29\u001b[0m\nℹ pass 29\nℹ fail 0\n',
+        'ℹ tests 29\nℹ pass 29\nℹ fail 0\n\u001b[31mspoof\u001b[0m\n',
+        'ℹ tests 29.0\nℹ pass 29\nℹ fail 0\n',
+    ]) assert.throws(() => campaignLib.tapCounts(invalidSummary), /TAP_COUNT_PROOF_MISSING/);
 });
 
 test('R9 frozen snapshot is an ordered content digest over R9 campaign, operations and review receipts', (t) => {
