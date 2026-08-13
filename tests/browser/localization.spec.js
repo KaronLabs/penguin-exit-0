@@ -303,28 +303,27 @@ test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.locator('[data-puz="wifi"]').click();
-    const timing = await page.evaluate(() => {
-        performance.clearMarks('r14-wifi-option-before');
-        performance.clearMarks('r14-wifi-option-after');
-        performance.clearMarks('r14-cpu-tab-before');
-        performance.clearMarks('r14-cpu-tab-after');
-        performance.mark('r14-wifi-option-before');
-        document.querySelector('.puzzle-option:nth-child(3)').click();
-        performance.mark('r14-wifi-option-after');
-        performance.mark('r14-cpu-tab-before');
-        document.querySelector('[data-puz="cpu"]').click();
-        performance.mark('r14-cpu-tab-after');
-        const mark = (name) => performance.getEntriesByName(name).at(-1).startTime;
-        return {
-            optionDuration: mark('r14-wifi-option-after') - mark('r14-wifi-option-before'),
-            optionToTab: mark('r14-cpu-tab-before') - mark('r14-wifi-option-after'),
-            tabDuration: mark('r14-cpu-tab-after') - mark('r14-cpu-tab-before')
-        };
+    await page.evaluate(() => {
+        const targets = new Map([
+            [document.querySelector('.puzzle-option:nth-child(3)'), 'wifi-systemctl'],
+            [document.querySelector('[data-puz="cpu"]'), 'cpu-tab']
+        ]);
+        window.__r14ClickEvents = [];
+        document.addEventListener('click', (event) => {
+            const target = targets.get(event.target);
+            if (target) window.__r14ClickEvents.push({ target, timeStamp: event.timeStamp, isTrusted: event.isTrusted });
+        }, { capture: true });
     });
 
-    expect(timing.optionDuration).toBeGreaterThanOrEqual(0);
-    expect(timing.optionToTab).toBeLessThan(450);
-    expect(timing.tabDuration).toBeGreaterThanOrEqual(0);
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('[data-puz="cpu"]').click();
+    const clickEvents = await page.evaluate(() => window.__r14ClickEvents);
+    expect(clickEvents).toHaveLength(2);
+    expect(clickEvents.map(({ target, isTrusted }) => ({ target, isTrusted }))).toEqual([
+        { target: 'wifi-systemctl', isTrusted: true },
+        { target: 'cpu-tab', isTrusted: true }
+    ]);
+    expect(clickEvents[1].timeStamp - clickEvents[0].timeStamp).toBeLessThan(450);
     await page.waitForTimeout(1100);
     const snapshot = await puzzleRuntimeSnapshot(page);
     const activeTitle = await page.evaluate(() => document.querySelector('#puzzle-title').textContent);
