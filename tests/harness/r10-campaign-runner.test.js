@@ -651,13 +651,17 @@ test('the sealed real schema v3 R10 package remains verifiable under its histori
     });
     assert.equal(result.status, 'VERIFIED');
 
-    function mutatedPackage(mutateLedger) {
+    function mutatedPackage({ mutateClaims = () => {}, mutateLedger = () => {}, mutateEnvelope = () => {}, expectedRunId = runId } = {}) {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'penguin-r10-v3-mutation-'));
         t.after(() => fs.rmSync(root, { recursive: true, force: true }));
         const copiedCampaign = path.join(root, 'campaign');
         const copiedSpec = path.join(root, path.basename(specPath));
         fs.cpSync(campaignDir, copiedCampaign, { recursive: true });
         fs.copyFileSync(specPath, copiedSpec);
+        const claimsPath = path.join(copiedCampaign, 'claims.json');
+        const copiedClaims = JSON.parse(fs.readFileSync(claimsPath, 'utf8'));
+        mutateClaims(copiedClaims);
+        fs.writeFileSync(claimsPath, JSON.stringify(copiedClaims, null, 2));
         const ledgerPath = path.join(copiedCampaign, 'ledger.jsonl');
         const copiedLedger = fs.readFileSync(ledgerPath, 'utf8').trim().split(/\r?\n/).map(JSON.parse);
         mutateLedger(copiedLedger);
@@ -669,28 +673,46 @@ test('the sealed real schema v3 R10 package remains verifiable under its histori
         for (const name of Object.keys(envelope.payloadHashes)) {
             envelope.payloadHashes[name] = sha256File(path.join(copiedCampaign, name));
         }
+        mutateEnvelope(envelope);
         fs.writeFileSync(envelopePath, JSON.stringify(envelope, null, 2));
         return {
             campaignDir: copiedCampaign,
             specPath: copiedSpec,
             sourceRoot: path.join(copiedCampaign, 'source-snapshot'),
             executionRoot,
-            expectedRunId: runId,
+            expectedRunId,
         };
     }
 
-    const forgedArgv = mutatedPackage((entries) => {
-        const command = entries.find((entry) => entry.command?.key === '20-preflight').command;
-        command.argv = [command.argv[0], 'scripts/forged-preflight.mjs'];
-    });
-    assert.throws(() => verifyR10Package(forgedArgv), /ledger command argv mismatch/);
-
-    const forgedCwd = mutatedPackage((entries) => {
-        for (const entry of entries) {
-            if (entry.command) entry.command.cwd = 'C:\\forged\\other-source';
+    const unknownRunId = '20260807T002346Z-r10-korean-release';
+    const attacks = [
+        { name: 'evil node launcher', options: { mutateLedger: (entries) => { entries.find((entry) => entry.command?.key === '20-preflight').command.argv[0] = 'C:\\evil\\node.exe'; } } },
+        { name: 'relative node launcher', options: { mutateLedger: (entries) => { entries.find((entry) => entry.command?.key === '20-preflight').command.argv[0] = 'node'; } } },
+        { name: 'evil cmd wrapper', options: { mutateLedger: (entries) => { entries.find((entry) => entry.command?.key === '10-npm-ci').command.argv[0] = 'C:\\evil\\cmd.exe'; } } },
+        { name: 'external Playwright CLI root', options: { mutateLedger: (entries) => { entries.find((entry) => entry.command?.key === '40-browser').command.argv[1] = 'C:\\evil\\node_modules\\@playwright\\test\\cli.js'; } } },
+        { name: 'Playwright CLI traversal root', options: { mutateLedger: (entries) => { entries.find((entry) => entry.command?.key === '40-browser').command.argv[1] = 'C:\\evil\\..\\external\\node_modules\\@playwright\\test\\cli.js'; } } },
+        { name: 'forged script', options: { mutateLedger: (entries) => { const command = entries.find((entry) => entry.command?.key === '20-preflight').command; command.argv = [command.argv[0], 'scripts/forged-preflight.mjs']; } } },
+        { name: 'foreign cwd', options: { mutateLedger: (entries) => { for (const entry of entries) if (entry.command) entry.command.cwd = 'C:\\forged\\other-source'; } } },
+        { name: 'envelope byte mutation', options: { mutateEnvelope: (envelope) => { envelope.anchorProbe = 'forged'; } } },
+        {
+            name: 'unknown schema-v3 package',
+            options: {
+                expectedRunId: unknownRunId,
+                mutateClaims: (claims) => { claims.runId = unknownRunId; },
+                mutateLedger: (entries) => { for (const entry of entries) entry.runId = unknownRunId; },
+                mutateEnvelope: (envelope) => { envelope.runId = unknownRunId; },
+            },
+        },
+    ];
+    const outcomes = attacks.map(({ options }) => {
+        try {
+            verifyR10Package(mutatedPackage(options));
+            return 'VERIFIED';
+        } catch (error) {
+            return error.message;
         }
     });
-    assert.throws(() => verifyR10Package(forgedCwd), /ledger command cwd mismatch/);
+    assert.deepEqual(outcomes, attacks.map(() => 'untrusted schema v3 package'));
 });
 
 test('official spec and campaign cannot be published before the staged package is VERIFIED', (t) => {
