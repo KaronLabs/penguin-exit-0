@@ -103,6 +103,46 @@ test('schema validators fail closed on missing, unknown, and wrong-type config f
     assert.throws(() => smoke.validateOperationConfig({ ...config, schemaVersion: '2' }), /config/);
 });
 
+test('schema path fields and CLI config reject relative input before resolution', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const schema2Paths = Object.keys(fixture.config).filter((key) => /(Path|Dir|Root)$/.test(key));
+    for (const key of schema2Paths) {
+        assert.throws(
+            () => smoke.validateOperationConfig({ ...fixture.config, [key]: `relative/${key}` }),
+            new RegExp(`config\\.${key}: must be absolute`),
+            `schema 2 ${key}`,
+        );
+    }
+
+    const derived = {
+        schemaVersion: 3,
+        baseConfigPath: fixture.configPath,
+        baseConfigSha256: sha256File(fixture.configPath),
+        mutationId: 'NC-RELATIVE-PATH',
+        mutationRootRealpath: path.join(fixture.temp, 'mutation'),
+        auditTargetRealpath: path.join(fixture.temp, 'mutation', 'accepted'),
+        externalOperationReceiptPath: fixture.operationReceiptPath,
+        auditReceiptPath: path.join(fixture.temp, 'mutation', 'audit.json'),
+    };
+    for (const key of ['baseConfigPath', 'mutationRootRealpath', 'auditTargetRealpath', 'externalOperationReceiptPath', 'auditReceiptPath']) {
+        assert.throws(
+            () => smoke.validateDerivedAuditConfig({ ...derived, [key]: `relative/${key}` }),
+            new RegExp(`auditConfig\\.${key}: must be absolute`),
+            `schema 3 ${key}`,
+        );
+    }
+
+    const cli = spawnSync(process.execPath, [path.resolve('scripts/verify-public-smoke-v2.mjs'), '--config', 'relative/config.json'], {
+        cwd: fixture.temp,
+        encoding: 'utf8',
+        timeout: 15_000,
+    });
+    assert.notEqual(cli.status, 0);
+    assert.match(cli.stderr, /absolute/i);
+    assert.equal(cli.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false);
+    assert.equal(fs.existsSync(fixture.config.auditReceiptPath), false);
+});
+
 test('manifest authenticates exactly the regular files below its root', (t) => {
     const root = tempRoot(t);
     const relativePath = 'screenshots/chromium-immutable-initial-320.png';
@@ -671,6 +711,21 @@ function rewriteAccepted(fixture, { observations, events } = {}) {
     fixture.manifest = sealAccepted(fixture);
 }
 
+function rewriteProbeAuthority(fixture, phase, mutate) {
+    const operation = readJson(fixture.operationReceiptPath);
+    const key = phase === 'initial' ? 'initial' : 'finalAlias';
+    const relativePath = operation.fileProbes[`${key}Path`];
+    const probePath = path.join(fixture.acceptedDir, relativePath);
+    const probe = readJson(probePath);
+    mutate(probe);
+    writeJson(probePath, probe);
+    operation.fileProbes[`${key}Sha256`] = sha256File(probePath);
+    fixture.manifest = sealAccepted(fixture);
+    operation.accepted.manifestSha256 = sha256File(path.join(fixture.acceptedDir, 'artifact-manifest.json'));
+    operation.accepted.treeDigest = sha256(canonicalJson({ files: fixture.manifest.files, manifestSha256: operation.accepted.manifestSha256 }));
+    writeJson(fixture.operationReceiptPath, operation);
+}
+
 function rewriteCampaign(fixture, claims) {
     writeJson(path.join(fixture.campaignDir, 'claims.json'), claims);
     const envelopePath = path.join(fixture.campaignDir, 'submission-envelope.json');
@@ -809,6 +864,78 @@ test('invalid auditor input emits no gate and creates no receipt', (t) => {
     assert.notEqual(cli.status, 0);
     assert.equal(cli.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false);
     assert.equal(fs.existsSync(fixture.config.auditReceiptPath), false);
+});
+
+test('raw Content-Type is authoritative after every downstream hash is resealed', (t) => {
+    for (const [name, publicPath, contentType] of [
+        ['wrong text type', '/', 'text/plain'],
+        ['empty', '/', ''],
+        ['whitespace', '/', '   '],
+        ['JavaScript binary fallback', '/script.js', 'application/octet-stream'],
+        ['semicolon only', '/', '; charset=utf-8'],
+    ]) {
+        const fixture = createAcceptedFixture(t);
+        rewriteProbeAuthority(fixture, 'initial', (probe) => {
+            probe.results.find((result) => result.path === publicPath).contentType = contentType;
+        });
+        assert.throws(() => smoke.auditAcceptedRun({ configPath: fixture.configPath }), /fileGate\.initial\.mime/, name);
+    }
+
+    for (const [publicPath, contentType] of [
+        ['/', ' text/html '],
+        ['/', 'text/html; charset=utf-8; boundary=x'],
+        ['/script.js', ' Application/JavaScript ; charset=UTF-8'],
+        ['/style.css', ' Text/CSS ; charset=UTF-8'],
+    ]) {
+        const fixture = createAcceptedFixture(t);
+        rewriteProbeAuthority(fixture, 'initial', (probe) => {
+            probe.results.find((result) => result.path === publicPath).contentType = contentType;
+        });
+        assert.doesNotThrow(() => smoke.auditAcceptedRun({ configPath: fixture.configPath }), `${publicPath} ${contentType}`);
+    }
+
+    const claimed = createAcceptedFixture(t);
+    rewriteProbeAuthority(claimed, 'finalAlias', (probe) => {
+        probe.results.find((result) => result.path === '/script.js').mime = 'text/plain';
+    });
+    assert.throws(() => smoke.auditAcceptedRun({ configPath: claimed.configPath }), /fileGate\.finalAlias\.mime/);
+});
+
+test('receipt validation failure happens before publication and leaves no final receipt', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const tools = path.join(fixture.temp, 'fault-tools');
+    fs.mkdirSync(tools);
+    const library = fs.readFileSync(path.resolve('scripts/public-smoke-v2-lib.mjs'), 'utf8').replace(
+        'export function validateAuditReceipt(receipt, expected) {',
+        "export function validateAuditReceipt(receipt, expected) { if (expected !== undefined) throw new Error('injected receipt validation failure');",
+    );
+    fs.writeFileSync(path.join(tools, 'public-smoke-v2-lib.mjs'), library);
+    fs.copyFileSync(path.resolve('scripts/verify-public-smoke-v2.mjs'), path.join(tools, 'verify-public-smoke-v2.mjs'));
+    const cli = spawnSync(process.execPath, [path.join(tools, 'verify-public-smoke-v2.mjs'), '--config', fixture.configPath], {
+        encoding: 'utf8',
+        timeout: 15_000,
+    });
+    assert.notEqual(cli.status, 0);
+    assert.match(cli.stderr, /injected receipt validation failure/);
+    assert.equal(cli.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false);
+    assert.equal(fs.existsSync(fixture.config.auditReceiptPath), false);
+});
+
+test('validated receipt publication creates a missing contained parent directory', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const config = readJson(fixture.configPath);
+    config.auditReceiptPath = path.join(fixture.releaseRoot, 'missing', 'nested', 'audit-receipt.json');
+    writeJson(fixture.configPath, config);
+    const operation = readJson(fixture.operationReceiptPath);
+    operation.configSha256 = sha256File(fixture.configPath);
+    writeJson(fixture.operationReceiptPath, operation);
+    const cli = spawnSync(process.execPath, [path.resolve('scripts/verify-public-smoke-v2.mjs'), '--config', fixture.configPath], {
+        encoding: 'utf8',
+        timeout: 15_000,
+    });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.match(cli.stdout, /^PUBLIC_SMOKE_V2_GATE=6\/6 /);
+    assert.equal(fs.existsSync(config.auditReceiptPath), true);
 });
 
 test('case deadline is measured from that case context creation rather than the operation clock origin', (t) => {

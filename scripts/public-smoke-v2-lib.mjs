@@ -94,9 +94,9 @@ function relativeFile(value, invariant) {
 }
 
 function canonicalPath(file, invariant) {
-    const resolved = path.resolve(string(file, invariant));
-    if (!path.isAbsolute(resolved)) fail(invariant, 'must be absolute');
-    return resolved;
+    const candidate = string(file, invariant);
+    if (!path.isAbsolute(candidate)) fail(invariant, 'must be absolute');
+    return path.resolve(candidate);
 }
 
 function contained(root, candidate, invariant) {
@@ -837,7 +837,10 @@ function validateProbe(root, relative, phase, expectedOrigins, campaign, deploym
         const expectedUrl = new URL(publicPath === '/' ? '/' : publicPath.slice(1), baseUrl).href;
         if (result.originKind !== originKind || result.path !== publicPath || result.requestedUrl !== expectedUrl || result.finalUrl !== expectedUrl || result.status !== 200 || result.transportError !== null) fail(`fileGate.${invariantPhase}.identity`);
         if (!Array.isArray(result.redirects) || result.redirects.length !== 0) fail(`fileGate.${invariantPhase}.redirects`);
-        string(result.contentType, `fileGate.${invariantPhase}.contentType`); string(result.mime, `fileGate.${invariantPhase}.mime`); if (result.mime !== campaign.productFiles[publicPath].mime) fail(`fileGate.${invariantPhase}.mime`);
+        const contentType = string(result.contentType, `fileGate.${invariantPhase}.contentType`);
+        const mediaType = contentType.split(';', 1)[0].trim().toLowerCase();
+        string(result.mime, `fileGate.${invariantPhase}.mime`);
+        if (!mediaType || mediaType !== campaign.productFiles[publicPath].mime || result.mime !== campaign.productFiles[publicPath].mime) fail(`fileGate.${invariantPhase}.mime`);
         nonNegative(result.bytes, `fileGate.${invariantPhase}.bytes`); sha(result.sha256, `fileGate.${invariantPhase}.sha256`); utc(result.startedUtc, `fileGate.${invariantPhase}.startedUtc`); utc(result.finishedUtc, `fileGate.${invariantPhase}.finishedUtc`); if (Date.parse(result.finishedUtc) < Date.parse(result.startedUtc)) fail(`fileGate.${invariantPhase}.time`);
         const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('.', '-');
         const expectedPrefix = phase === 'initial' ? `initial-${originKind}` : 'final-alias';
