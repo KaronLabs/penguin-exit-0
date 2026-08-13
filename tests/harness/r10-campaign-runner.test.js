@@ -633,7 +633,7 @@ test('official entry snapshots prior R10 before claiming the current run and exc
     );
 });
 
-test('the sealed real schema v3 R10 package remains verifiable under its historical 39/13 contract', () => {
+test('the sealed real schema v3 R10 package remains verifiable under its historical 39/13 contract', (t) => {
     const project = path.resolve('.');
     const canonicalProject = path.dirname(path.resolve(project, git(project, 'rev-parse', '--git-common-dir')));
     const workspace = path.dirname(canonicalProject);
@@ -650,6 +650,47 @@ test('the sealed real schema v3 R10 package remains verifiable under its histori
         expectedRunId: runId,
     });
     assert.equal(result.status, 'VERIFIED');
+
+    function mutatedPackage(mutateLedger) {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'penguin-r10-v3-mutation-'));
+        t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+        const copiedCampaign = path.join(root, 'campaign');
+        const copiedSpec = path.join(root, path.basename(specPath));
+        fs.cpSync(campaignDir, copiedCampaign, { recursive: true });
+        fs.copyFileSync(specPath, copiedSpec);
+        const ledgerPath = path.join(copiedCampaign, 'ledger.jsonl');
+        const copiedLedger = fs.readFileSync(ledgerPath, 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+        mutateLedger(copiedLedger);
+        fs.writeFileSync(ledgerPath, `${copiedLedger.map(JSON.stringify).join('\n')}\n`);
+        const manifestPath = path.join(copiedCampaign, 'artifact-manifest.json');
+        fs.writeFileSync(manifestPath, JSON.stringify(collectArtifactManifest(copiedCampaign), null, 2));
+        const envelopePath = path.join(copiedCampaign, 'submission-envelope.json');
+        const envelope = JSON.parse(fs.readFileSync(envelopePath, 'utf8'));
+        for (const name of Object.keys(envelope.payloadHashes)) {
+            envelope.payloadHashes[name] = sha256File(path.join(copiedCampaign, name));
+        }
+        fs.writeFileSync(envelopePath, JSON.stringify(envelope, null, 2));
+        return {
+            campaignDir: copiedCampaign,
+            specPath: copiedSpec,
+            sourceRoot: path.join(copiedCampaign, 'source-snapshot'),
+            executionRoot,
+            expectedRunId: runId,
+        };
+    }
+
+    const forgedArgv = mutatedPackage((entries) => {
+        const command = entries.find((entry) => entry.command?.key === '20-preflight').command;
+        command.argv = [command.argv[0], 'scripts/forged-preflight.mjs'];
+    });
+    assert.throws(() => verifyR10Package(forgedArgv), /ledger command argv mismatch/);
+
+    const forgedCwd = mutatedPackage((entries) => {
+        for (const entry of entries) {
+            if (entry.command) entry.command.cwd = 'C:\\forged\\other-source';
+        }
+    });
+    assert.throws(() => verifyR10Package(forgedCwd), /ledger command cwd mismatch/);
 });
 
 test('official spec and campaign cannot be published before the staged package is VERIFIED', (t) => {
