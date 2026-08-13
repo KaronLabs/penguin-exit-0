@@ -130,12 +130,13 @@ function expectedScreenshotName(label, stage) {
 }
 
 export function deriveVisibility(raw) {
-    const primitiveKeys = ['hiddenAttribute', 'display', 'visibility', 'opacity', 'clientRects', 'intersectionArea', 'intersectionRatio', 'viewportWidth', 'viewportHeight', 'centerX', 'centerY', 'hitElementId', 'hitIsSelfOrDescendant'];
+    const primitiveKeys = ['hiddenAttribute', 'display', 'position', 'visibility', 'opacity', 'clientRects', 'intersectionArea', 'intersectionRatio', 'viewportWidth', 'viewportHeight', 'centerX', 'centerY', 'hitElementId', 'hitIsSelfOrDescendant'];
     const actualKeys = Object.keys(object(raw, 'visibility')).sort();
     const allowedKeys = [...primitiveKeys, 'visible'].sort();
     if (actualKeys.some((key) => !allowedKeys.includes(key)) || primitiveKeys.some((key) => !actualKeys.includes(key))) fail('visibility', `keys=${actualKeys.join(',')}`);
     if (bool(raw.hiddenAttribute, 'visibility.hiddenAttribute')) return false;
     if (string(raw.display, 'visibility.display') === 'none') return false;
+    if (string(raw.position, 'visibility.position') !== 'fixed') return false;
     if (['hidden', 'collapse'].includes(string(raw.visibility, 'visibility.visibility'))) return false;
     if (!(typeof raw.opacity === 'number' && Number.isFinite(raw.opacity) && raw.opacity > 0)) return false;
     if (!Array.isArray(raw.clientRects) || !raw.clientRects.some((rect) => {
@@ -305,14 +306,14 @@ function validateRecoveries(value) {
 
 function validateInitial(value) {
     exactKeys(value, ['endingVisibility', 'endingRole', 'endingAriaModal', 'endingAriaLabelledby', 'endingAccessibleName', 'backgroundInert', 'activeElementId', 'produceDisabled', 'produceAccessibleName'], 'initial');
-    if (deriveVisibility(value.endingVisibility) || value.endingVisibility.display !== 'none' || value.endingVisibility.intersectionArea !== 0 || value.endingVisibility.intersectionRatio !== 0 || value.endingVisibility.clientRects.some((rect) => rect.width > 0 && rect.height > 0) || value.endingRole !== 'dialog' || value.endingAriaModal !== 'true' || value.endingAriaLabelledby !== 'ending-process-heading' || value.endingAccessibleName !== '프로세스는 살아남았습니다' || value.activeElementId === 'btn-play-again' || value.produceDisabled !== false || value.produceAccessibleName !== '코드 작성: 생산량 10과 GitHub 스타 150 획득') fail('initial.ending');
+    if (deriveVisibility(value.endingVisibility) || value.endingVisibility.display !== 'none' || value.endingVisibility.position !== 'fixed' || value.endingVisibility.intersectionArea !== 0 || value.endingVisibility.intersectionRatio !== 0 || value.endingVisibility.clientRects.some((rect) => rect.width > 0 && rect.height > 0) || value.endingRole !== 'dialog' || value.endingAriaModal !== 'true' || value.endingAriaLabelledby !== 'ending-process-heading' || value.endingAccessibleName !== '프로세스는 살아남았습니다' || value.activeElementId === 'btn-play-again' || value.produceDisabled !== false || value.produceAccessibleName !== '코드 작성: 생산량 10과 GitHub 스타 150 획득') fail('initial.ending');
     exactKeys(value.backgroundInert, ['header', 'dashboard', 'intrusionBanner', 'mainGrid'], 'initial.backgroundInert');
     if (Object.values(value.backgroundInert).some((inert) => inert !== false)) fail('initial.backgroundInert');
 }
 
 function validateEnding(value) {
     exactKeys(value, ['visibility', 'role', 'ariaModal', 'ariaLabelledby', 'accessibleName', 'initialFocusId', 'tabFocusId', 'shiftTabFocusId', 'backgroundInert', 'produceDisabled', 'produceAccessibleName', 'tokens'], 'ending');
-    if (!deriveVisibility(value.visibility) || value.visibility.display !== 'flex') fail('ending.computedVisibility');
+    if (!deriveVisibility(value.visibility) || value.visibility.display !== 'flex' || value.visibility.position !== 'fixed') fail('ending.computedVisibility');
     if (value.role !== 'dialog' || value.ariaModal !== 'true' || value.ariaLabelledby !== 'ending-process-heading' || value.accessibleName !== '프로세스는 살아남았습니다' || value.initialFocusId !== 'btn-play-again' || value.tabFocusId !== 'btn-play-again' || value.shiftTabFocusId !== 'btn-play-again' || value.produceDisabled !== true || value.produceAccessibleName !== 'EXIT 0 달성') fail('ending.accessibility');
     exactKeys(value.backgroundInert, ['header', 'dashboard', 'intrusionBanner', 'mainGrid'], 'ending.backgroundInert');
     if (Object.values(value.backgroundInert).some((inert) => inert !== true)) fail('ending.backgroundInert');
@@ -371,22 +372,77 @@ function readJson(file, invariant) {
     try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) { fail(invariant, error.message); }
 }
 
+const OPERATION_CONFIG_KEYS = ['schemaVersion', 'releaseId', 'releaseRoot', 'acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'campaignDir', 'campaignSpecPath', 'campaignReceiptPath', 'campaignRunId', 'sourceSnapshotDir', 'executionSourceDir', 'authorityProjectRoot', 'authorityWorkspaceRoot', 'deploymentRecordPath', 'immutableUrl', 'aliasUrl', 'nodeExePath', 'nodeExeSha256', 'wranglerJsPath', 'wranglerJsSha256', 'projectName'];
+const DERIVED_CONFIG_KEYS = ['schemaVersion', 'baseConfigPath', 'baseConfigSha256', 'mutationId', 'mutationRootRealpath', 'auditTargetRealpath', 'externalOperationReceiptPath', 'auditReceiptPath'];
+
+export function validateOperationConfig(config) {
+    exactKeys(config, OPERATION_CONFIG_KEYS, 'config');
+    if (config.schemaVersion !== 2 || !RELEASE_ID.test(string(config.releaseId, 'config.releaseId'))) fail('config.schemaVersion');
+    for (const key of OPERATION_CONFIG_KEYS.filter((key) => /(?:Path|Dir|Root)$/.test(key))) canonicalPath(config[key], `config.${key}`);
+    sha(config.nodeExeSha256, 'config.nodeExeSha256'); sha(config.wranglerJsSha256, 'config.wranglerJsSha256');
+    validateUrl(config.immutableUrl, 'config.immutableUrl'); validateUrl(config.aliasUrl, 'config.aliasUrl'); string(config.projectName, 'config.projectName');
+    return config;
+}
+
+export function validateDerivedAuditConfig(config) {
+    exactKeys(config, DERIVED_CONFIG_KEYS, 'auditConfig');
+    if (config.schemaVersion !== 3) fail('auditConfig.schemaVersion');
+    canonicalPath(config.baseConfigPath, 'auditConfig.baseConfigPath'); sha(config.baseConfigSha256, 'auditConfig.baseConfigSha256'); string(config.mutationId, 'auditConfig.mutationId');
+    canonicalPath(config.mutationRootRealpath, 'auditConfig.mutationRootRealpath'); canonicalPath(config.auditTargetRealpath, 'auditConfig.auditTargetRealpath'); canonicalPath(config.externalOperationReceiptPath, 'auditConfig.externalOperationReceiptPath'); canonicalPath(config.auditReceiptPath, 'auditConfig.auditReceiptPath');
+    return config;
+}
+
+export function validateCampaignClaims(value) {
+    const keys = ['schemaVersion', 'runId', 'v1Sha256', 'candidateInventory', 'gameCoreSha256', 'sourceGit', 'unit', 'browser', 'performance', 'negativeControls', 'campaignVerifier', 'r9Frozen', 'r10Frozen', 'actualBrowserZoom'];
+    exactKeys(value, keys, 'campaignClaims');
+    if (value.schemaVersion !== 5) fail('campaignClaims.schemaVersion'); string(value.runId, 'campaignClaims.runId'); sha(value.v1Sha256, 'campaignClaims.v1Sha256'); sha(value.gameCoreSha256, 'campaignClaims.gameCoreSha256');
+    exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignClaims.candidateInventory'); nonNegative(value.candidateInventory.fileCount, 'campaignClaims.candidateInventory.fileCount'); sha(value.candidateInventory.pathListSha256, 'campaignClaims.candidateInventory.pathListSha256'); sha(value.candidateInventory.contentRecordsSha256, 'campaignClaims.candidateInventory.contentRecordsSha256');
+    exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignClaims.sourceGit'); string(value.sourceGit.branch, 'campaignClaims.sourceGit.branch'); sha(value.sourceGit.headSha, 'campaignClaims.sourceGit.headSha');
+    for (const key of ['unit', 'campaignVerifier']) { exactKeys(value[key], ['tests', 'passed', 'failed', 'exitCode'], `campaignClaims.${key}`); if (value[key].tests !== value[key].passed || value[key].failed !== 0 || value[key].exitCode !== 0) fail(`campaignClaims.${key}`); }
+    exactKeys(value.browser, ['chromium', 'firefox', 'webkit', 'integrity', 'reportedFailures', 'exitCode'], 'campaignClaims.browser');
+    for (const engine of ENGINES) { exactKeys(value.browser[engine], ['passed', 'failed'], `campaignClaims.browser.${engine}`); if (value.browser[engine].passed !== 16 || value.browser[engine].failed !== 0) fail(`campaignClaims.browser.${engine}`); }
+    if (value.browser.integrity !== true || value.browser.reportedFailures !== 0 || value.browser.exitCode !== 0) fail('campaignClaims.browser');
+    return value;
+}
+
+export function validateCampaignEnvelope(value) {
+    exactKeys(value, ['schemaVersion', 'runId', 'payloadHashes', 'source', 'spec', 'rawEvidence'], 'campaignEnvelope');
+    if (value.schemaVersion !== 5) fail('campaignEnvelope.schemaVersion'); string(value.runId, 'campaignEnvelope.runId');
+    object(value.payloadHashes, 'campaignEnvelope.payloadHashes');
+    exactKeys(value.source, ['path', 'fileCount', 'pathListSha256', 'contentRecordsSha256', 'gitBranch', 'gitHeadSha'], 'campaignEnvelope.source');
+    exactKeys(value.spec, ['fileName', 'sizeBytes', 'sha256'], 'campaignEnvelope.spec');
+    exactKeys(value.rawEvidence, ['summary', 'samples'], 'campaignEnvelope.rawEvidence');
+    for (const key of ['summary', 'samples']) exactKeys(value.rawEvidence[key], ['path', 'sha256'], `campaignEnvelope.rawEvidence.${key}`);
+    return value;
+}
+
+export function validateCampaignReceipt(value) {
+    const keys = ['schemaVersion', 'runId', 'status', 'createdUtc', 'completedUtc', 'projectRoot', 'cleanRoot', 'campaign', 'spec', 'candidateInventory', 'gameCoreSha256', 'sourceGit', 'r9Frozen', 'r10Frozen', 'commands', 'limitation', 'publicationState'];
+    exactKeys(value, keys, 'campaignReceipt');
+    if (value.schemaVersion !== 1 || value.status !== 'VERIFIED') fail('campaignReceipt.status');
+    exactKeys(value.campaign, ['path', 'artifactManifestSha256', 'submissionEnvelopeSha256'], 'campaignReceipt.campaign');
+    exactKeys(value.spec, ['path', 'sizeBytes', 'sha256'], 'campaignReceipt.spec'); exactKeys(value.candidateInventory, ['fileCount', 'pathListSha256', 'contentRecordsSha256'], 'campaignReceipt.candidateInventory'); exactKeys(value.sourceGit, ['branch', 'headSha'], 'campaignReceipt.sourceGit');
+    if (!Array.isArray(value.commands)) fail('campaignReceipt.commands');
+    return value;
+}
+
+export function validatePngEvidence(file, viewport, invariant = 'png') {
+    exactKeys(viewport, ['width', 'height'], `${invariant}.viewport`);
+    const dimensions = pngDimensions(file, invariant);
+    if (dimensions.width !== viewport.width || dimensions.height !== viewport.height) fail(`${invariant}.viewport`);
+    return dimensions;
+}
+
 function resolveConfig(configPath) {
     const canonicalConfig = canonicalPath(configPath, 'config.path');
     noSymlinkAncestors(canonicalConfig, 'config.path');
     const config = readJson(canonicalConfig, 'config.json');
-    const schema2 = ['schemaVersion', 'releaseId', 'releaseRoot', 'acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'campaignDir', 'campaignSpecPath', 'campaignReceiptPath', 'campaignRunId', 'sourceSnapshotDir', 'executionSourceDir', 'authorityProjectRoot', 'authorityWorkspaceRoot', 'deploymentRecordPath', 'immutableUrl', 'aliasUrl', 'nodeExePath', 'nodeExeSha256', 'wranglerJsPath', 'wranglerJsSha256', 'projectName'];
-    const schema3 = ['schemaVersion', 'baseConfigPath', 'baseConfigSha256', 'mutationId', 'mutationRootRealpath', 'auditTargetRealpath', 'externalOperationReceiptPath', 'auditReceiptPath'];
     if (config.schemaVersion === 2) {
-        exactKeys(config, schema2, 'config');
-        if (!RELEASE_ID.test(string(config.releaseId, 'config.releaseId'))) fail('config.releaseId');
-        for (const key of schema2.filter((key) => /(?:Path|Dir|Root)$/.test(key))) canonicalPath(config[key], `config.${key}`);
-        sha(config.nodeExeSha256, 'config.nodeExeSha256'); sha(config.wranglerJsSha256, 'config.wranglerJsSha256');
-        validateUrl(config.immutableUrl, 'config.immutableUrl'); validateUrl(config.aliasUrl, 'config.aliasUrl');
+        validateOperationConfig(config);
         return { base: config, config, configPath: canonicalConfig, target: config.acceptedDir, auditReceiptPath: config.auditReceiptPath, operationReceiptPath: config.operationReceiptPath };
     }
     if (config.schemaVersion !== 3) fail('config.schemaVersion');
-    exactKeys(config, schema3, 'auditConfig');
+    validateDerivedAuditConfig(config);
     const baseConfigPath = canonicalPath(config.baseConfigPath, 'auditConfig.baseConfigPath');
     if (sha256File(baseConfigPath) !== sha(config.baseConfigSha256, 'auditConfig.baseConfigSha256')) fail('auditConfig.baseConfigSha256');
     const baseResolved = resolveConfig(baseConfigPath);
@@ -397,7 +453,7 @@ function resolveConfig(configPath) {
     return { base: baseResolved.base, config, configPath: canonicalConfig, target, auditReceiptPath: canonicalPath(config.auditReceiptPath, 'auditConfig.auditReceiptPath'), operationReceiptPath: baseResolved.operationReceiptPath };
 }
 
-function validateOperationReceipt(receipt) {
+export function validateOperationReceipt(receipt) {
     const keys = ['schemaVersion', 'releaseId', 'createdUtc', 'status', 'configPath', 'configSha256', 'orchestratorPath', 'orchestratorSha256', 'campaignVerifier', 'worker', 'accepted', 'screenshotBindings', 'cloudflareReads', 'fileProbes'];
     exactKeys(receipt, keys, 'operationReceipt');
     if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED') fail('operationReceipt.status');
