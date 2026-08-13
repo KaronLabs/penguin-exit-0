@@ -394,7 +394,7 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
         'NEGATIVE_CONTROLS_PASS', 'CAMPAIGN_VERIFIER_TESTS_PASS', 'PACKAGE_READY_FOR_GATE',
     ];
     const ledger = states.map((state, index) => ({
-        schemaVersion: 4, runId, state,
+        schemaVersion: 5, runId, state,
         timestampUtc: index < 3
             ? new Date(Date.parse('2026-08-07T00:00:00.000Z') + index * 1000).toISOString()
             : index <= 11 ? commands[index - 3].endedUtc : new Date(cursor + (index - 12) * 1000).toISOString(),
@@ -414,7 +414,7 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
     fs.writeFileSync(path.join(campaign, 'r10-before.json'), JSON.stringify(r10Snapshot, null, 2));
     fs.writeFileSync(path.join(campaign, 'r10-after.json'), JSON.stringify(r10Snapshot, null, 2));
     const claims = {
-        schemaVersion: 4, runId,
+        schemaVersion: 5, runId,
         candidateInventory: { fileCount: candidate.fileCount, pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256 },
         gameCoreSha256: sha256File(path.join(source, 'game-core.js')),
         sourceGit: { branch: 'main', headSha: git(source, 'rev-parse', 'HEAD') },
@@ -437,7 +437,7 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
     ];
     const payloadHashes = Object.fromEntries(payloads.map((name) => [name, sha256File(path.join(campaign, name))]));
     fs.writeFileSync(path.join(campaign, 'submission-envelope.json'), JSON.stringify({
-        schemaVersion: 4, runId, payloadHashes,
+        schemaVersion: 5, runId, payloadHashes,
         source: {
             path: 'source-snapshot', fileCount: candidate.fileCount,
             pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256,
@@ -633,7 +633,7 @@ test('official entry snapshots prior R10 before claiming the current run and exc
     );
 });
 
-test('the sealed real schema v3 R10 package is rejected by the exact 48/48 browser contract', () => {
+test('the sealed real schema v3 R10 package remains verifiable under its historical 39/13 contract', () => {
     const project = path.resolve('.');
     const canonicalProject = path.dirname(path.resolve(project, git(project, 'rev-parse', '--git-common-dir')));
     const workspace = path.dirname(canonicalProject);
@@ -642,13 +642,14 @@ test('the sealed real schema v3 R10 package is rejected by the exact 48/48 brows
     const specPath = path.join(workspace, 'review', `spec_${runId}_mission02_r10_korean_release.md`);
     const ledger = fs.readFileSync(path.join(campaignDir, 'ledger.jsonl'), 'utf8').trim().split(/\r?\n/).map(JSON.parse);
     const executionRoot = ledger.find((entry) => entry.command)?.command.cwd;
-    assert.throws(() => verifyR10Package({
+    const result = verifyR10Package({
         campaignDir,
         specPath,
         sourceRoot: path.join(campaignDir, 'source-snapshot'),
         executionRoot,
         expectedRunId: runId,
-    }), /browser evidence is not exact 48\/48/);
+    });
+    assert.equal(result.status, 'VERIFIED');
 });
 
 test('official spec and campaign cannot be published before the staged package is VERIFIED', (t) => {
