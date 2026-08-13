@@ -15,15 +15,38 @@ const expectedIntrusions = [
     { title: '💼 CEO 금요일 17:59 배포 지시!', body: 'CEO가 즉시 프로덕션 배포를 요구합니다!' }
 ];
 const firstPuzzleChoices = [
-    { tabId: 'wifi', optionIndex: 0, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8', tuna: '1 / 3', debt: '0%', npcName: 'Polar Bear DevOps' },
-    { tabId: 'wifi', optionIndex: 1, command: 'top / ip link', output: 'eth0: state DOWN', tuna: '2 / 3', debt: '0%', npcName: 'Polar Bear DevOps' },
-    { tabId: 'wifi', optionIndex: 2, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npcName: null },
-    { tabId: 'cpu', optionIndex: 0, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다.', tuna: '1 / 3', debt: '0%', npcName: 'Walrus DBA' },
-    { tabId: 'cpu', optionIndex: 1, command: 'kill -9 1337', output: '[1] + Killed xmrig', tuna: '2 / 3', debt: '0%', npcName: 'Walrus DBA' },
-    { tabId: 'cpu', optionIndex: 2, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다.', tuna: '0 / 3', debt: '20%', npcName: null },
-    { tabId: 'ssh', optionIndex: 0, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman', tuna: '1 / 3', debt: '0%', npcName: 'Sam Altman' },
-    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npcName: 'Sam Altman' }
+    { tabId: 'wifi', optionIndex: 0, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 1, command: 'top / ip link', output: 'eth0: state DOWN\n링크 상태와 라우팅을 함께 확인했습니다. 범인은 케이블입니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 2, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npc: null },
+    { tabId: 'cpu', optionIndex: 0, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🦭', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
+    { tabId: 'cpu', optionIndex: 1, command: 'kill -9 1337', output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🦭', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
+    { tabId: 'cpu', optionIndex: 2, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0 / 3', debt: '20%', npc: null },
+    { tabId: 'ssh', optionIndex: 0, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
+    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } }
 ];
+
+async function puzzleRuntimeSnapshot(page) {
+    return page.evaluate(() => {
+        const quoteText = document.querySelector('#quote-collection').textContent;
+        const npcCard = document.querySelector('#npc-card');
+        return {
+            terminalLines: [...document.querySelector('#terminal-output').children].map((node) => ({
+                kind: node.dataset.terminalKind,
+                context: node.dataset.dialogueContext ?? null,
+                text: node.textContent
+            })),
+            tuna: document.querySelector('#val-tuna').textContent,
+            debt: document.querySelector('#val-debt').textContent,
+            quoteText,
+            quoteCount: Number.parseInt(quoteText.match(/\d+(?=\/62$)/)[0], 10),
+            npc: npcCard.hidden ? null : {
+                icon: document.querySelector('#npc-icon').textContent,
+                name: document.querySelector('#npc-name').textContent,
+                message: document.querySelector('#npc-message').textContent
+            }
+        };
+    });
+}
 
 async function metrics(page) {
     return page.evaluate(() => ({
@@ -227,26 +250,19 @@ test('최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 �
         await page.locator(`[data-puz="${fixture.tabId}"]`).click();
         await page.locator('.puzzle-option').nth(fixture.optionIndex).click();
 
-        const terminalLines = await page.locator('#terminal-output > *').evaluateAll((nodes) => nodes.map((node) => ({
-            kind: node.dataset.terminalKind,
-            context: node.dataset.dialogueContext ?? null,
-            text: node.textContent
-        })));
-        expect.soft(terminalLines, fixture.command).toEqual([
-            { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
-            expect.objectContaining({ kind: 'system', context: null, text: expect.stringContaining(fixture.output) }),
-            expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ /) })
-        ]);
-        await expect(page.locator('#val-tuna')).toHaveText(fixture.tuna);
-        await expect(page.locator('#val-debt')).toHaveText(fixture.debt);
-        await expect.soft(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
-
-        if (fixture.npcName === null) {
-            await expect(page.locator('#npc-card')).toBeHidden();
-        } else {
-            await expect(page.locator('#npc-card')).toBeVisible();
-            await expect(page.locator('#npc-name')).toHaveText(fixture.npcName);
-        }
+        const snapshot = await puzzleRuntimeSnapshot(page);
+        expect.soft(snapshot, fixture.command).toEqual({
+            terminalLines: [
+                { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
+                { kind: 'system', context: null, text: fixture.output },
+                expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+            ],
+            tuna: fixture.tuna,
+            debt: fixture.debt,
+            quoteText: '아콘 독설 수집 1/62',
+            quoteCount: 1,
+            npc: fixture.npc
+        });
     }
 });
 
@@ -261,14 +277,23 @@ test('반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 
         const option = page.locator('.puzzle-option').nth(fixture.optionIndex);
 
         await option.click();
-        const firstTuna = await page.locator('#val-tuna').innerText();
-        const firstDebt = await page.locator('#val-debt').innerText();
+        const firstSnapshot = await puzzleRuntimeSnapshot(page);
         await option.click();
+        const repeatSnapshot = await puzzleRuntimeSnapshot(page);
 
-        await expect(page.locator('#val-tuna')).toHaveText(firstTuna);
-        await expect(page.locator('#val-debt')).toHaveText(firstDebt);
-        await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveCount(1);
-        await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-terminal-kind', 'archon');
+        expect.soft({
+            tail: repeatSnapshot.terminalLines.slice(-3),
+            quoteDelta: repeatSnapshot.quoteCount - firstSnapshot.quoteCount,
+            economy: [firstSnapshot.tuna, firstSnapshot.debt, repeatSnapshot.tuna, repeatSnapshot.debt]
+        }, fixture.command).toEqual({
+            tail: [
+                { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
+                { kind: 'system', context: null, text: fixture.output },
+                expect.objectContaining({ kind: 'archon', context: 'repeat', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+            ],
+            quoteDelta: 1,
+            economy: [fixture.tuna, fixture.debt, fixture.tuna, fixture.debt]
+        });
     }
 });
 
@@ -278,14 +303,46 @@ test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.locator('[data-puz="wifi"]').click();
-    await page.locator('.puzzle-option').nth(2).click();
-    await page.waitForTimeout(200);
-    await page.locator('[data-puz="cpu"]').click();
+    const timing = await page.evaluate(() => {
+        performance.clearMarks('r14-wifi-option-before');
+        performance.clearMarks('r14-wifi-option-after');
+        performance.clearMarks('r14-cpu-tab-before');
+        performance.clearMarks('r14-cpu-tab-after');
+        performance.mark('r14-wifi-option-before');
+        document.querySelector('.puzzle-option:nth-child(3)').click();
+        performance.mark('r14-wifi-option-after');
+        performance.mark('r14-cpu-tab-before');
+        document.querySelector('[data-puz="cpu"]').click();
+        performance.mark('r14-cpu-tab-after');
+        const mark = (name) => performance.getEntriesByName(name).at(-1).startTime;
+        return {
+            optionDuration: mark('r14-wifi-option-after') - mark('r14-wifi-option-before'),
+            optionToTab: mark('r14-cpu-tab-before') - mark('r14-wifi-option-after'),
+            tabDuration: mark('r14-cpu-tab-after') - mark('r14-cpu-tab-before')
+        };
+    });
 
-    await expect(page.locator('#puzzle-title')).toHaveText('장애 #2: 서버 #4 고CPU 경보');
-    await expect(page.locator('#terminal-output [data-terminal-kind="system"]')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
-    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveCount(1);
-    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    expect(timing.optionDuration).toBeGreaterThanOrEqual(0);
+    expect(timing.optionToTab).toBeLessThan(450);
+    expect(timing.tabDuration).toBeGreaterThanOrEqual(0);
+    await page.waitForTimeout(1100);
+    const snapshot = await puzzleRuntimeSnapshot(page);
+    const activeTitle = await page.evaluate(() => document.querySelector('#puzzle-title').textContent);
+    expect({ activeTitle, snapshot }).toEqual({
+        activeTitle: '장애 #2: 서버 #4 고CPU 경보',
+        snapshot: {
+            terminalLines: [
+                { kind: 'command', context: null, text: 'archon@stone-igloo:~$ systemctl restart nginx' },
+                { kind: 'system', context: null, text: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.' },
+                expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+            ],
+            tuna: '0 / 3',
+            debt: '15%',
+            quoteText: '아콘 독설 수집 1/62',
+            quoteCount: 1,
+            npc: null
+        }
+    });
 });
 
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
