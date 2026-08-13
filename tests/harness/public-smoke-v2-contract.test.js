@@ -790,11 +790,25 @@ test('a complete accepted fixture authenticates every external authority and all
     assert.equal(cli.stdout, `PUBLIC_SMOKE_V2_GATE=6/6 manifest_sha256=${receipt.acceptedManifestSha256} release=${RELEASE_ID}\n`);
     const emitted = readJson(fixture.config.auditReceiptPath);
     smoke.validateAuditReceipt(emitted, expectedAuditReceipt(fixture));
+    const rebound = structuredClone(receipt);
+    rebound.deploymentId = 'feedface-1234-5678-9abc-def012345678';
+    assert.throws(() => smoke.validateAuditReceipt(rebound, receipt), /auditReceipt\.binding/);
     const before = sha256File(fixture.config.auditReceiptPath);
     const repeated = spawnSync(process.execPath, [path.resolve('scripts/verify-public-smoke-v2.mjs'), '--config', fixture.configPath], { encoding: 'utf8' });
     assert.notEqual(repeated.status, 0);
     assert.equal(repeated.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false);
     assert.equal(sha256File(fixture.config.auditReceiptPath), before, 'exclusive creation never overwrites the receipt');
+});
+
+test('invalid auditor input emits no gate and creates no receipt', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const config = readJson(fixture.configPath);
+    config.unknown = true;
+    writeJson(fixture.configPath, config);
+    const cli = spawnSync(process.execPath, [path.resolve('scripts/verify-public-smoke-v2.mjs'), '--config', fixture.configPath], { encoding: 'utf8' });
+    assert.notEqual(cli.status, 0);
+    assert.equal(cli.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false);
+    assert.equal(fs.existsSync(fixture.config.auditReceiptPath), false);
 });
 
 test('case deadline is measured from that case context creation rather than the operation clock origin', (t) => {
@@ -922,6 +936,16 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
         ['visibility position', /ending\.computedVisibility/, (fixture) => {
             const observations = structuredClone(fixture.cases);
             observations[0].ending.visibility.position = 'static';
+            rewriteAccepted(fixture, { observations });
+        }],
+        ['initial visibility position', /initial\.ending/, (fixture) => {
+            const observations = structuredClone(fixture.cases);
+            observations[0].initial.endingVisibility.position = 'static';
+            rewriteAccepted(fixture, { observations });
+        }],
+        ['RECOVER final delta', /recover\.starDelta/, (fixture) => {
+            const observations = structuredClone(fixture.cases);
+            observations[0].recoveries[6].starDelta = 150;
             rewriteAccepted(fixture, { observations });
         }],
         ['intrusion sequence', /intrusion\.sequence/, (fixture) => {
@@ -1101,6 +1125,21 @@ test('config and manifest containment reject escapes, case collisions, and symli
         manifest.manifestPayloadSha256 = sha256(canonicalJson({ schemaVersion: manifest.schemaVersion, releaseId: manifest.releaseId, files: manifest.files }));
         assert.throws(() => validateManifest(root, manifest), /case.*collision/i);
     }
+});
+
+test('accepted manifest rejects rehashed unexpected and missing members', (t) => {
+    const fixture = createAcceptedFixture(t);
+    writeFile(path.join(fixture.acceptedDir, 'unexpected.bin'), 'attacker bytes');
+    rewriteAccepted(fixture);
+    assert.throws(() => smoke.auditAcceptedRun({ configPath: fixture.configPath }), /manifest\.acceptedFileSet/);
+
+    const missing = createAcceptedFixture(t);
+    const manifestPath = path.join(missing.acceptedDir, 'artifact-manifest.json');
+    const manifest = readJson(manifestPath);
+    manifest.files = manifest.files.filter((entry) => entry.path !== 'control-plane/post.stderr.bin');
+    manifest.manifestPayloadSha256 = sha256(canonicalJson({ schemaVersion: manifest.schemaVersion, releaseId: manifest.releaseId, files: manifest.files }));
+    writeJson(manifestPath, manifest);
+    assert.throws(() => smoke.auditAcceptedRun({ configPath: missing.configPath }), /manifest\.fileSet/);
 });
 
 test('audit receipt semantics reject every fixed count, digest, target, deployment and screenshot mutation', (t) => {

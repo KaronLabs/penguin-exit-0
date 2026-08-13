@@ -25,7 +25,7 @@ try {
     fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
     fs.writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { encoding: 'utf8', flag: 'wx' });
     const reparsed = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
-    validateAuditReceipt(reparsed);
+    validateAuditReceipt(reparsed, receipt);
     process.stdout.write(`PUBLIC_SMOKE_V2_GATE=6/6 manifest_sha256=${receipt.acceptedManifestSha256} release=${receipt.releaseId}\n`);
 } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
