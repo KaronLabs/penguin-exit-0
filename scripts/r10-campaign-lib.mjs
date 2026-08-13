@@ -335,9 +335,20 @@ export function buildR10PhasePlan(cleanSource) {
 }
 
 export function tapCounts(text) {
-    const read = (label) => Number(text.match(new RegExp(`^# ${label} (\\d+)$`, 'm'))?.[1]);
-    const result = { tests: read('tests'), passed: read('pass'), failed: read('fail') };
-    if (!Object.values(result).every(Number.isFinite)) throw new Error('TAP_COUNT_PROOF_MISSING');
+    if (typeof text !== 'string' || /[\u001b\u009b]/u.test(text)) throw new Error('TAP_COUNT_PROOF_MISSING');
+    const matches = text.split('\n').flatMap((line) => {
+        const exact = line.match(/^(#|ℹ) (tests|pass|fail) ([0-9]+)\r?$/u);
+        if (exact) return [{ prefix: exact[1], label: exact[2], value: Number(exact[3]) }];
+        if (/^(?:#|ℹ) (?:tests|pass|fail)\b/u.test(line)) throw new Error('TAP_COUNT_PROOF_MISSING');
+        return [];
+    });
+    const labels = new Map(matches.map(({ label, value }) => [label, value]));
+    if (matches.length !== 3 || labels.size !== 3 || new Set(matches.map(({ prefix }) => prefix)).size !== 1) {
+        throw new Error('TAP_COUNT_PROOF_MISSING');
+    }
+    const result = { tests: labels.get('tests'), passed: labels.get('pass'), failed: labels.get('fail') };
+    if (!Object.values(result).every(Number.isSafeInteger)
+        || result.tests < 1 || result.passed !== result.tests || result.failed !== 0) throw new Error('TAP_COUNT_PROOF_MISSING');
     return result;
 }
 
