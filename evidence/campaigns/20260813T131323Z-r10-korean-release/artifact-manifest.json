@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "SHA-256",
+  "pathEncoding": "UTF-8 NUL-terminated ordered path records",
+  "fileCount": 73,
+  "pathListSha256": "FCF6DEDD89BBE7F09DFDDFFADBA03A8708F9FB35CE9085ACB40058DAA561B71B",
+  "contentRecordsSha256": "841015FACD530C45E7CF21A6526157D7402F1EB337DF54796411CD4BE0A52C29",
+  "files": [
+    {
+      "path": "candidate-inventory.json",
+      "sizeBytes": 8085,
+      "sha256": "D9231BACC8DA7DBAAF73ADACAA8D740FF25FEBDD8EA017873D75943D6E71EBD4"
+    },
+    {
+      "path": "claims.json",
+      "sizeBytes": 2632,
+      "sha256": "0DB873749B451C3827332267D812AE0152063453FEB9A4484BAAFB28542F9598"
+    },
+    {
+      "path": "commands/10-npm-ci.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/10-npm-ci.stdout.log",
+      "sizeBytes": 75,
+      "sha256": "EBC002B418C115EFADF05AF78030F83C93A1D347D7032B92ADD9AE2B4D818904"
+    },
+    {
+      "path": "commands/20-preflight.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/20-preflight.stdout.log",
+      "sizeBytes": 29,
+      "sha256": "24248069A01F88C30865FCBA56846924E24E87A133325D9CBA23DFFBD07B9D7D"
+    },
+    {
+      "path": "commands/30-unit.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/30-unit.stdout.log",
+      "sizeBytes": 2230,
+      "sha256": "F64539CE4F97A54CD588C166873CD878F1DB99FA2199E59E394391BD83BCB65B"
+    },
+    {
+      "path": "commands/40-browser.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/40-browser.stdout.log",
+      "sizeBytes": 6779,
+      "sha256": "3B9335EEE7C9047B30F985E2BFE7010F71BF69C596F46B47B917FA2A328C14D9"
+    },
+    {
+      "path": "commands/50-performance.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/50-performance.stdout.log",
+      "sizeBytes": 734,
+      "sha256": "5302C500A266F4CF6B171C81FC89ED7885C124E8A23FADE30E50A5F3D60DE1D2"
+    },
+    {
+      "path": "commands/60-manifest.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/60-manifest.stdout.log",
+      "sizeBytes": 81,
+      "sha256": "939A27525590DF7ED2F8C27E61D65D060DB9409E0F4C4C0A20D92096CDE84B1A"
+    },
+    {
+      "path": "commands/61-evidence-gate.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/61-evidence-gate.stdout.log",
+      "sizeBytes": 451,
+      "sha256": "46BEB6283593E0AC6EF3D3DC43F4FB66365D53610DCBAE36D46C406C4642672C"
+    },
+    {
+      "path": "commands/70-negative-controls.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/70-negative-controls.stdout.log",
+      "sizeBytes": 1706,
+      "sha256": "2C5BC40380730E1258B1971A38694920CD9B4B3C1E59DF3E22DA98EA2CECFF35"
+    },
+    {
+      "path": "commands/71-campaign-verifier-tests.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "commands/71-campaign-verifier-tests.stdout.log",
+      "sizeBytes": 511,
+      "sha256": "9A2320D02AC3616CE10E09F2EDCC0CA9196714AF7D1012EB95A51EAB66B0FC7C"
+    },
+    {
+      "path": "frame-samples.json",
+      "sizeBytes": 841862,
+      "sha256": "B3827ECD787BD229860DDAD8A669AF0B0B8DEEB5117A2DE635312316BA4E7E51"
+    },
+    {
+      "path": "ledger.jsonl",
+      "sizeBytes": 10295,
+      "sha256": "B7BD34CFEFD6736DEB1DEE750E57F72E84D6D7CD96308320CAC5EE0C412C9EEB"
+    },
+    {
+      "path": "performance-summary.json",
+      "sizeBytes": 643,
+      "sha256": "77F60EADE69A795E2DBAD7356006CA4636B698A51E3A11C2C067E137718AE48F"
+    },
+    {
+      "path": "r10-after.json",
+      "sizeBytes": 157170,
+      "sha256": "A061829490BB3AE74F57FD80D3737555830634E7E7D4BE052E05D5CE0A30F206"
+    },
+    {
+      "path": "r10-before.json",
+      "sizeBytes": 157170,
+      "sha256": "A061829490BB3AE74F57FD80D3737555830634E7E7D4BE052E05D5CE0A30F206"
+    },
+    {
+      "path": "r9-after.json",
+      "sizeBytes": 17977,
+      "sha256": "39C038CC12CDF24F2D4673DBD6FDDBB347082B60F8C8FB6CD966F4D2FDFF1FDE"
+    },
+    {
+      "path": "r9-before.json",
+      "sizeBytes": 17977,
+      "sha256": "39C038CC12CDF24F2D4673DBD6FDDBB347082B60F8C8FB6CD966F4D2FDFF1FDE"
+    },
+    {
+      "path": "source-snapshot/.gitattributes",
+      "sizeBytes": 137,
+      "sha256": "C93E302F62BB8AD32B77CBADE0618025CE933BF08D5F45FCC33BF6CF2F14049D"
+    },
+    {
+      "path": "source-snapshot/.gitignore",
+      "sizeBytes": 154,
+      "sha256": "503BD48D70D22D7523BA3354D3E5D356CEB138DF33057BE1C6E7F772D28C8A55"
+    },
+    {
+      "path": "source-snapshot/content.js",
+      "sizeBytes": 10081,
+      "sha256": "AF63396A4A4C7C96730A1F8BB306B2C2BDF3386ABE14A94649CD65BB3AE4067F"
+    },
+    {
+      "path": "source-snapshot/docs/final-report.md",
+      "sizeBytes": 1033,
+      "sha256": "5832DF9F8727466F40DFC9AC3B177BAE089DA05C09644AE45EC51B719728AD0A"
+    },
+    {
+      "path": "source-snapshot/docs/superpowers/plans/2026-08-07-r11-signature-humor.md",
+      "sizeBytes": 5654,
+      "sha256": "A9C41A61A6EBE4E7847E79B654F1C57A97FD6C6BA78404D65F268B36882F0106"
+    },
+    {
+      "path": "source-snapshot/docs/superpowers/plans/2026-08-13-r12-intrusion-impact.md",
+      "sizeBytes": 4333,
+      "sha256": "8AE8CF64F36470F361CE0B10EFF818D464107ACCA4AAE88BF2B35F0D6821E380"
+    },
+    {
+      "path": "source-snapshot/docs/superpowers/plans/2026-08-13-r13-terminal-readability.md",
+      "sizeBytes": 3793,
+      "sha256": "EF060780C1CC936317774D4C748CDC36F08911A3D6440A4A695EA75B7635A5BD"
+    },
+    {
+      "path": "source-snapshot/docs/superpowers/plans/2026-08-13-r14-campaign-count.md",
+      "sizeBytes": 5549,
+      "sha256": "24184E1AEE06448F1D7FA67668232B6F082B4650C5BB3F8CC51289056D3520BE"
+    },
+    {
+      "path": "source-snapshot/docs/superpowers/plans/2026-08-13-r14-signature-runtime.md",
+      "sizeBytes": 3483,
+      "sha256": "0CEF0910ADFAF72A6781AC085006FD6FB6F1B1A7AB5663C8A185855F574E3C0D"
+    },
+    {
+      "path": "source-snapshot/game-core.js",
+      "sizeBytes": 6347,
+      "sha256": "B3FAD87BD4EEE3C608E4E2944A3572DF272646534D95ADED3A1463EBE6D708A2"
+    },
+    {
+      "path": "source-snapshot/index.html",
+      "sizeBytes": 6181,
+      "sha256": "09A5F080870D193C339A166E16D787B7753547B04B64431176DC12C750A48AB2"
+    },
+    {
+      "path": "source-snapshot/package-lock.json",
+      "sizeBytes": 5301,
+      "sha256": "9F4FD17CF7465D44B4F2521298576231427C54A6DDEC42F1E9D666442513970E"
+    },
+    {
+      "path": "source-snapshot/package.json",
+      "sizeBytes": 1040,
+      "sha256": "48918672964E04B4339ADA26D88BF17D7E12C5DEF0D524654F1D8308912AB43B"
+    },
+    {
+      "path": "source-snapshot/playwright.config.js",
+      "sizeBytes": 994,
+      "sha256": "E61474AB2255ED655D63890AD3F5FC1048D2B02DDC28EB60F50F5701F64DCF30"
+    },
+    {
+      "path": "source-snapshot/review/spec_20260806_mission02_containment_protocol.md",
+      "sizeBytes": 4053,
+      "sha256": "9CC476094F7BEF5873EA143A7D362FF55ADD44D6A68740506F6EBC16FD85EC09"
+    },
+    {
+      "path": "source-snapshot/script.js",
+      "sizeBytes": 20069,
+      "sha256": "84D39E465968CC65252E5239EF94BDDB57E2E8421366FD876C8887C6AD99837B"
+    },
+    {
+      "path": "source-snapshot/scripts/build-canonical-campaign.mjs",
+      "sizeBytes": 6983,
+      "sha256": "21A51779C35A91DCB20882FCA39F51CC211C85036B38BF982B7E26F80B885919"
+    },
+    {
+      "path": "source-snapshot/scripts/campaign-evidence.mjs",
+      "sizeBytes": 2620,
+      "sha256": "711B7129ACDD70E87418B066529488CC3ABA4EC1C8BC44CA1DC5A959F11E76F2"
+    },
+    {
+      "path": "source-snapshot/scripts/generate-manifest.mjs",
+      "sizeBytes": 2079,
+      "sha256": "13EB88534B2280EBB6B0031663A888F99C16478AA073800165A6A4582C852A21"
+    },
+    {
+      "path": "source-snapshot/scripts/generate-report.mjs",
+      "sizeBytes": 2641,
+      "sha256": "133BB804467B5CC29157105EC426FB82358FD448F66E009B0E8899BF1FC2E325"
+    },
+    {
+      "path": "source-snapshot/scripts/preflight.mjs",
+      "sizeBytes": 949,
+      "sha256": "5F6C9F2BDE7BB334EC51A88D4DBC078E2685BB15E067A71CD4EBCB4AB03FC7DB"
+    },
+    {
+      "path": "source-snapshot/scripts/r10-campaign-lib.mjs",
+      "sizeBytes": 22957,
+      "sha256": "242F29F266921D65EFB0FDA3A8D891A92BD398F73DE3BDEBBA52AD2CF5566228"
+    },
+    {
+      "path": "source-snapshot/scripts/run-negative-controls.mjs",
+      "sizeBytes": 9179,
+      "sha256": "DFA54E411513198808142198D318C2EFE006BCF3DECD27078D78C131BE30509B"
+    },
+    {
+      "path": "source-snapshot/scripts/run-r10-campaign.mjs",
+      "sizeBytes": 27587,
+      "sha256": "E2D1D0A9F284B63307CDF392637695639D0E4C5D98587DA050BD2C645D941D5F"
+    },
+    {
+      "path": "source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "source-snapshot/scripts/verify-campaign.mjs",
+      "sizeBytes": 7916,
+      "sha256": "C7C93711DDBEE12F2E90F0C699CDA59A9E7246EE49EEE0062414BBEACBF553DE"
+    },
+    {
+      "path": "source-snapshot/scripts/verify-evidence.mjs",
+      "sizeBytes": 8254,
+      "sha256": "25B5D14AB29CA6DB5AD95899E8E27BBB93306DCFA295281D565F0633D6089648"
+    },
+    {
+      "path": "source-snapshot/scripts/verify-r10-campaign.mjs",
+      "sizeBytes": 20147,
+      "sha256": "E3A3454E18947710ED3C6F3448FDE398444ADBAF0E1E5C14D4B3C97A5BDF3E59"
+    },
+    {
+      "path": "source-snapshot/style.css",
+      "sizeBytes": 3308753,
+      "sha256": "7B16C4A5956CC6BABB7EB199BEAD9E66291F4B25CFD38673DEE3E19D862F3C05"
+    },
+    {
+      "path": "source-snapshot/tests/browser/accessibility.spec.js",
+      "sizeBytes": 17186,
+      "sha256": "6A4514277C25B37012CA81CC61F18C59A0F62BCE060BD27BF539A4B0CA17A038"
+    },
+    {
+      "path": "source-snapshot/tests/browser/core-route.spec.js",
+      "sizeBytes": 6214,
+      "sha256": "8129D520C03299B89E8546093A1F39300156F4F81223045EDC02B7CF16CEF58D"
+    },
+    {
+      "path": "source-snapshot/tests/browser/global-setup.mjs",
+      "sizeBytes": 326,
+      "sha256": "CF18C6EFCAAC05DD40AF0DAC36CDF0033B0FB8A4C88AE9C37033A206781D5562"
+    },
+    {
+      "path": "source-snapshot/tests/browser/intrusion.spec.js",
+      "sizeBytes": 20798,
+      "sha256": "00BDC03B17558D97184D79AF45C83E6D7F029982CC0103ACCD01BFBB8954B752"
+    },
+    {
+      "path": "source-snapshot/tests/browser/localization.spec.js",
+      "sizeBytes": 31459,
+      "sha256": "906B5A89E1E2DB7C96B3554B1C91A9A700A457E455543999ED8F4E9D80C110A2"
+    },
+    {
+      "path": "source-snapshot/tests/browser/performance.spec.js",
+      "sizeBytes": 8737,
+      "sha256": "9CCF220CC765787819BF996491F66837ECF368C0458D44E90261B66A7638830B"
+    },
+    {
+      "path": "source-snapshot/tests/browser/serve.mjs",
+      "sizeBytes": 3671,
+      "sha256": "CD129E8F5F1049EFA7DC64F2295580A486FAF9329479DBF9BAE8EEA9D8073185"
+    },
+    {
+      "path": "source-snapshot/tests/campaign-evidence.test.js",
+      "sizeBytes": 4519,
+      "sha256": "9C2FEE2329EFB3FF6914CA4529F47004866B4BD4CF3B23F6332C2A0416E2FE7D"
+    },
+    {
+      "path": "source-snapshot/tests/campaign-verifier.test.js",
+      "sizeBytes": 7678,
+      "sha256": "26DD83F673F2F67E2EB45759236AAE6AA623D837320B9622E5605516ACD1742E"
+    },
+    {
+      "path": "source-snapshot/tests/full-run.test.js",
+      "sizeBytes": 2762,
+      "sha256": "19CA3E50BF9448BE9084F4F7E6D18DF06601772B3B7487C024561161C0C141FF"
+    },
+    {
+      "path": "source-snapshot/tests/game-core.test.js",
+      "sizeBytes": 2927,
+      "sha256": "5B1D4FBB191D65FADEEB593F5B6D78DBE1AA5EA54320DFB5690AD6155842703B"
+    },
+    {
+      "path": "source-snapshot/tests/harness/playwright-lifecycle.test.js",
+      "sizeBytes": 4602,
+      "sha256": "342C319DE86F63BF8793E528010001BAA987171758ECF7117B5D7C426BE48BE0"
+    },
+    {
+      "path": "source-snapshot/tests/harness/r10-campaign-runner.test.js",
+      "sizeBytes": 47666,
+      "sha256": "96A63EF11DFC7039174FF75D45611893C6997826FB66C6812DE3817BAD1C0B6B"
+    },
+    {
+      "path": "source-snapshot/tests/intrusion-races.test.js",
+      "sizeBytes": 1035,
+      "sha256": "02B5498EA9094602BE6AD9D85FF6F0C60D232F0D6DFDFCC89C70EB9066F9D19A"
+    },
+    {
+      "path": "source-snapshot/tests/localization-contract.test.js",
+      "sizeBytes": 10501,
+      "sha256": "E3C9E929DDD2F5C84218057E52FAF0332A77304620634F636EE1DA8B0D8BFC00"
+    },
+    {
+      "path": "source-snapshot/tests/puzzle-routes.test.js",
+      "sizeBytes": 1128,
+      "sha256": "0A83C23AA2960703EEE0872727C4B939CB97BDE2B86B94D22D83B21353B68263"
+    },
+    {
+      "path": "source-snapshot/tests/remediation.test.js",
+      "sizeBytes": 3074,
+      "sha256": "F826B0568D35CAAC254F7EB8B79B619D686B4B1790F4BF372AE3206C3F3A0F07"
+    }
+  ]
+}

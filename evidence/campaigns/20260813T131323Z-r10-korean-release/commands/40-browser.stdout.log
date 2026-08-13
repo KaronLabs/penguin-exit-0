@@ -1,0 +1,52 @@
+
+Running 48 tests using 1 worker
+
+[1/48] [chromium] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[2/48] [chromium] › tests\browser\accessibility.spec.js:206:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[3/48] [chromium] › tests\browser\accessibility.spec.js:237:1 › 탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 동기화한다
+[4/48] [chromium] › tests\browser\accessibility.spec.js:282:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[5/48] [chromium] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[6/48] [chromium] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[7/48] [chromium] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[8/48] [chromium] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[9/48] [chromium] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[10/48] [chromium] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[11/48] [chromium] › tests\browser\localization.spec.js:97:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[12/48] [chromium] › tests\browser\localization.spec.js:243:1 › 최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 남긴다
+[13/48] [chromium] › tests\browser\localization.spec.js:269:1 › 반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 않고 repeat 독설을 남긴다
+[14/48] [chromium] › tests\browser\localization.spec.js:300:1 › 탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다
+[15/48] [chromium] › tests\browser\localization.spec.js:347:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[16/48] [chromium] › tests\browser\localization.spec.js:428:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+[17/48] [firefox] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[18/48] [firefox] › tests\browser\accessibility.spec.js:206:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[19/48] [firefox] › tests\browser\accessibility.spec.js:237:1 › 탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 동기화한다
+[20/48] [firefox] › tests\browser\accessibility.spec.js:282:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[21/48] [firefox] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[22/48] [firefox] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[23/48] [firefox] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[24/48] [firefox] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[25/48] [firefox] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[26/48] [firefox] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[27/48] [firefox] › tests\browser\localization.spec.js:97:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[28/48] [firefox] › tests\browser\localization.spec.js:243:1 › 최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 남긴다
+[29/48] [firefox] › tests\browser\localization.spec.js:269:1 › 반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 않고 repeat 독설을 남긴다
+[30/48] [firefox] › tests\browser\localization.spec.js:300:1 › 탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다
+[31/48] [firefox] › tests\browser\localization.spec.js:347:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[32/48] [firefox] › tests\browser\localization.spec.js:428:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+[33/48] [webkit] › tests\browser\accessibility.spec.js:65:1 › 320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다
+[34/48] [webkit] › tests\browser\accessibility.spec.js:206:1 › 640x360 reflow에서 핵심 동작과 엔딩이 스크롤로 도달 가능하다
+[35/48] [webkit] › tests\browser\accessibility.spec.js:237:1 › 탭은 클릭과 키보드 조작에서 선택 상태와 패널 연결을 동기화한다
+[36/48] [webkit] › tests\browser\accessibility.spec.js:282:1 › reduced-motion은 transition을 제거하면서 게임 조작을 보존한다
+[37/48] [webkit] › tests\browser\core-route.spec.js:10:1 › Core Route - Happy Path (No upgrade, no penalty)
+[38/48] [webkit] › tests\browser\core-route.spec.js:35:1 › Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)
+[39/48] [webkit] › tests\browser\core-route.spec.js:66:1 › Core Route - Penalty Route & RECOVER Button Mechanics
+[40/48] [webkit] › tests\browser\core-route.spec.js:118:1 › Core Route - 1-Shot Ending Modal Overlay Verification
+[41/48] [webkit] › tests\browser\intrusion.spec.js:178:1 › AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer
+[42/48] [webkit] › tests\browser\intrusion.spec.js:227:1 › AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)
+[43/48] [webkit] › tests\browser\localization.spec.js:97:1 › 초기 화면은 한국어 문서 언어와 랜드마크를 제공한다
+[44/48] [webkit] › tests\browser\localization.spec.js:243:1 › 최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 남긴다
+[45/48] [webkit] › tests\browser\localization.spec.js:269:1 › 반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 않고 repeat 독설을 남긴다
+[46/48] [webkit] › tests\browser\localization.spec.js:300:1 › 탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다
+[47/48] [webkit] › tests\browser\localization.spec.js:347:1 › 퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다
+[48/48] [webkit] › tests\browser\localization.spec.js:428:1 › 동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다
+  48 passed (2.9m)

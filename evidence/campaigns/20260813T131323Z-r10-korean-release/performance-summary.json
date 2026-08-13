@@ -1,0 +1,23 @@
+{
+  "startedUtc": "2026-08-13T13:16:57.781Z",
+  "endedUtc": "2026-08-13T13:26:57.950Z",
+  "measuredDurationMs": 600169,
+  "environment": {
+    "nodeVersion": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "project": "chromium-perf"
+  },
+  "sampleCount": 36011,
+  "rawMinMs": 16.5,
+  "rawMaxMs": 33.199999999953434,
+  "p50LatencyMs": 16.699999999982538,
+  "p95LatencyMs": 16.70000000006985,
+  "p99LatencyMs": 16.800000000017462,
+  "longTaskObserverSupported": true,
+  "longTasksCount": 0,
+  "heapStartMb": 0.6608924865722656,
+  "heapEndMb": 2.1190032958984375,
+  "heapNetGrowthMb": 1.4581108093261719,
+  "totalActionsCount": 7040
+}

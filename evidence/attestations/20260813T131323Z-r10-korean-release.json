@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260813T131323Z-r10-korean-release",
+  "classification": "verified_schema_v5_campaign_archive",
+  "sourceGitHead": "23dda84e8b854da35245278b9c58cf85c4be99f1",
+  "sha256": {
+    "artifactManifest": "bcf7684b155b4fbc8fbcecb0cc3ab37d244f57c1c399dbdc6aee759d1ee5ea93",
+    "submissionEnvelope": "7bcc48321c30b5304d80817986e714655841eec226afa8650cf71f2466df5467",
+    "externalSpec": "c14ff0ce72547cc00f6fac685cc1e00af153a8a4c24f2ff3aab3cedab7e18dfa",
+    "externalReceipt": "19fcc9f175f4aa1a15be59d7a34922abc97e2555deb1f6b54177490f6b1ac554",
+    "ignoredSuccessMarker": "becf6670922b451014408a2b93ff57e93e0acbf5805201ff5cdf52b324442860"
+  },
+  "limitations": [
+    "This attestation archives the fresh schema-v5 campaign bound to sourceGitHead; deployment and public smoke evidence are separate gates.",
+    "The external spec, receipt, and ignored SUCCESS marker are hash-attested here but remain outside this Git tree."
+  ]
+}

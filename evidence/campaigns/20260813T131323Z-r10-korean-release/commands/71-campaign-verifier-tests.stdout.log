@@ -1,0 +1,14 @@
+✔ accepts a fully bound campaign (356.0602ms)
+✔ rejects an envelope that omits one required payload hash (124.7899ms)
+✔ rejects a changed spec instead of merely proving it exists (131.5599ms)
+✔ rejects missing or reordered ledger states (170.8579ms)
+✔ rejects raw evidence that is not hash-bound by the envelope (143.5292ms)
+✔ rejects a report whose bound claims are stale (163.3043ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1924.789

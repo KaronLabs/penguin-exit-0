@@ -1,0 +1,37 @@
+✔ parses explicit schema browser contracts by engine (9.2315ms)
+✔ never converts failed or malformed browser evidence into passing counts (1.897ms)
+✔ accepts a fully bound campaign (92.4518ms)
+✔ rejects an envelope that omits one required payload hash (72.1068ms)
+✔ rejects a changed spec instead of merely proving it exists (72.7354ms)
+✔ rejects missing or reordered ledger states (68.7594ms)
+✔ rejects raw evidence that is not hash-bound by the envelope (73.9173ms)
+✔ rejects a report whose bound claims are stale (67.0856ms)
+✔ Full Game Run - Happy Path (No upgrade, no penalty) (2.3439ms)
+✔ Full Game Run - Upgrade Route (Buy Coffee upgrade, RECOVER to 3000 stars) (0.3451ms)
+✔ Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 3000 stars) (1.0412ms)
+✔ Core State Engine - Initial State Defaults (1.5743ms)
+✔ Core State Engine - Produce Action 15:1 Ratio Contract (0.5405ms)
+✔ Core State Engine - Fixed 500 Star Penalty Bounds (0.9897ms)
+✔ Core State Engine - Upgrade Cap +8 & Slot Max 2 (0.2727ms)
+✔ Core State Engine - Recovery Mode Entry & Exit (0.1993ms)
+✔ AI Intrusion Guards - Single Intrusion Active & Production Blocked (1.3994ms)
+✔ AI Intrusion Guards - Single Ending Execution Lock (0.1959ms)
+✔ 콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존한다 (10.1492ms)
+✔ 업그레이드는 관제 배지와 비용·보너스를 보존한다 (0.2236ms)
+✔ Puzzle Content Registry - Fair SRE Diagnostics for WiFi (1.0366ms)
+✔ Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH (0.2097ms)
+✔ Remediation P0 - Defer ending on simultaneous intrusion at 200 units (1.0997ms)
+✔ Remediation P1 - Idempotent AI Penalty (Reject duplicate penalty when no intrusion) (0.7256ms)
+✔ Remediation P1 - Reject negative tuna amounts (0.1216ms)
+✔ Remediation P1 - Reject forged upgrade payloads (0.1751ms)
+✔ Remediation P1 - Threat Meter clamped at max 99 (0.1363ms)
+✔ CEO reject charges exactly 500 stars and clears only CEO intrusion (0.1346ms)
+✔ generic resolution never applies a hidden star penalty (0.167ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 548.6238
