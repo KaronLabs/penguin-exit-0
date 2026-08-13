@@ -335,20 +335,35 @@ export function buildR10PhasePlan(cleanSource) {
 }
 
 export function tapCounts(text) {
-    if (typeof text !== 'string' || /[\u001b\u009b]/u.test(text)) throw new Error('TAP_COUNT_PROOF_MISSING');
-    const matches = text.split('\n').flatMap((line) => {
-        const exact = line.match(/^(#|ℹ) (tests|pass|fail) ([0-9]+)\r?$/u);
-        if (exact) return [{ prefix: exact[1], label: exact[2], value: Number(exact[3]) }];
-        if (/^(?:#|ℹ) (?:tests|pass|fail)\b/u.test(line)) throw new Error('TAP_COUNT_PROOF_MISSING');
-        return [];
-    });
-    const labels = new Map(matches.map(({ label, value }) => [label, value]));
-    if (matches.length !== 3 || labels.size !== 3 || new Set(matches.map(({ prefix }) => prefix)).size !== 1) {
-        throw new Error('TAP_COUNT_PROOF_MISSING');
-    }
-    const result = { tests: labels.get('tests'), passed: labels.get('pass'), failed: labels.get('fail') };
-    if (!Object.values(result).every(Number.isSafeInteger)
-        || result.tests < 1 || result.passed !== result.tests || result.failed !== 0) throw new Error('TAP_COUNT_PROOF_MISSING');
+    const missing = () => { throw new Error('TAP_COUNT_PROOF_MISSING'); };
+    if (typeof text !== 'string' || /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(text)
+        || /\r(?!\n)/u.test(text)) missing();
+    const hasCrlf = text.includes('\r\n');
+    if (hasCrlf && text.replaceAll('\r\n', '').includes('\n')) missing();
+    const normalized = hasCrlf ? text.replaceAll('\r\n', '\n') : text;
+    const input = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized;
+    if (input.endsWith('\n')) missing();
+    const count = '(0|[1-9][0-9]*)';
+    const duration = '((?:0|[1-9][0-9]*)(?:\\.[0-9]+)?)';
+    const labels = ['tests', 'suites', 'pass', 'fail', 'cancelled', 'skipped', 'todo'];
+    const nodeLines = labels.map((label) => `ℹ ${label} ${count}`).join('\\n');
+    const legacyLines = labels.map((label) => `# ${label} ${count}`).join('\\n');
+    const nodeMatch = input.match(new RegExp(`(^|\\n)${nodeLines}\\nℹ duration_ms ${duration}$`, 'u'));
+    const legacyMatch = input.match(new RegExp(`(^|\\n)1\\.\\.${count}\\n${legacyLines}\\n# duration_ms ${duration}$`, 'u'));
+    const matches = [nodeMatch, legacyMatch].filter(Boolean);
+    if (matches.length !== 1) missing();
+    const match = matches[0];
+    const body = input.slice(0, match.index);
+    if (/(?:^|\n)(?:ℹ (?:tests|suites|pass|fail|cancelled|skipped|todo|duration_ms)\b|# (?:tests|suites|pass|fail|cancelled|skipped|todo|duration_ms)\b|1\.\.)/u.test(body)) missing();
+    const offset = legacyMatch ? 3 : 2;
+    const values = match.slice(offset, offset + 7).map(Number);
+    const [tests, suites, passed, failed, cancelled, skipped, todo] = values;
+    const durationMs = Number(match[offset + 7]);
+    if (!values.every(Number.isSafeInteger) || !Number.isFinite(durationMs) || durationMs < 0
+        || tests < 1 || suites < 0 || passed !== tests
+        || failed !== 0 || cancelled !== 0 || skipped !== 0 || todo !== 0
+        || (legacyMatch && Number(match[2]) !== tests)) missing();
+    const result = { tests, passed, failed };
     return result;
 }
 
