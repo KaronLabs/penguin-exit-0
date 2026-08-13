@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { browserCountsAreComplete, parsePassingBrowserCounts } from './campaign-evidence.mjs';
+import { BROWSER_CONTRACT_V5, browserCountsAreComplete, parsePassingBrowserCounts } from './campaign-evidence.mjs';
 import {
     FROZEN_GAME_CORE_SHA256,
     assertCanonicalCampaignSource,
@@ -28,6 +28,7 @@ const scriptFile = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(scriptFile), '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
 const V1_SHA256 = '96D6F8407DF3B4E5D3DDB4CBEB42F6430F221C909B56353118D3B14D3777884B';
+const CAMPAIGN_SCHEMA_VERSION = 5;
 
 export function buildPhasePlan(cleanSource) {
     return buildR10PhasePlan(cleanSource);
@@ -276,8 +277,8 @@ export function runR10Campaign(runId) {
         if (unit.tests !== 29 || unit.passed !== 29 || unit.failed !== 0) throw new Error(`UNIT_COUNT_MISMATCH ${JSON.stringify(unit)}`);
 
         const browserCommand = commands.find((command) => command.key === '40-browser');
-        const browser = parsePassingBrowserCounts(read(browserCommand.stdoutPath), browserCommand.exitCode);
-        if (!browserCountsAreComplete(browser)) throw new Error(`BROWSER_COUNT_MISMATCH ${JSON.stringify(browser)}`);
+        const browser = parsePassingBrowserCounts(read(browserCommand.stdoutPath), browserCommand.exitCode, BROWSER_CONTRACT_V5);
+        if (!browserCountsAreComplete(browser, BROWSER_CONTRACT_V5)) throw new Error(`BROWSER_COUNT_MISMATCH ${JSON.stringify(browser)}`);
 
         const summaryPath = path.join(cleanSource, 'evidence', 'performance', 'performance-summary.json');
         const samplesPath = path.join(cleanSource, 'evidence', 'performance', 'frame-samples.json');
@@ -319,7 +320,7 @@ export function runR10Campaign(runId) {
         }
 
         const claims = {
-            schemaVersion: 4,
+            schemaVersion: CAMPAIGN_SCHEMA_VERSION,
             runId,
             v1Sha256: V1_SHA256,
             candidateInventory: {
@@ -359,17 +360,17 @@ export function runR10Campaign(runId) {
             copy: new Date(Date.parse(createdUtc) + 2).toISOString(),
         };
         const ledger = [
-            { schemaVersion: 4, runId, state: 'CREATED', timestampUtc: createdUtc, command: null },
-            { schemaVersion: 4, runId, state: 'SOURCE_INVENTORY_PASS', timestampUtc: internalTimes.inventory, command: null },
-            { schemaVersion: 4, runId, state: 'CLEAN_COPY_PASS', timestampUtc: internalTimes.copy, command: null },
+            { schemaVersion: CAMPAIGN_SCHEMA_VERSION, runId, state: 'CREATED', timestampUtc: createdUtc, command: null },
+            { schemaVersion: CAMPAIGN_SCHEMA_VERSION, runId, state: 'SOURCE_INVENTORY_PASS', timestampUtc: internalTimes.inventory, command: null },
+            { schemaVersion: CAMPAIGN_SCHEMA_VERSION, runId, state: 'CLEAN_COPY_PASS', timestampUtc: internalTimes.copy, command: null },
             ...phasePlan.map((phase) => ({
-                schemaVersion: 4,
+                schemaVersion: CAMPAIGN_SCHEMA_VERSION,
                 runId,
                 state: phase.state,
                 timestampUtc: campaignCommands.find((command) => command.key === phase.key).endedUtc,
                 command: campaignCommands.find((command) => command.key === phase.key),
             })),
-            { schemaVersion: 4, runId, state: 'PACKAGE_READY_FOR_GATE', timestampUtc: new Date().toISOString(), command: null },
+            { schemaVersion: CAMPAIGN_SCHEMA_VERSION, runId, state: 'PACKAGE_READY_FOR_GATE', timestampUtc: new Date().toISOString(), command: null },
         ];
         fs.writeFileSync(path.join(stagedCampaign, 'ledger.jsonl'), `${ledger.map(JSON.stringify).join('\n')}\n`, { encoding: 'utf8', flag: 'wx' });
 
@@ -385,7 +386,7 @@ export function runR10Campaign(runId) {
                 .map((name) => [name, sha256File(path.join(stagedCampaign, name))]),
         );
         const envelope = {
-            schemaVersion: 4,
+            schemaVersion: CAMPAIGN_SCHEMA_VERSION,
             runId,
             payloadHashes,
             source: {

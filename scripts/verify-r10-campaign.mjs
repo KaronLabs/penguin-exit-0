@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { browserCountsAreComplete, parsePassingBrowserCounts } from './campaign-evidence.mjs';
+import { BROWSER_CONTRACT_V3, BROWSER_CONTRACT_V5, browserCountsAreComplete, parsePassingBrowserCounts } from './campaign-evidence.mjs';
 import {
     FROZEN_GAME_CORE_SHA256,
     assertCanonicalCampaignSource,
@@ -43,6 +43,10 @@ const ARTIFACT_EXCLUSIONS = new Set([
 
 function invariant(condition, message) {
     if (!condition) throw new Error(message);
+}
+
+function browserContractForSchema(schemaVersion) {
+    return schemaVersion <= 4 ? BROWSER_CONTRACT_V3 : BROWSER_CONTRACT_V5;
 }
 
 function readJson(file, label) {
@@ -87,15 +91,20 @@ export function collectArtifactManifest(campaignDir) {
     };
 }
 
-function verifyCommand(command, campaignDir, phase, sourceRoot) {
+function verifyCommand(command, campaignDir, phase, sourceRoot, allowForeignWindowsPath = false) {
     invariant(command && Array.isArray(command.argv) && command.argv.length > 0, 'ledger command argv missing');
-    invariant(path.isAbsolute(command.cwd), 'ledger command cwd must be absolute');
+    const foreignWindowsPath = path.win32.isAbsolute(command.cwd) && !path.isAbsolute(command.cwd);
+    invariant(path.isAbsolute(command.cwd) || foreignWindowsPath, 'ledger command cwd must be absolute');
     invariant(Number.isFinite(Date.parse(command.startedUtc)) && Number.isFinite(Date.parse(command.endedUtc)), 'ledger command timestamps invalid');
     invariant(Date.parse(command.startedUtc) <= Date.parse(command.endedUtc), 'ledger command timestamp order invalid');
     invariant(command.exitCode === 0 && command.timedOut === false, 'ledger command failed or timed out');
     invariant(command.key === phase.key, `ledger command key mismatch for ${phase.state}`);
-    invariant(JSON.stringify(command.argv) === JSON.stringify(phase.argv), `ledger command argv mismatch for ${phase.state}`);
-    invariant(path.resolve(command.cwd) === path.resolve(sourceRoot), `ledger command cwd mismatch for ${phase.state}`);
+    if (!allowForeignWindowsPath) {
+        invariant(JSON.stringify(command.argv) === JSON.stringify(phase.argv), `ledger command argv mismatch for ${phase.state}`);
+    }
+    if (!foreignWindowsPath || !allowForeignWindowsPath) {
+        invariant(path.resolve(command.cwd) === path.resolve(sourceRoot), `ledger command cwd mismatch for ${phase.state}`);
+    }
     invariant(command.timeoutMs === phase.timeoutMs, `ledger command timeout contract mismatch for ${phase.state}`);
     for (const stream of ['stdout', 'stderr']) {
         const artifactKey = `${stream}ArtifactPath`;
@@ -145,17 +154,18 @@ export function verifyR10Package({
     invariant(sha256File(path.join(source, 'game-core.js')) === expectedGameCoreSha256, 'game-core.js frozen SHA-256 mismatch');
 
     const claims = readJson(path.join(campaign, 'claims.json'), 'claims');
-    invariant((claims.schemaVersion === 3 || claims.schemaVersion === 4) && claims.runId === expectedRunId, 'claims run/schema mismatch');
+    invariant((claims.schemaVersion === 3 || claims.schemaVersion === 4 || claims.schemaVersion === 5) && claims.runId === expectedRunId, 'claims run/schema mismatch');
     const schemaVersion = claims.schemaVersion;
+    const browserContract = browserContractForSchema(schemaVersion);
     invariant(claims.candidateInventory?.fileCount === candidate.fileCount
         && claims.candidateInventory?.pathListSha256 === candidate.pathListSha256
         && claims.candidateInventory?.contentRecordsSha256 === candidate.contentRecordsSha256, 'claims candidate inventory mismatch');
     invariant(claims.gameCoreSha256 === expectedGameCoreSha256, 'claims game-core hash mismatch');
-    if (schemaVersion === 4) {
+    if (schemaVersion >= 4) {
         invariant(claims.sourceGit?.branch === 'main' && /^[a-f0-9]{40}$/.test(claims.sourceGit?.headSha), 'canonical Git source binding missing');
     }
     invariant(claims.unit?.tests === 29 && claims.unit?.passed === 29 && claims.unit?.failed === 0 && claims.unit?.exitCode === 0, 'unit evidence is not exact 29/29');
-    invariant(claims.browser?.exitCode === 0 && browserCountsAreComplete(claims.browser), 'browser evidence is not exact 48/48');
+    invariant(claims.browser?.exitCode === 0 && browserCountsAreComplete(claims.browser, browserContract), `browser evidence is not exact ${browserContract.expectedTotal}/${browserContract.expectedTotal}`);
     invariant(claims.negativeControls?.passed === 21 && claims.negativeControls?.total === 21
         && claims.negativeControls?.failed === 0 && claims.negativeControls?.exitCode === 0, 'negative controls are not exact 21/21');
     invariant(Number.isInteger(claims.campaignVerifier?.tests) && claims.campaignVerifier.tests > 0
@@ -171,7 +181,7 @@ export function verifyR10Package({
         && claims.r9Frozen?.beforeDigest === r9Before.digest
         && claims.r9Frozen?.afterDigest === r9After.digest, 'R9 frozen claims do not bind exact snapshots');
     let r10Before = null;
-    if (schemaVersion === 4) {
+    if (schemaVersion >= 4) {
         r10Before = readJson(path.join(campaign, 'r10-before.json'), 'R10 before snapshot');
         const r10After = readJson(path.join(campaign, 'r10-after.json'), 'R10 after snapshot');
         verifyFrozenSnapshot(r10Before, 'R10', 'before');
@@ -208,15 +218,15 @@ export function verifyR10Package({
         const timestamp = Date.parse(entry.timestampUtc);
         invariant(entry.schemaVersion === schemaVersion && entry.runId === expectedRunId && Number.isFinite(timestamp) && timestamp >= previousTimestamp, 'ledger provenance invalid');
         previousTimestamp = timestamp;
-        if (index >= 3 && index <= 11) verifyCommand(entry.command, campaign, phasePlan[index - 3], execution);
+        if (index >= 3 && index <= 11) verifyCommand(entry.command, campaign, phasePlan[index - 3], execution, schemaVersion === 3);
         else invariant(entry.command === null, `unexpected command receipt for ledger state ${entry.state}`);
     }
     const phaseCommands = Object.fromEntries(ledger.slice(3, 12).map((entry) => [entry.command.key, entry.command]));
     invariant(commandStdout(phaseCommands['20-preflight'], campaign).includes('Preflight status: match=true'), 'preflight stdout proof missing');
     const unitLog = tapCounts(commandStdout(phaseCommands['30-unit'], campaign));
     invariant(unitLog.tests === claims.unit.tests && unitLog.passed === claims.unit.passed && unitLog.failed === claims.unit.failed, 'unit stdout counts do not match claims');
-    const browserLog = parsePassingBrowserCounts(commandStdout(phaseCommands['40-browser'], campaign), phaseCommands['40-browser'].exitCode);
-    invariant(browserCountsAreComplete(browserLog) && JSON.stringify(browserLog) === JSON.stringify({
+    const browserLog = parsePassingBrowserCounts(commandStdout(phaseCommands['40-browser'], campaign), phaseCommands['40-browser'].exitCode, browserContract);
+    invariant(browserCountsAreComplete(browserLog, browserContract) && JSON.stringify(browserLog) === JSON.stringify({
         chromium: claims.browser.chromium,
         firefox: claims.browser.firefox,
         webkit: claims.browser.webkit,
@@ -246,7 +256,7 @@ export function verifyR10Package({
 
     const envelope = readJson(path.join(campaign, 'submission-envelope.json'), 'submission envelope');
     invariant(envelope.schemaVersion === schemaVersion && envelope.runId === expectedRunId, 'envelope run/schema mismatch');
-    const requiredPayloads = schemaVersion === 4 ? REQUIRED_PAYLOADS_V4 : REQUIRED_PAYLOADS_V3;
+    const requiredPayloads = schemaVersion >= 4 ? REQUIRED_PAYLOADS_V4 : REQUIRED_PAYLOADS_V3;
     invariant(JSON.stringify(Object.keys(envelope.payloadHashes ?? {}).sort()) === JSON.stringify([...requiredPayloads].sort()), 'envelope payload set mismatch');
     for (const name of requiredPayloads) {
         invariant(envelope.payloadHashes[name] === sha256File(path.join(campaign, name)), `payload hash mismatch: ${name}`);
@@ -254,7 +264,7 @@ export function verifyR10Package({
     invariant(envelope.source?.path === 'source-snapshot' && envelope.source?.fileCount === candidate.fileCount
         && envelope.source?.pathListSha256 === candidate.pathListSha256
         && envelope.source?.contentRecordsSha256 === candidate.contentRecordsSha256, 'envelope source binding mismatch');
-    if (schemaVersion === 4) {
+    if (schemaVersion >= 4) {
         invariant(envelope.source?.gitBranch === claims.sourceGit.branch
             && envelope.source?.gitHeadSha === claims.sourceGit.headSha, 'envelope canonical Git source binding mismatch');
     }
@@ -268,7 +278,7 @@ export function verifyR10Package({
     invariant(specText.includes(expectedRunId) && specText.includes(candidate.pathListSha256)
         && specText.includes(candidate.contentRecordsSha256)
         && specText.includes('actual browser chrome zoom not claimed'), 'spec omits bound run, inventory, or zoom limitation');
-    if (schemaVersion === 4) {
+    if (schemaVersion >= 4) {
         invariant(specText.includes(claims.sourceGit.headSha) && specText.includes(r10Before.digest), 'spec omits canonical Git or R10 frozen binding');
     }
 
