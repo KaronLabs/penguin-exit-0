@@ -189,8 +189,10 @@ function queuePuzzleResult(puzzle, choice, repeated) {
     scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
     scheduleTerminal(() => {
         if (repeated) appendDialogue('repeat');
-        else if (choice.isFairDiagnostic || choice.key === 'altman') showEncounter(puzzle.encounter);
-        else appendDialogue('puzzle');
+        else {
+            appendDialogue('puzzle');
+            if (choice.isFairDiagnostic || choice.key === 'altman') showEncounter(puzzle.encounter);
+        }
     }, 1050);
 }
 
@@ -285,7 +287,6 @@ btnProduce.addEventListener('click', () => {
 function selectPuzzleTab(btn, moveFocus = false) {
     const nextPuzzleId = btn.getAttribute('data-puz');
     if (nextPuzzleId !== activePuzzleId) {
-        clearTerminalTimers();
         npcCard.hidden = true;
         activePuzzleId = nextPuzzleId;
         renderPuzzles();
