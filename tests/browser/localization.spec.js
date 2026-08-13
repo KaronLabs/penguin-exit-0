@@ -376,14 +376,14 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await option.click();
     await expect(page.locator('#terminal-output')).toContainText('에러 로그 안 읽냐? 네 눈은 장식이냐, 아니면 CSS냐?');
     await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/62');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v1')))).toMatchObject({
         version: 1,
-        cursors: { repeat: 1 },
-        discovered: ['repeat:0']
+        cursors: { puzzle: 1, repeat: 1 },
+        discovered: ['puzzle:0', 'repeat:0']
     });
     await page.reload();
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/62');
     await page.locator('[data-puz="wifi"]').click();
     await page.locator('.puzzle-option').first().click();
     await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
