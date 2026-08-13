@@ -1,0 +1,432 @@
+{
+  "fileCount": 85,
+  "pathListSha256": "B1B425EE6BCE8F16A3F89E461C44159D74A1CDEAFC961C40609716E7DAE2D53D",
+  "digest": "C70884AAA32948E4F799348391597DCC412267BC17BE2B51E83DDAD4E61160C5",
+  "files": [
+    {
+      "path": ".campaign-operations/20260807T013000Z-r9-final.json",
+      "sizeBytes": 207,
+      "sha256": "ABA051521D090420114DA1805129156235A6650B35E54FD28E96082C629334A5"
+    },
+    {
+      "path": ".campaign-operations/20260807T020000Z-r9-final.json",
+      "sizeBytes": 207,
+      "sha256": "B018255508BF883B5922F3C701F2798E9D0A5614581FF1B7904E75BEF9C6A586"
+    },
+    {
+      "path": ".campaign-operations/20260807T023000Z-r9-final.json",
+      "sizeBytes": 207,
+      "sha256": "79545F2DDEB61209AF55A34CB40157A9069571B52FC41E8DD4A10D3DB342C77D"
+    },
+    {
+      "path": ".campaign-operations/20260807T030000Z-r9-final.json",
+      "sizeBytes": 207,
+      "sha256": "6BD639DD8382F303D7AEB0481C26FE92EB4BA64B7A9A0F52E0B41887CF8B0235"
+    },
+    {
+      "path": "evidence/campaigns/20260807T002345Z-r10-korean-release/source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "evidence/campaigns/20260807T013000Z-r9-final/00-preflight.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T013000Z-r9-final/00-preflight.stdout.log",
+      "sizeBytes": 29,
+      "sha256": "24248069A01F88C30865FCBA56846924E24E87A133325D9CBA23DFFBD07B9D7D"
+    },
+    {
+      "path": "evidence/campaigns/20260807T013000Z-r9-final/10-unit.stderr.log",
+      "sizeBytes": 589,
+      "sha256": "CAEB7D8C0A272AE221C16721FC19C38FE139EE851DBA24ED952FAC2460F6B4E8"
+    },
+    {
+      "path": "evidence/campaigns/20260807T013000Z-r9-final/10-unit.stdout.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T013000Z-r9-final/NO_GO.json",
+      "sizeBytes": 737,
+      "sha256": "4026A70D966A9A69789A080E55635656FAEF94BEF7A23BCE6F602B65E9A8B229"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/00-preflight.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/00-preflight.stdout.log",
+      "sizeBytes": 29,
+      "sha256": "24248069A01F88C30865FCBA56846924E24E87A133325D9CBA23DFFBD07B9D7D"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/10-unit.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/10-unit.stdout.log",
+      "sizeBytes": 4621,
+      "sha256": "AF2C76A14B1D4CD7E80D7C03C8A47D1BB8B1BC4472D41B6416FDF4424E10A6CF"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/20-browser.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/20-browser.stdout.log",
+      "sizeBytes": 3032,
+      "sha256": "175C96253119561F9C060D68EC096FFAF09FCD2A9781E4AE2845DE34C168C408"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/30-performance.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/30-performance.stdout.log",
+      "sizeBytes": 839,
+      "sha256": "8DBA74AFE65AF7B7523F7CC5C42831C478484BD45D6F024A70102CEA5077B381"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/40-negative-evidence.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/40-negative-evidence.stdout.log",
+      "sizeBytes": 1706,
+      "sha256": "2C5BC40380730E1258B1971A38694920CD9B4B3C1E59DF3E22DA98EA2CECFF35"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/41-negative-campaign.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/41-negative-campaign.stdout.log",
+      "sizeBytes": 1117,
+      "sha256": "061D69B18FA76629EE3A8499CD21F2A8E7E46B4D38A1D5E3AEF7605B5BEB470A"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/45-report.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/45-report.stdout.log",
+      "sizeBytes": 47,
+      "sha256": "D3F00AFD2D9DA4E63AE688D2316A4690A9EE0E67FEBB25BF3076534FB50449A1"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/46-manifest.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/46-manifest.stdout.log",
+      "sizeBytes": 81,
+      "sha256": "CC48F89D64578ED2A3FD48A349CF9135AD686AA76BBAEA0DA843FA8D0968CAC5"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/50-final-gate.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/50-final-gate.stdout.log",
+      "sizeBytes": 451,
+      "sha256": "09EBF4AAE71657B8223C32FB23CB86960C904CB428398FDAEC9D1CABFADEEE99"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/artifact-manifest.json",
+      "sizeBytes": 6358,
+      "sha256": "C4EBB250CC452ADAEABE78E0076C31D927674DF802FE117437722246C0B111FA"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/claims.json",
+      "sizeBytes": 1331,
+      "sha256": "B5CBBF284E8D3332310E9F076209FD13B3306ADCBB6B22DFDBBE639DD537EC05"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/ledger.jsonl",
+      "sizeBytes": 5483,
+      "sha256": "DBE71C4AA03E29637D51F37E3EEDBBDFD6C3BB2E893C05CAB6151EC2616B3E25"
+    },
+    {
+      "path": "evidence/campaigns/20260807T020000Z-r9-final/submission-envelope.json",
+      "sizeBytes": 1259,
+      "sha256": "B61AC67644041C9A62FA3924D7C7734C4570DE5F61A7D2126536D0FD474AB59A"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/00-preflight.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/00-preflight.stdout.log",
+      "sizeBytes": 29,
+      "sha256": "24248069A01F88C30865FCBA56846924E24E87A133325D9CBA23DFFBD07B9D7D"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/10-unit.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/10-unit.stdout.log",
+      "sizeBytes": 4982,
+      "sha256": "43D9CC2A420B7B8C6FD0A204C596AA2A69364A8FF268472C008DF511348E74BE"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/20-browser.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/20-browser.stdout.log",
+      "sizeBytes": 3032,
+      "sha256": "A35D04A4B639264A76D013B960E803B3A5A86933C56514B7D5D9F41D22CFECC2"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/30-performance.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/30-performance.stdout.log",
+      "sizeBytes": 839,
+      "sha256": "89F1068D58EE9FF4C52454B478B48C54FFCD351997096A50C6C6B387E48077DD"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/40-negative-evidence.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/40-negative-evidence.stdout.log",
+      "sizeBytes": 1706,
+      "sha256": "2C5BC40380730E1258B1971A38694920CD9B4B3C1E59DF3E22DA98EA2CECFF35"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/41-negative-campaign.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/41-negative-campaign.stdout.log",
+      "sizeBytes": 1117,
+      "sha256": "1637B46CFE4A2DE2C2CC56A5106E9E27D53BD7E595DACCADD1F2F9819AACB5CB"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/45-report.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/45-report.stdout.log",
+      "sizeBytes": 47,
+      "sha256": "733DCF1381E8B309CCD2F277C1F3BAF6838BB438703ED2021CF38428682B7035"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/46-manifest.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/46-manifest.stdout.log",
+      "sizeBytes": 81,
+      "sha256": "A368544AFCAC4F3D0B1996D1BA289CC5E9C9BA87494959A83ECD2CA101764A7F"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/50-final-gate.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/50-final-gate.stdout.log",
+      "sizeBytes": 451,
+      "sha256": "B4221C17575341C72A6CDC6C20D7A6D2286F660806C3DE59476CD5F5C91C3879"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/artifact-manifest.json",
+      "sizeBytes": 6695,
+      "sha256": "1BD57173F775E9E389936044F84EB06DF436EEFFD2807F10BED707C5846C084C"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/claims.json",
+      "sizeBytes": 1335,
+      "sha256": "3E0ED67A36D0AC1CCF8A66AF528A610A36A3C0A0854F65A25858FEA08FE84BE8"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/ledger.jsonl",
+      "sizeBytes": 5483,
+      "sha256": "A997566CA0F62C9B6B703DB36FE60A639AFCDCE4F7FCD10DD63A47A7ACE53F36"
+    },
+    {
+      "path": "evidence/campaigns/20260807T023000Z-r9-final/submission-envelope.json",
+      "sizeBytes": 1259,
+      "sha256": "8E72EDD0A7F2B3340525E66CFB1F5ED5067AAE15C5606EE1540F6815EAD55006"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/00-preflight.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/00-preflight.stdout.log",
+      "sizeBytes": 29,
+      "sha256": "24248069A01F88C30865FCBA56846924E24E87A133325D9CBA23DFFBD07B9D7D"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/10-unit.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/10-unit.stdout.log",
+      "sizeBytes": 4985,
+      "sha256": "BC489C379DEE4808E923D7ACCE75889C46917E7FB20C0ADEDD0AC501D73D8C19"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/20-browser.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/20-browser.stdout.log",
+      "sizeBytes": 2667,
+      "sha256": "0089A66DFB32B0B37DCF4F20C14E94960E6261A5229ED14F42595795C6DDC589"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/30-performance.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/30-performance.stdout.log",
+      "sizeBytes": 782,
+      "sha256": "068D54C68BC40F5ADEAA2B86CC672FBE9DF8BD2E93ABE7CDEFD5BDD09571CEC7"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/40-negative-evidence.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/40-negative-evidence.stdout.log",
+      "sizeBytes": 1706,
+      "sha256": "2C5BC40380730E1258B1971A38694920CD9B4B3C1E59DF3E22DA98EA2CECFF35"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/41-negative-campaign.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/41-negative-campaign.stdout.log",
+      "sizeBytes": 1117,
+      "sha256": "9B67E92930AA052A426F57E066EBBBB15FA52A4A95290D38A0636D8EC0412B7B"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/45-report.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/45-report.stdout.log",
+      "sizeBytes": 47,
+      "sha256": "AFC4629D60F3390FF7854D6166BCFB1FF7A7418F04020C1B9821FA030F4A8626"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/46-manifest.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/46-manifest.stdout.log",
+      "sizeBytes": 81,
+      "sha256": "A368544AFCAC4F3D0B1996D1BA289CC5E9C9BA87494959A83ECD2CA101764A7F"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/50-final-gate.stderr.log",
+      "sizeBytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/50-final-gate.stdout.log",
+      "sizeBytes": 451,
+      "sha256": "13C15B10D09ABA6AE278DE60A20ECC068993BA70A265CDBDFA4BD007BA638E86"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/artifact-manifest.json",
+      "sizeBytes": 6695,
+      "sha256": "9ACD4914ADC6878E5F6333DE74D3AC50397B126004DD1F228A21E666783E633A"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/claims.json",
+      "sizeBytes": 1348,
+      "sha256": "0EFBBE6CAF3DEE5FB1709D05EAC3A7F29CEE6313CCC06F6D9C0713E4CB196C65"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/ledger.jsonl",
+      "sizeBytes": 5483,
+      "sha256": "EC9CEEED17FEAC3D42DE856D10E75A49903011B634E9BD4098E16A0967AC8A5B"
+    },
+    {
+      "path": "evidence/campaigns/20260807T030000Z-r9-final/submission-envelope.json",
+      "sizeBytes": 1259,
+      "sha256": "462385B44497A9D3BF62B3412ED47088D86FF64BC5B99C284B3169925644506C"
+    },
+    {
+      "path": "evidence/campaigns/20260807T092115Z-r10-korean-release/source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "evidence/campaigns/20260812T164443Z-r10-korean-release/source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "evidence/campaigns/20260812T201509Z-r10-korean-release/source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "evidence/campaigns/20260812T214826Z-r10-korean-release/source-snapshot/scripts/run-r9-campaign.mjs",
+      "sizeBytes": 8975,
+      "sha256": "705A67EA6CE284A81F2CF286A3320D97E132F7691CC429EE8CB1E43234188E07"
+    },
+    {
+      "path": "workspace-review/deployment_20260807_mission02_r10_korean_release.md",
+      "sizeBytes": 3376,
+      "sha256": "3342D8A1F6FD80F65B44A631BC8C97E54372FA44EA2E8AB97018C11D4C34DD9B"
+    },
+    {
+      "path": "workspace-review/deployment_20260807_mission02_r9_production.md",
+      "sizeBytes": 1660,
+      "sha256": "AFCF99A211615FB86ACBDA5B8B87BCE30484CC1C2A2379D72EBC71BF028749DB"
+    },
+    {
+      "path": "workspace-review/spec_20260807T020000Z-r9-final_mission02_final_acquittal.md",
+      "sizeBytes": 1214,
+      "sha256": "58E9C85CA22EE522132C3DA4E3492379BE90BD33BAC257F4131353DB9F0B0AA4"
+    },
+    {
+      "path": "workspace-review/spec_20260807T023000Z-r9-final_mission02_final_acquittal.md",
+      "sizeBytes": 1214,
+      "sha256": "C0325FF25F96A092C60E79ED5BBC66ACAC4B3EC258E042C3D18B0E1F04A39426"
+    },
+    {
+      "path": "workspace-review/spec_20260807T030000Z-r9-final_mission02_final_acquittal.md",
+      "sizeBytes": 1214,
+      "sha256": "5BA795DC2FB797860E4EA602C2FA3C0211DAE34DAB54B282DE9D0220912E7D58"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: accepts a fully bound campaign
+ok 1 - accepts a fully bound campaign
+  ---
+  duration_ms: 74.5301
+  type: 'test'
+  ...
+# Subtest: rejects an envelope that omits one required payload hash
+ok 2 - rejects an envelope that omits one required payload hash
+  ---
+  duration_ms: 68.0336
+  type: 'test'
+  ...
+# Subtest: rejects a changed spec instead of merely proving it exists
+ok 3 - rejects a changed spec instead of merely proving it exists
+  ---
+  duration_ms: 68.2686
+  type: 'test'
+  ...
+# Subtest: rejects missing or reordered ledger states
+ok 4 - rejects missing or reordered ledger states
+  ---
+  duration_ms: 68.305
+  type: 'test'
+  ...
+# Subtest: rejects raw evidence that is not hash-bound by the envelope
+ok 5 - rejects raw evidence that is not hash-bound by the envelope
+  ---
+  duration_ms: 64.68
+  type: 'test'
+  ...
+# Subtest: rejects a report whose bound claims are stale
+ok 6 - rejects a report whose bound claims are stale
+  ---
+  duration_ms: 67.5983
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 484.5944

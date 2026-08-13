@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260812T220742Z-r10-korean-release",
+  "classification": "historical_verified_campaign_archive",
+  "sourceGitHead": "6b0d74330d7328dad801e5b90d45d4eeb873e2f7",
+  "sha256": {
+    "artifactManifest": "97ea8a5f18ef8b8d340b1a58f34e8d0963842b606fd8cf95f92fe4fad3f0c4da",
+    "submissionEnvelope": "39c2f69d614d6688a795a6d8fd317580f4aabc5f7c76d3cd479edbc9f0c6bac4",
+    "externalSpec": "a0993f9f96a0219e0e97fa8768ce019d272de0ff6311a363fac9eb7f3196e36d",
+    "externalReceipt": "083c466f0bc779879d803276fa7b41bb469323ab5ce8028d703c7df2b5d82910",
+    "ignoredSuccessMarker": "9ef78c13154b3c7da083b4338aa03aea7612e4c8bfd437582c055440245d3880"
+  },
+  "limitations": [
+    "This attestation archives an already completed campaign; it is not a fresh verifier run from the current working tree.",
+    "The external spec, receipt, and ignored SUCCESS marker are hash-attested here but remain outside this Git tree."
+  ]
+}
