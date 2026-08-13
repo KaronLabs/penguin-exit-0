@@ -14,6 +14,16 @@ const expectedIntrusions = [
     { title: '✨ Gemini 응답 지연!', body: 'Gemini가 응답을 생성 중입니다... 3초 후 자동 해제되며 Esc로도 해제할 수 있습니다.' },
     { title: '💼 CEO 금요일 17:59 배포 지시!', body: 'CEO가 즉시 프로덕션 배포를 요구합니다!' }
 ];
+const firstPuzzleChoices = [
+    { tabId: 'wifi', optionIndex: 0, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8', tuna: '1 / 3', debt: '0%', npcName: 'Polar Bear DevOps' },
+    { tabId: 'wifi', optionIndex: 1, command: 'top / ip link', output: 'eth0: state DOWN', tuna: '2 / 3', debt: '0%', npcName: 'Polar Bear DevOps' },
+    { tabId: 'wifi', optionIndex: 2, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npcName: null },
+    { tabId: 'cpu', optionIndex: 0, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다.', tuna: '1 / 3', debt: '0%', npcName: 'Walrus DBA' },
+    { tabId: 'cpu', optionIndex: 1, command: 'kill -9 1337', output: '[1] + Killed xmrig', tuna: '2 / 3', debt: '0%', npcName: 'Walrus DBA' },
+    { tabId: 'cpu', optionIndex: 2, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다.', tuna: '0 / 3', debt: '20%', npcName: null },
+    { tabId: 'ssh', optionIndex: 0, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman', tuna: '1 / 3', debt: '0%', npcName: 'Sam Altman' },
+    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npcName: 'Sam Altman' }
+];
 
 async function metrics(page) {
     return page.evaluate(() => ({
@@ -187,19 +197,6 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect(terminalKinds.archonLabel).toMatchObject({
         color: 'rgb(246, 184, 63)', display: 'block', visibility: 'visible', opacity: '1', pseudo: '"ARCHON // ROAST"'
     });
-    await page.evaluate(() => window.__resetGameForTest());
-    await page.locator('.puzzle-option').nth(2).click();
-    await page.locator('[data-puz="wifi"]').click();
-    await page.waitForTimeout(1100);
-    await expect.soft(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
-    await expect.soft(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveCount(1);
-    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
-    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveText(/^아콘 🐧 \/\/ /);
-    await page.evaluate(() => window.__resetGameForTest());
-    await page.locator('.puzzle-option').nth(2).click();
-    await page.locator('[data-puz="cpu"]').click();
-    await page.waitForTimeout(500);
-    await expect(page.locator('#terminal-output')).not.toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('[data-puz="wifi"]').click();
     for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').nth(2).click();
@@ -218,6 +215,77 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect.soft(terminalViewport.atBottom).toBe(true);
     expect.soft(terminalViewport.lastVisible).toBe(true);
     expect.soft(terminalViewport.lastText.startsWith('아콘 🐧 // ')).toBe(true);
+});
+
+test('최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 남긴다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+
+    for (const fixture of firstPuzzleChoices) {
+        await page.goto('/');
+        await page.evaluate(() => localStorage.clear());
+        await page.reload();
+        await page.locator(`[data-puz="${fixture.tabId}"]`).click();
+        await page.locator('.puzzle-option').nth(fixture.optionIndex).click();
+
+        const terminalLines = await page.locator('#terminal-output > *').evaluateAll((nodes) => nodes.map((node) => ({
+            kind: node.dataset.terminalKind,
+            context: node.dataset.dialogueContext ?? null,
+            text: node.textContent
+        })));
+        expect.soft(terminalLines, fixture.command).toEqual([
+            { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
+            expect.objectContaining({ kind: 'system', context: null, text: expect.stringContaining(fixture.output) }),
+            expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ /) })
+        ]);
+        await expect(page.locator('#val-tuna')).toHaveText(fixture.tuna);
+        await expect(page.locator('#val-debt')).toHaveText(fixture.debt);
+        await expect.soft(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 1/62');
+
+        if (fixture.npcName === null) {
+            await expect(page.locator('#npc-card')).toBeHidden();
+        } else {
+            await expect(page.locator('#npc-card')).toBeVisible();
+            await expect(page.locator('#npc-name')).toHaveText(fixture.npcName);
+        }
+    }
+});
+
+test('반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 않고 repeat 독설을 남긴다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+
+    for (const fixture of firstPuzzleChoices) {
+        await page.goto('/');
+        await page.evaluate(() => localStorage.clear());
+        await page.reload();
+        await page.locator(`[data-puz="${fixture.tabId}"]`).click();
+        const option = page.locator('.puzzle-option').nth(fixture.optionIndex);
+
+        await option.click();
+        const firstTuna = await page.locator('#val-tuna').innerText();
+        const firstDebt = await page.locator('#val-debt').innerText();
+        await option.click();
+
+        await expect(page.locator('#val-tuna')).toHaveText(firstTuna);
+        await expect(page.locator('#val-debt')).toHaveText(firstDebt);
+        await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveCount(1);
+        await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-terminal-kind', 'archon');
+    }
+});
+
+test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.waitForTimeout(200);
+    await page.locator('[data-puz="cpu"]').click();
+
+    await expect(page.locator('#puzzle-title')).toHaveText('장애 #2: 서버 #4 고CPU 경보');
+    await expect(page.locator('#terminal-output [data-terminal-kind="system"]')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
+    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveCount(1);
+    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
 });
 
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
