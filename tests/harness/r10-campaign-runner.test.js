@@ -39,6 +39,10 @@ function browserProgressLines() {
     return lines.join('\n');
 }
 
+function legacyTapFooter(tests, durationMs) {
+    return `1..${tests}\n# tests ${tests}\n# suites 0\n# pass ${tests}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms ${durationMs}\n`;
+}
+
 test('R10 run id is exact and duplicate ownership is refused from either original root', (t) => {
     const base = tempRoot(t);
     const operations = path.join(base, '.campaign-operations');
@@ -346,13 +350,13 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
     const stdoutByKey = {
         '10-npm-ci': 'added 3 packages\n',
         '20-preflight': 'Preflight status: match=true\n',
-        '30-unit': '# tests 29\n# pass 29\n# fail 0\n',
+        '30-unit': legacyTapFooter(29, '563.6752'),
         '40-browser': browserProgressLines(),
         '50-performance': '[PERF] Warming up for 30s...\n[PERF] Starting workload measurement loop for 600s...\n',
         '60-manifest': '[MANIFEST GENERATOR] Successfully generated manifest.json with 42 tracked files.\n',
         '61-evidence-gate': 'EVIDENCE_GATE=GO\n',
         '70-negative-controls': 'NEGATIVE CONTROLS SUITE R7: 21 / 21 PASSED.\n',
-        '71-campaign-verifier-tests': '# tests 6\n# pass 6\n# fail 0\n',
+        '71-campaign-verifier-tests': legacyTapFooter(6, '521.0431'),
     };
     let cursor = Date.parse('2026-08-07T00:00:03.000Z');
     const commands = phasePlan.map((phase) => {
@@ -506,26 +510,62 @@ test('R10 phase plan runs every mutating tool only in clean source and never inv
     assert.ok(plan.every((phase) => !phase.argv.join(' ').includes('campaign:build')));
     assert.ok(plan.find((phase) => phase.key === '50-performance').timeoutMs >= 780000);
 
-    const legacySummary = '# tests 29\n# pass 29\n# fail 0\n';
-    const node24UnitSummary = 'success lines\nℹ tests 29\nℹ suites 0\nℹ pass 29\nℹ fail 0\nℹ duration_ms 502.5497\n';
-    const node24VerifierSummary = 'ℹ tests 6\r\nℹ suites 0\r\nℹ pass 6\r\nℹ fail 0\r\n';
-    assert.deepEqual(campaignLib.tapCounts(legacySummary), { tests: 29, passed: 29, failed: 0 });
-    assert.deepEqual(campaignLib.tapCounts(node24UnitSummary), { tests: 29, passed: 29, failed: 0 });
-    assert.deepEqual(campaignLib.tapCounts(node24VerifierSummary), { tests: 6, passed: 6, failed: 0 });
+    const node24UnitTail = '✔ generic resolution never applies a hidden star penalty (0.1566ms)\nℹ tests 29\nℹ suites 0\nℹ pass 29\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 502.5497\n';
+    const node24VerifierTail = '✔ rejects a report whose bound claims are stale (61.3721ms)\nℹ tests 6\nℹ suites 0\nℹ pass 6\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 445.6526\n';
+    const legacyUnitTail = "  duration_ms: 0.3186\n  type: 'test'\n  ...\n1..29\n# tests 29\n# suites 0\n# pass 29\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 563.6752\n";
+    const legacyVerifierTail = "  duration_ms: 70.3871\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 521.0431\n";
+    for (const [summary, expected] of [
+        [node24UnitTail, { tests: 29, passed: 29, failed: 0 }],
+        [node24VerifierTail, { tests: 6, passed: 6, failed: 0 }],
+        [legacyUnitTail, { tests: 29, passed: 29, failed: 0 }],
+        [legacyVerifierTail, { tests: 6, passed: 6, failed: 0 }],
+        [node24UnitTail.replaceAll('\n', '\r\n'), { tests: 29, passed: 29, failed: 0 }],
+        [node24VerifierTail.slice(0, -1), { tests: 6, passed: 6, failed: 0 }],
+        ['body\nℹ tests 2\nℹ suites 7\nℹ pass 2\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 0\n', { tests: 2, passed: 2, failed: 0 }],
+    ]) assert.deepEqual(campaignLib.tapCounts(summary), expected);
 
-    for (const invalidSummary of [
-        '',
-        '# tests 29\n# pass 29\n',
-        '# tests 28\n# pass 29\n# fail 0\n',
-        'ℹ tests 29\nℹ pass 28\nℹ fail 0\n',
-        'ℹ tests 29\nℹ pass 29\nℹ fail 1\n',
-        '# tests 29\n# tests 29\n# pass 29\n# fail 0\n',
-        '# tests 29\nℹ tests 29\n# pass 29\n# fail 0\n',
-        '# tests 29\nℹ tests 6\n# pass 29\n# fail 0\n',
-        '\u001b[32mℹ tests 29\u001b[0m\nℹ pass 29\nℹ fail 0\n',
-        'ℹ tests 29\nℹ pass 29\nℹ fail 0\n\u001b[31mspoof\u001b[0m\n',
-        'ℹ tests 29.0\nℹ pass 29\nℹ fail 0\n',
-    ]) assert.throws(() => campaignLib.tapCounts(invalidSummary), /TAP_COUNT_PROOF_MISSING/);
+    const nodeFooter = 'ℹ tests 29\nℹ suites 0\nℹ pass 29\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 502.5497\n';
+    const invalidSummaries = {
+        missing: '',
+        tripletOnly: 'ℹ tests 29\nℹ pass 29\nℹ fail 0\n',
+        missingField: nodeFooter.replace('ℹ cancelled 0\n', ''),
+        reordered: nodeFooter.replace('ℹ suites 0\nℹ pass 29\n', 'ℹ pass 29\nℹ suites 0\n'),
+        duplicated: nodeFooter.replace('ℹ suites 0\n', 'ℹ suites 0\nℹ suites 0\n'),
+        mixedDialect: nodeFooter.replace('ℹ pass 29', '# pass 29'),
+        mixedNewlines: nodeFooter.replace('ℹ suites 0\n', 'ℹ suites 0\r\n'),
+        trailingJunk: `${nodeFooter}spoof\n`,
+        trailingBlankLine: `${nodeFooter}\n`,
+        trailingSpace: nodeFooter.replace('ℹ duration_ms 502.5497\n', 'ℹ duration_ms 502.5497 \n'),
+        bodyMarker: `ℹ tests 29\nbody\n${nodeFooter}`,
+        bodyPlan: `1..29\nbody\n${nodeFooter}`,
+        planMismatch: `${legacyTapFooter(29, '563.6752').replace('1..29', '1..28')}`,
+        planLeadingZero: legacyTapFooter(29, '563.6752').replace('1..29', '1..029'),
+        testsLeadingZero: nodeFooter.replace('ℹ tests 29', 'ℹ tests 029'),
+        testsSigned: nodeFooter.replace('ℹ tests 29', 'ℹ tests +29'),
+        testsExponent: nodeFooter.replace('ℹ tests 29', 'ℹ tests 29e0'),
+        testsUnicodeDigits: nodeFooter.replace('ℹ tests 29', 'ℹ tests ２９'),
+        markerLookalike: nodeFooter.replace('ℹ tests 29', 'i tests 29'),
+        unsafeTests: nodeFooter.replaceAll('29', '9007199254740992'),
+        passMismatch: nodeFooter.replace('ℹ pass 29', 'ℹ pass 28'),
+        failed: nodeFooter.replace('ℹ fail 0', 'ℹ fail 1'),
+        cancelled: nodeFooter.replace('ℹ cancelled 0', 'ℹ cancelled 1'),
+        skipped: nodeFooter.replace('ℹ skipped 0', 'ℹ skipped 1'),
+        todo: nodeFooter.replace('ℹ todo 0', 'ℹ todo 1'),
+        durationNegative: nodeFooter.replace('502.5497', '-1'),
+        durationLeadingZero: nodeFooter.replace('502.5497', '0502.5497'),
+        durationExponent: nodeFooter.replace('502.5497', '5e2'),
+        durationInfinity: nodeFooter.replace('502.5497', '1e309'),
+        durationMissingFraction: nodeFooter.replace('502.5497', '502.'),
+        ansi: `\u001b[32m${nodeFooter}\u001b[0m`,
+        nul: `body\u0000\n${nodeFooter}`,
+        c1Csi: `body\u009b31m\n${nodeFooter}`,
+        c1Osc: `body\u009dtitle\n${nodeFooter}`,
+        c1St: `body\u009c\n${nodeFooter}`,
+        tab: `body\ttext\n${nodeFooter}`,
+    };
+    for (const [name, summary] of Object.entries(invalidSummaries)) {
+        assert.throws(() => campaignLib.tapCounts(summary), /TAP_COUNT_PROOF_MISSING/, name);
+    }
 });
 
 test('R9 frozen snapshot is an ordered content digest over R9 campaign, operations and review receipts', (t) => {
