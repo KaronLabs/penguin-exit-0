@@ -31,11 +31,11 @@ function tempRoot(t) {
 
 function browserProgressLines() {
     const lines = [];
-    for (let index = 1; index <= 39; index++) {
-        const engine = index <= 13 ? 'chromium' : index <= 26 ? 'firefox' : 'webkit';
-        lines.push(`[${index}/39] [${engine}] › test-${index}`);
+    for (let index = 1; index <= 48; index++) {
+        const engine = index <= 16 ? 'chromium' : index <= 32 ? 'firefox' : 'webkit';
+        lines.push(`[${index}/48] [${engine}] › test-${index}`);
     }
-    lines.push('  39 passed (6.2s)');
+    lines.push('  48 passed (6.2s)');
     return lines.join('\n');
 }
 
@@ -419,7 +419,7 @@ test('R10 verifier binds exact source, payloads, ledger, command logs, raw perfo
         gameCoreSha256: sha256File(path.join(source, 'game-core.js')),
         sourceGit: { branch: 'main', headSha: git(source, 'rev-parse', 'HEAD') },
         unit: { tests: 29, passed: 29, failed: 0, exitCode: 0 },
-        browser: { chromium: { passed: 13, failed: 0 }, firefox: { passed: 13, failed: 0 }, webkit: { passed: 13, failed: 0 }, integrity: true, reportedFailures: 0, exitCode: 0 },
+        browser: { chromium: { passed: 16, failed: 0 }, firefox: { passed: 16, failed: 0 }, webkit: { passed: 16, failed: 0 }, integrity: true, reportedFailures: 0, exitCode: 0 },
         performance: summary,
         negativeControls: { passed: 21, total: 21, failed: 0, exitCode: 0 },
         campaignVerifier: { tests: 6, passed: 6, failed: 0, exitCode: 0 },
@@ -633,7 +633,7 @@ test('official entry snapshots prior R10 before claiming the current run and exc
     );
 });
 
-test('the sealed real schema v3 R10 package remains verifiable without live authority arguments', () => {
+test('the sealed real schema v3 R10 package is rejected by the exact 48/48 browser contract', () => {
     const project = path.resolve('.');
     const canonicalProject = path.dirname(path.resolve(project, git(project, 'rev-parse', '--git-common-dir')));
     const workspace = path.dirname(canonicalProject);
@@ -642,14 +642,13 @@ test('the sealed real schema v3 R10 package remains verifiable without live auth
     const specPath = path.join(workspace, 'review', `spec_${runId}_mission02_r10_korean_release.md`);
     const ledger = fs.readFileSync(path.join(campaignDir, 'ledger.jsonl'), 'utf8').trim().split(/\r?\n/).map(JSON.parse);
     const executionRoot = ledger.find((entry) => entry.command)?.command.cwd;
-    const result = verifyR10Package({
+    assert.throws(() => verifyR10Package({
         campaignDir,
         specPath,
         sourceRoot: path.join(campaignDir, 'source-snapshot'),
         executionRoot,
         expectedRunId: runId,
-    });
-    assert.equal(result.status, 'VERIFIED');
+    }), /browser evidence is not exact 48\/48/);
 });
 
 test('official spec and campaign cannot be published before the staged package is VERIFIED', (t) => {

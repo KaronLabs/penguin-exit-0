@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../');
-export const PORT = 4173;
+export const PORT = 43173;
 export const HOST = '127.0.0.1';
 export const SERVER_URL = `http://${HOST}:${PORT}`;
 export const AVAILABILITY_TIMEOUT_MS = 1000;

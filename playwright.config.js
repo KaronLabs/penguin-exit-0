@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 30000,
   globalSetup: './tests/browser/global-setup.mjs',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:43173',
     headless: true,
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,

@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
     AVAILABILITY_TIMEOUT_MS,
     isStaticServerAvailable,
+    PORT,
     SERVER_URL,
     startStaticServer,
     stopStaticServer,
@@ -36,7 +37,7 @@ function isServerReachable() {
 function listen(server) {
     return new Promise((resolve, reject) => {
         server.once('error', reject);
-        server.listen(4173, '127.0.0.1', () => {
+        server.listen(PORT, '127.0.0.1', () => {
             server.off('error', reject);
             resolve();
         });

@@ -144,7 +144,7 @@ function buildSpec({ runId, candidate, claims, campaignTarget, createdUtc }) {
         + `- pre-existing R10 frozen snapshot: ${claims.r10Frozen.fileCount} files, ${claims.r10Frozen.beforeDigest}\n\n`
         + `## Executed evidence\n\n`
         + `- Node TAP: ${claims.unit.passed}/${claims.unit.tests}, failed ${claims.unit.failed}, exit ${claims.unit.exitCode}\n`
-        + `- Playwright: Chromium ${claims.browser.chromium.passed}/13, Firefox ${claims.browser.firefox.passed}/13, WebKit ${claims.browser.webkit.passed}/13; total 39/39\n`
+        + `- Playwright: Chromium ${claims.browser.chromium.passed}/16, Firefox ${claims.browser.firefox.passed}/16, WebKit ${claims.browser.webkit.passed}/16; total 48/48\n`
         + `- Performance: warm-up 30000ms; duration ${performance.measuredDurationMs}ms; samples ${performance.sampleCount}; P95 ${performance.p95LatencyMs}ms; P99 ${performance.p99LatencyMs}ms; long tasks ${performance.longTasksCount}; heap ${performance.heapNetGrowthMb}MiB; actions ${performance.totalActionsCount}\n`
         + `- Evidence negative controls: ${claims.negativeControls.passed}/${claims.negativeControls.total}\n`
         + `- Campaign verifier tests: ${claims.campaignVerifier.passed}/${claims.campaignVerifier.tests}\n`

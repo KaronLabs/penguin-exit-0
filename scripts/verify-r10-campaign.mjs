@@ -155,7 +155,7 @@ export function verifyR10Package({
         invariant(claims.sourceGit?.branch === 'main' && /^[a-f0-9]{40}$/.test(claims.sourceGit?.headSha), 'canonical Git source binding missing');
     }
     invariant(claims.unit?.tests === 29 && claims.unit?.passed === 29 && claims.unit?.failed === 0 && claims.unit?.exitCode === 0, 'unit evidence is not exact 29/29');
-    invariant(claims.browser?.exitCode === 0 && browserCountsAreComplete(claims.browser), 'browser evidence is not exact 39/39');
+    invariant(claims.browser?.exitCode === 0 && browserCountsAreComplete(claims.browser), 'browser evidence is not exact 48/48');
     invariant(claims.negativeControls?.passed === 21 && claims.negativeControls?.total === 21
         && claims.negativeControls?.failed === 0 && claims.negativeControls?.exitCode === 0, 'negative controls are not exact 21/21');
     invariant(Number.isInteger(claims.campaignVerifier?.tests) && claims.campaignVerifier.tests > 0
