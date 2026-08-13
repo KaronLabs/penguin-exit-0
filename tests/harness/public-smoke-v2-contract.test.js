@@ -17,6 +17,7 @@ import {
     validateCase,
     validateManifest,
 } from '../../scripts/public-smoke-v2-lib.mjs';
+import * as smoke from '../../scripts/public-smoke-v2-lib.mjs';
 
 function tempRoot(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'public-smoke-v2-contract-'));
@@ -32,6 +33,7 @@ function visibility(overrides = {}) {
     return {
         hiddenAttribute: false,
         display: 'flex',
+        position: 'fixed',
         visibility: 'visible',
         opacity: 1,
         clientRects: [{ x: 0, y: 0, width: 40, height: 30, top: 0, right: 40, bottom: 30, left: 0 }],
@@ -64,6 +66,7 @@ test('computed visibility requires every primitive rather than a runner supplied
     for (const [name, broken] of [
         ['hidden attribute', { hiddenAttribute: true }],
         ['display', { display: 'none' }],
+        ['position', { position: 'absolute' }],
         ['CSS visibility', { visibility: 'hidden' }],
         ['opacity', { opacity: 0 }],
         ['positive rect', { clientRects: [] }],
@@ -72,6 +75,29 @@ test('computed visibility requires every primitive rather than a runner supplied
         ['center hit test', { hitIsSelfOrDescendant: false }],
     ]) assert.equal(deriveVisibility(visibility(broken)), false, name);
     assert.equal(deriveVisibility({ ...visibility(), visible: true, display: 'none' }), false);
+});
+
+test('the contract library exposes explicit validators for every Task 1 evidence boundary', () => {
+    for (const name of [
+        'validateOperationConfig', 'validateDerivedAuditConfig', 'validateCampaignClaims',
+        'validateCampaignEnvelope', 'validateCampaignReceipt', 'validateOperationReceipt',
+        'validatePngEvidence', 'validateAuditReceipt',
+    ]) assert.equal(typeof smoke[name], 'function', `${name} must be a handwritten exact validator`);
+});
+
+test('schema validators fail closed on missing, unknown, and wrong-type config fields', () => {
+    const config = {
+        schemaVersion: 2,
+        releaseId: '20260813T010203Z-r14-public-smoke-v2',
+        releaseRoot: '/release', acceptedDir: '/release/accepted', failureRoot: '/release/failure',
+        operationReceiptPath: '/release/operation.json', auditReceiptPath: '/release/audit.json', negativeReceiptPath: '/release/negative.json', closureRoot: '/release/closure', closureReceiptPath: '/release/closure.json', actualChromeEvidencePath: '/release/chrome.json', releaseReceiptPath: '/release/final.json', workerStdoutPath: '/release/worker.out', workerStderrPath: '/release/worker.err',
+        campaignDir: '/campaign', campaignSpecPath: '/campaign/spec.md', campaignReceiptPath: '/campaign/receipt.json', campaignRunId: '20260813T010203Z-r10-korean-release', sourceSnapshotDir: '/campaign/source-snapshot', executionSourceDir: '/execution', authorityProjectRoot: '/authority/project', authorityWorkspaceRoot: '/authority', deploymentRecordPath: '/release/deployment.json', immutableUrl: 'https://abcdef12.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: '/node', nodeExeSha256: 'a'.repeat(64), wranglerJsPath: '/wrangler', wranglerJsSha256: 'b'.repeat(64), projectName: 'penguin-exit-0',
+    };
+    assert.doesNotThrow(() => smoke.validateOperationConfig(config));
+    const missing = { ...config }; delete missing.projectName;
+    assert.throws(() => smoke.validateOperationConfig(missing), /config/);
+    assert.throws(() => smoke.validateOperationConfig({ ...config, attacker: true }), /config/);
+    assert.throws(() => smoke.validateOperationConfig({ ...config, schemaVersion: '2' }), /config/);
 });
 
 test('manifest authenticates exactly the regular files below its root', (t) => {
