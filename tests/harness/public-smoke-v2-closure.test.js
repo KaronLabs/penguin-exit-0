@@ -138,6 +138,39 @@ async function makeClosureFixture(t) {
     return { ...fixture, audit, negative, checkpointAuditPaths };
 }
 
+async function makeProducerClosureFixture(t) {
+    const createAcceptedFixture = await fixtureFactoryPromise;
+    const fixture = createAcceptedFixture(t);
+    const audit = smoke.auditAcceptedRun({ configPath: fixture.configPath });
+    writeJson(fixture.config.auditReceiptPath, audit);
+    const producer = await import('../../scripts/run-public-smoke-v2-negative-controls.mjs');
+    let auditCalls = 0;
+    const result = producer.runNegativeControlsFromConfig(fixture.configPath, {
+        auditPristine: () => {
+            const checkpointAudit = structuredClone(audit);
+            checkpointAudit.createdUtc = new Date(Date.parse('2026-08-14T00:02:00.000Z') + auditCalls++).toISOString();
+            return checkpointAudit;
+        },
+        spawnSyncImpl: (_file, args) => {
+            const derived = JSON.parse(fs.readFileSync(args[2], 'utf8'));
+            const expectedInvariant = smoke.NEGATIVE_CONTROL_REGISTRY.find(({ id }) => id === derived.mutationId).expectedInvariant;
+            return {
+                status: 1,
+                signal: null,
+                stdout: Buffer.alloc(0),
+                stderr: Buffer.from(`AUDIT_TARGET_REALPATH=${fs.realpathSync(derived.auditTargetRealpath)}\n${expectedInvariant}\n`),
+            };
+        },
+        now: () => new Date('2026-08-14T00:03:00.000Z'),
+    });
+    const checkpointAuditPaths = result.receipt.checkpoints.map((checkpoint) => path.join(
+        path.dirname(fixture.config.negativeReceiptPath),
+        'negative-checkpoint-audits',
+        `${String(checkpoint.sequence).padStart(3, '0')}-${checkpoint.controlId.toLowerCase()}-${checkpoint.phase.toLowerCase()}.json`,
+    ));
+    return { ...fixture, audit, negative: result.receipt, checkpointAuditPaths };
+}
+
 function ownershipRows(fixture) {
     return [{
         Id: fixture.operationReceipt.cloudflareReads.pre.deploymentId,
@@ -322,6 +355,38 @@ test('closure authenticates all 25 materialized checkpoint audit receipts before
     for (const [name, mutate, invariant] of cases) {
         await t.test(name, async (t) => {
             const fixture = await makeClosureFixture(t);
+            mutate(fixture);
+            const local = localOnlyOverrides(fixture);
+            await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), invariant);
+            assert.equal(local.ownershipCalls.length, 0);
+            assert.equal(local.getCalls.length, 0);
+            assert.equal(fs.existsSync(fixture.config.closureReceiptPath), false);
+        });
+    }
+});
+
+test('actual Task3 on-disk output is directly consumable and companion drift fails before external reads', async (t) => {
+    const closure = await import('../../scripts/close-public-smoke-v2.mjs');
+
+    await t.test('untouched producer output', async (t) => {
+        const fixture = await makeProducerClosureFixture(t);
+        const negativeBytes = fs.readFileSync(fixture.config.negativeReceiptPath);
+        const companionBytes = fixture.checkpointAuditPaths.map((file) => fs.readFileSync(file));
+        const local = localOnlyOverrides(fixture);
+        const receipt = await closure.runClosureFromConfig(fixture.configPath, local.overrides);
+        assert.equal(receipt.status, 'VERIFIED');
+        assert.equal(local.ownershipCalls.length, 1);
+        assert.equal(local.getCalls.length, 5);
+        assert.deepEqual(fs.readFileSync(fixture.config.negativeReceiptPath), negativeBytes);
+        fixture.checkpointAuditPaths.forEach((file, index) => assert.deepEqual(fs.readFileSync(file), companionBytes[index]));
+    });
+
+    for (const [name, mutate, invariant] of [
+        ['removed producer companion', (fixture) => fs.unlinkSync(fixture.checkpointAuditPaths[7]), /negativeReceipt\.checkpointAuditReceipt\.file/],
+        ['tampered producer companion', (fixture) => fs.appendFileSync(fixture.checkpointAuditPaths[8], ' '), /negativeReceipt\.checkpointAuditReceipt\.sha256/],
+    ]) {
+        await t.test(name, async (t) => {
+            const fixture = await makeProducerClosureFixture(t);
             mutate(fixture);
             const local = localOnlyOverrides(fixture);
             await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), invariant);
