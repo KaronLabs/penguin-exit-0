@@ -376,6 +376,125 @@ test('a byte-identical pre-publication collision is never mistaken for the final
     assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), expectedBytes);
 });
 
+test('publication failures remove only the task-owned final and durably preserve replacements', async (t) => {
+    await t.test('temporary unlink failure removes the linked final', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalUnlink = fs.unlinkSync;
+        let injected = false;
+        fs.unlinkSync = function (target) {
+            if (!injected && path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
+                injected = true;
+                const error = new Error('temp-unlink-failure');
+                error.code = 'EIO';
+                throw error;
+            }
+            return originalUnlink.call(this, target);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /temp-unlink-failure/);
+        } finally {
+            fs.unlinkSync = originalUnlink;
+        }
+        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
+    });
+
+    await t.test('same-byte final replacement survives publication parent fsync failure', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalLink = fs.linkSync;
+        const originalFsync = fs.fsyncSync;
+        let replacementBytes;
+        fs.linkSync = function (source, destination) {
+            originalLink.call(this, source, destination);
+            replacementBytes = fs.readFileSync(destination);
+            fs.unlinkSync(destination);
+            fs.writeFileSync(destination, replacementBytes);
+        };
+        fs.fsyncSync = function (descriptor) {
+            const stat = fs.fstatSync(descriptor);
+            if (stat.isDirectory()) throw new Error('publication-parent-fsync-failure');
+            return originalFsync.call(this, descriptor);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /releaseReceiptPath\.identity|publication-parent-fsync-failure/);
+        } finally {
+            fs.linkSync = originalLink;
+            fs.fsyncSync = originalFsync;
+        }
+        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), replacementBytes);
+    });
+
+    await t.test('post-publication input drift removes and fsyncs the task-owned final', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalLink = fs.linkSync;
+        const originalFsync = fs.fsyncSync;
+        let directoryFsyncs = 0;
+        fs.linkSync = function (source, destination) {
+            originalLink.call(this, source, destination);
+            fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
+        };
+        fs.fsyncSync = function (descriptor) {
+            if (fs.fstatSync(descriptor).isDirectory()) directoryFsyncs += 1;
+            return originalFsync.call(this, descriptor);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /finalizer\.inputDrift/);
+        } finally {
+            fs.linkSync = originalLink;
+            fs.fsyncSync = originalFsync;
+        }
+        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
+        assert.equal(directoryFsyncs, 2);
+    });
+
+    await t.test('same-byte replacement during temporary unlink survives post-publication drift', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalLink = fs.linkSync;
+        const originalUnlink = fs.unlinkSync;
+        let replacementBytes;
+        fs.linkSync = function (source, destination) {
+            originalLink.call(this, source, destination);
+            fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
+        };
+        fs.unlinkSync = function (target) {
+            if (path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
+                replacementBytes = fs.readFileSync(fixture.config.releaseReceiptPath);
+                originalUnlink.call(this, fixture.config.releaseReceiptPath);
+                fs.writeFileSync(fixture.config.releaseReceiptPath, replacementBytes);
+            }
+            return originalUnlink.call(this, target);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /finalizer\.inputDrift/);
+        } finally {
+            fs.linkSync = originalLink;
+            fs.unlinkSync = originalUnlink;
+        }
+        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), replacementBytes);
+    });
+
+    await t.test('cleanup parent fsync failure is surfaced after owned final removal', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalLink = fs.linkSync;
+        const originalFsync = fs.fsyncSync;
+        let directoryFsyncs = 0;
+        fs.linkSync = function (source, destination) {
+            originalLink.call(this, source, destination);
+            fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
+        };
+        fs.fsyncSync = function (descriptor) {
+            if (fs.fstatSync(descriptor).isDirectory() && ++directoryFsyncs === 2) throw new Error('cleanup-parent-fsync-failure');
+            return originalFsync.call(this, descriptor);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /cleanup-parent-fsync-failure/);
+        } finally {
+            fs.linkSync = originalLink;
+            fs.fsyncSync = originalFsync;
+        }
+        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
+    });
+});
+
 test('argv is exact and the real CLI emits one strict success line with empty stderr', async (t) => {
     const fixture = await makeFinalizerFixture(t);
     await assert.rejects(finalizer.runFinalizerFromArgv([]), /finalizer\.argv/);

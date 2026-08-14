@@ -145,6 +145,33 @@ function fsyncDirectory(directory) {
     }
 }
 
+function regularIdentity(file) {
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink() || !stat.isFile()) fail('releaseReceiptPath.identity');
+    return { dev: stat.dev, ino: stat.ino, size: stat.size };
+}
+
+function sameIdentity(left, right) {
+    return left.dev === right.dev && left.ino === right.ino;
+}
+
+function cleanupOwnedFinal(file, ownership, bytes) {
+    let current;
+    let actual;
+    try {
+        current = regularIdentity(file);
+        actual = fs.readFileSync(file);
+    } catch {
+        return false;
+    }
+    const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
+    const actualSha = crypto.createHash('sha256').update(actual).digest('hex');
+    if (!sameIdentity(current, ownership) || current.size !== bytes.length || actual.length !== bytes.length || actualSha !== expectedSha || !actual.equals(bytes)) return false;
+    fs.unlinkSync(file);
+    fsyncDirectory(path.dirname(file));
+    return true;
+}
+
 function publishExclusive(file, receipt) {
     const parent = path.dirname(file);
     fs.mkdirSync(parent, { recursive: true });
@@ -158,17 +185,24 @@ function publishExclusive(file, receipt) {
     } finally {
         if (descriptor !== undefined) fs.closeSync(descriptor);
     }
-    let linked = false;
+    const temporaryIdentity = regularIdentity(temporary);
+    let ownership;
     try {
         fs.linkSync(temporary, file);
-        linked = true;
+        const finalIdentity = regularIdentity(file);
+        if (!sameIdentity(finalIdentity, temporaryIdentity)) fail('releaseReceiptPath.identity');
+        ownership = finalIdentity;
         fsyncDirectory(parent);
+        fs.unlinkSync(temporary);
     } catch (error) {
-        if (linked && pathExists(file) && sha256File(file) === crypto.createHash('sha256').update(bytes).digest('hex')) fs.unlinkSync(file);
+        if (ownership) cleanupOwnedFinal(file, ownership, bytes);
         throw error;
     } finally {
-        if (pathExists(temporary)) fs.unlinkSync(temporary);
+        if (pathExists(temporary)) {
+            try { fs.unlinkSync(temporary); } catch {}
+        }
     }
+    return { ownership, bytes };
 }
 
 function sameExceptCreated(actual, expected, invariant) {
@@ -251,9 +285,9 @@ export async function runFinalizerFromConfig(configPath, dependencies = {}) {
     validateFinalReceipt(receipt, { releaseId: config.releaseId, deploymentId: authority.deployment.deploymentId, immutableUrl: config.immutableUrl, aliasUrl: config.aliasUrl });
     dependencies.beforePublication?.();
     requireSameSnapshot(before, config);
-    publishExclusive(config.releaseReceiptPath, receipt);
+    const publication = publishExclusive(config.releaseReceiptPath, receipt);
     try { requireSameSnapshot(before, config); }
-    catch (error) { if (pathExists(config.releaseReceiptPath) && sha256File(config.releaseReceiptPath) === crypto.createHash('sha256').update(`${JSON.stringify(receipt)}\n`).digest('hex')) fs.unlinkSync(config.releaseReceiptPath); throw error; }
+    catch (error) { cleanupOwnedFinal(config.releaseReceiptPath, publication.ownership, publication.bytes); throw error; }
     return receipt;
 }
 
