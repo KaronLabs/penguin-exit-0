@@ -260,8 +260,9 @@ function parseAuditorResult(result, targetRealpath, expectedInvariant) {
     if (result.status === 0) fail('negative.auditor.exitCode');
     const stdout = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout ?? '');
     const stderr = Buffer.isBuffer(result.stderr) ? result.stderr : Buffer.from(result.stderr ?? '');
-    if (SUCCESS_GATE.test(stdout.toString('utf8'))) fail('negative.auditor.successGate');
-    const lines = stderr.toString('utf8').trimEnd().split(/\r?\n/);
+    const stdoutText = stdout.toString('utf8'), stderrText = stderr.toString('utf8');
+    if (SUCCESS_GATE.test(stdoutText) || SUCCESS_GATE.test(stderrText)) fail('negative.auditor.successGate');
+    const lines = stderrText.trimEnd().split(/\r?\n/);
     const expectedTargetLine = `AUDIT_TARGET_REALPATH=${targetRealpath}`;
     if (lines[0] !== expectedTargetLine) fail('negative.auditor.targetRealpath');
     const observedInvariant = lines[1]?.split(':', 1)[0];

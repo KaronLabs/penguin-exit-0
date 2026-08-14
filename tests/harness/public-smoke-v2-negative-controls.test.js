@@ -521,6 +521,31 @@ test('driver rejects a hostile child-created audit receipt before accepting its 
     assert.equal(fs.existsSync(config.negativeReceiptPath), false);
 });
 
+test('driver rejects a success gate smuggled after the exact target and invariant on auditor stderr', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-stderr-gate-');
+    let auditCalls = 0;
+    let spawnCount = 0;
+    let successLines;
+    assert.throws(() => {
+        successLines = driver.runNegativeControlsFromConfig(configPath, {
+            auditPristine: () => auditReceipt(acceptedDir, new Date(Date.parse('2026-08-14T00:00:00.000Z') + auditCalls++).toISOString()),
+            spawnSyncImpl: (_file, args) => {
+                spawnCount += 1;
+                const { result } = expectedAuditorRejection(args);
+                const exactTargetAndInvariant = result.stderr.toString('utf8').trimEnd();
+                return {
+                    ...result,
+                    stderr: Buffer.from(`${exactTargetAndInvariant}\nPUBLIC_SMOKE_V2_GATE=6/6 manifest_sha256=${'0'.repeat(64)} release=${RELEASE_ID}\n`),
+                };
+            },
+        }).lines;
+    }, /negative\.auditor\.successGate/);
+    assert.equal(spawnCount, 1);
+    assert.equal(successLines, undefined);
+    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
+});
+
 test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spawn, immutable authority, and exclusive receipt', async (t) => {
     const driver = await loadDriver();
     assert.equal(typeof driver.runNegativeControlsFromConfig, 'function', 'missing runNegativeControlsFromConfig production interface');
