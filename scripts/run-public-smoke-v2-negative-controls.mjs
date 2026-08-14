@@ -203,12 +203,18 @@ function fsyncDirectory(directory, fsImpl, platform) {
     finally { fsImpl.closeSync(descriptor); }
 }
 
+function pathEntryExists(file) {
+    try { fs.lstatSync(file); return true; }
+    catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
+}
+
 export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, platform = process.platform } = {}) {
     if (fsImpl.existsSync(file)) fail('negativeReceiptPath.exists');
     const directory = path.dirname(file);
     fsImpl.mkdirSync(directory, { recursive: true });
     const temporary = path.join(directory, `.${path.basename(file)}.tmp-${crypto.randomBytes(16).toString('hex')}`);
     let linked = false;
+    let temporaryIdentity;
     try {
         const descriptor = fsImpl.openSync(temporary, 'wx');
         try {
@@ -217,17 +223,27 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
         } finally {
             fsImpl.closeSync(descriptor);
         }
+        const temporaryStat = fsImpl.lstatSync(temporary);
+        temporaryIdentity = { dev: temporaryStat.dev, ino: temporaryStat.ino };
         fsImpl.linkSync(temporary, file);
         linked = true;
         fsyncDirectory(directory, fsImpl, platform);
         fsImpl.unlinkSync(temporary);
         fsyncDirectory(directory, fsImpl, platform);
     } catch (error) {
-        if (linked && fsImpl.existsSync(file) && fsImpl.existsSync(temporary)) {
-            const finalStat = fsImpl.lstatSync(file), temporaryStat = fsImpl.lstatSync(temporary);
-            if (finalStat.isFile() && !finalStat.isSymbolicLink() && finalStat.dev === temporaryStat.dev && finalStat.ino === temporaryStat.ino) fsImpl.unlinkSync(file);
+        let cleanupChangedDirectory = false;
+        if (linked && fsImpl.existsSync(file)) {
+            const finalStat = fsImpl.lstatSync(file);
+            if (finalStat.isFile() && !finalStat.isSymbolicLink() && finalStat.dev === temporaryIdentity.dev && finalStat.ino === temporaryIdentity.ino) {
+                fsImpl.unlinkSync(file);
+                cleanupChangedDirectory = true;
+            }
         }
-        if (fsImpl.existsSync(temporary)) fsImpl.unlinkSync(temporary);
+        if (fsImpl.existsSync(temporary)) {
+            fsImpl.unlinkSync(temporary);
+            cleanupChangedDirectory = true;
+        }
+        if (linked || cleanupChangedDirectory) fsyncDirectory(directory, fsImpl, platform);
         throw error;
     }
 }
@@ -308,6 +324,7 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
             auditReceiptPath: path.join(mutationRootRealpath, 'audit-receipt.json'),
         };
         writeJson(derivedConfigPath, derivedConfig);
+        if (pathEntryExists(derivedConfig.auditReceiptPath)) fail('negative.auditor.auditReceiptPath.preexisting');
         const auditorArgv = [config.nodeExePath, auditorPath, '--config', derivedConfigPath];
         const result = spawnSyncImpl(auditorArgv[0], auditorArgv.slice(1), {
             cwd: config.authorityProjectRoot,
@@ -317,6 +334,7 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
             maxBuffer: 64 * 1024 * 1024,
             encoding: null,
         });
+        if (pathEntryExists(derivedConfig.auditReceiptPath)) fail('negative.auditor.auditReceiptPath.published');
         const captured = parseAuditorResult(result, targetRealpath, expectedInvariant);
         fs.writeFileSync(path.join(mutationRootRealpath, 'auditor.stdout.bin'), captured.stdout, { flag: 'wx' });
         fs.writeFileSync(path.join(mutationRootRealpath, 'auditor.stderr.bin'), captured.stderr, { flag: 'wx' });

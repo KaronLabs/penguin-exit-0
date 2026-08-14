@@ -147,7 +147,8 @@ function validNegativeReceipt(t) {
     const root = tempRoot(t, 'r14-task3-negative-receipt-');
     const pristine = path.join(root, 'pristine');
     fs.mkdirSync(pristine);
-    const checkpoints = [{ sequence: 1, controlId: 'BASELINE', phase: 'BASELINE', treeDigest: '8'.repeat(64), auditReceiptSha256: '9'.repeat(64), auditStatus: 'VERIFIED' }];
+    const checkpointSha = (index) => sha(`fresh-audit-${index}`);
+    const checkpoints = [{ sequence: 1, controlId: 'BASELINE', phase: 'BASELINE', treeDigest: '8'.repeat(64), auditReceiptSha256: checkpointSha(0), auditStatus: 'VERIFIED' }];
     const controls = REGISTRY.map(([id, expectedInvariant], index) => {
         const mutationRoot = path.join(root, `mutation-${index + 1}`);
         const target = path.join(mutationRoot, 'accepted');
@@ -155,8 +156,8 @@ function validNegativeReceipt(t) {
         const configPath = path.join(mutationRoot, 'audit-config.json');
         fs.writeFileSync(configPath, '{}\n');
         checkpoints.push(
-            { sequence: index * 2 + 2, controlId: id, phase: 'BEFORE', treeDigest: '8'.repeat(64), auditReceiptSha256: '9'.repeat(64), auditStatus: 'VERIFIED' },
-            { sequence: index * 2 + 3, controlId: id, phase: 'AFTER', treeDigest: '8'.repeat(64), auditReceiptSha256: '9'.repeat(64), auditStatus: 'VERIFIED' },
+            { sequence: index * 2 + 2, controlId: id, phase: 'BEFORE', treeDigest: '8'.repeat(64), auditReceiptSha256: checkpointSha(index * 2 + 1), auditStatus: 'VERIFIED' },
+            { sequence: index * 2 + 3, controlId: id, phase: 'AFTER', treeDigest: '8'.repeat(64), auditReceiptSha256: checkpointSha(index * 2 + 2), auditStatus: 'VERIFIED' },
         );
         return {
             id, expectedInvariant, derivedConfigSha256: 'a'.repeat(64), mutationRootRealpath: fs.realpathSync(mutationRoot),
@@ -170,7 +171,8 @@ function validNegativeReceipt(t) {
         receipt: {
             schemaVersion: 1, releaseId: RELEASE_ID, status: 'VERIFIED', createdUtc: '2026-08-14T00:00:00.000Z',
             configSha256: 'c'.repeat(64), operationReceiptSha256: 'd'.repeat(64), pristineManifestSha256: 'e'.repeat(64),
-            pristineTreeDigest: '8'.repeat(64), initialPristineAuditReceiptSha256: '9'.repeat(64), finalPristineAuditReceiptSha256: '9'.repeat(64),
+            pristineTreeDigest: '8'.repeat(64), initialPristineAuditReceiptSha256: checkpoints[0].auditReceiptSha256,
+            finalPristineAuditReceiptSha256: checkpoints.at(-1).auditReceiptSha256,
             checkpoints, controls,
         },
     };
@@ -192,6 +194,80 @@ async function loadCompleteFixtureFactory() {
         .replaceAll("'../../scripts/public-smoke-v2-lib.mjs'", JSON.stringify(smokeLibraryUrl));
     const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\nexport { createAcceptedFixture };\n`).toString('base64')}`;
     return (await import(moduleUrl)).createAcceptedFixture;
+}
+
+function makeDriverFixture(t, prefix) {
+    const root = tempRoot(t, prefix);
+    const workspace = path.join(root, 'workspace');
+    const project = path.join(workspace, 'project');
+    const releaseRoot = path.join(workspace, 'review', RELEASE_ID);
+    const acceptedDir = makeMutationFixture(releaseRoot);
+    const campaignDir = path.join(project, 'evidence', 'campaigns', '20260813T000000Z-r10-korean-release');
+    const sourceSnapshotDir = path.join(campaignDir, 'source');
+    const executionSourceDir = path.join(project, '.campaign-operations', '20260813T000000Z-r10-korean-release', 'source');
+    fs.mkdirSync(sourceSnapshotDir, { recursive: true });
+    fs.mkdirSync(executionSourceDir, { recursive: true });
+    const tool = path.join(workspace, 'wrangler.js');
+    fs.writeFileSync(tool, 'fixture');
+    const nodeExePath = fs.realpathSync(process.execPath);
+    const output = (name) => path.join(releaseRoot, name);
+    const config = {
+        schemaVersion: 2, releaseId: RELEASE_ID, releaseRoot, acceptedDir, failureRoot: output('failures'),
+        operationReceiptPath: output('operation-receipt.json'), auditReceiptPath: output('audit.json'), negativeReceiptPath: output('negative.json'),
+        closureRoot: output('closure'), closureReceiptPath: output('closure/receipt.json'), actualChromeEvidencePath: output('chrome.json'), releaseReceiptPath: output('release.json'),
+        workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'), campaignDir,
+        campaignSpecPath: path.join(workspace, 'spec.md'), campaignReceiptPath: path.join(workspace, 'campaign.json'), campaignRunId: '20260813T000000Z-r10-korean-release',
+        sourceSnapshotDir, executionSourceDir, authorityProjectRoot: project, authorityWorkspaceRoot: workspace,
+        deploymentRecordPath: output('deployment.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/',
+        nodeExePath, nodeExeSha256: smoke.sha256File(nodeExePath), wranglerJsPath: tool, wranglerJsSha256: smoke.sha256File(tool), projectName: 'penguin-exit-0',
+    };
+    const configPath = output('config.json');
+    writeJson(configPath, config);
+    fs.writeFileSync(config.operationReceiptPath, 'frozen operation receipt\n');
+    return { acceptedDir, config, configPath, nodeExePath, project };
+}
+
+function expectedAuditorRejection(args) {
+    const derived = JSON.parse(fs.readFileSync(args[2], 'utf8'));
+    const expectedInvariant = REGISTRY.find(([id]) => id === derived.mutationId)[1];
+    const target = fs.realpathSync(derived.auditTargetRealpath);
+    return {
+        derived,
+        target,
+        result: { status: 1, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.from(`AUDIT_TARGET_REALPATH=${target}\n${expectedInvariant}\n`) },
+    };
+}
+
+function secondDirectoryFsyncFailure(finalPath, replaceWithForeign) {
+    const calls = [];
+    const owned = { dev: 1, ino: 100 };
+    const foreign = { dev: 1, ino: 200 };
+    const entries = new Map();
+    let directoryFsyncs = 0;
+    const stat = (identity) => ({ ...identity, isFile: () => true, isSymbolicLink: () => false });
+    const fsImpl = {
+        existsSync: (file) => entries.has(file),
+        mkdirSync: () => {},
+        openSync: (file, flags) => {
+            if (flags === 'wx') { entries.set(file, owned); return `temp:${file}`; }
+            return 'directory';
+        },
+        writeFileSync: () => {},
+        fsyncSync: (descriptor) => {
+            if (descriptor !== 'directory') { calls.push('fsync-temp'); return; }
+            directoryFsyncs += 1;
+            calls.push(`fsync-directory-${directoryFsyncs}`);
+            if (directoryFsyncs === 2) {
+                if (replaceWithForeign) entries.set(finalPath, foreign);
+                throw new Error('second parent fsync');
+            }
+        },
+        closeSync: () => {},
+        linkSync: (temporary, file) => { entries.set(file, entries.get(temporary)); calls.push('link'); },
+        lstatSync: (file) => stat(entries.get(file)),
+        unlinkSync: (file) => { calls.push(file === finalPath ? 'unlink-final' : 'unlink-temp'); entries.delete(file); },
+    };
+    return { calls, entries, foreign, fsImpl };
 }
 
 test('library exposes the exact ordered negative-control registry and recursive receipt validator', () => {
@@ -242,6 +318,18 @@ test('negative receipt binds distinct initial and final audits to the first and 
     receipt.finalPristineAuditReceiptSha256 = receipt.checkpoints.at(-1).auditReceiptSha256;
     assert.notEqual(receipt.initialPristineAuditReceiptSha256, receipt.finalPristineAuditReceiptSha256);
     assert.equal(smoke.validateNegativeReceipt(receipt, { pristineAcceptedRealpath: fs.realpathSync(pristine) }), receipt);
+});
+
+test('negative receipt validator rejects 25 replayed checkpoint audit hashes', (t) => {
+    const { receipt, pristine } = validNegativeReceipt(t);
+    const replayedSha256 = receipt.checkpoints[0].auditReceiptSha256;
+    receipt.checkpoints.forEach((checkpoint) => { checkpoint.auditReceiptSha256 = replayedSha256; });
+    receipt.initialPristineAuditReceiptSha256 = replayedSha256;
+    receipt.finalPristineAuditReceiptSha256 = replayedSha256;
+    assert.throws(
+        () => smoke.validateNegativeReceipt(receipt, { pristineAcceptedRealpath: fs.realpathSync(pristine) }),
+        /negativeReceipt\.checkpoints\.unique/,
+    );
 });
 
 test('Task2 signature keeps the NC09 roast invariant without weakening fairPing provenance', () => {
@@ -368,6 +456,7 @@ test('negative receipt publication durably orders link, parent fsync, temp unlin
         fsyncSync: (descriptor) => { calls.push(`fsync:${descriptor}`); },
         closeSync: () => {},
         linkSync: () => { calls.push('link'); },
+        lstatSync: () => ({ dev: 1, ino: 1, isFile: () => true, isSymbolicLink: () => false }),
         unlinkSync: () => { calls.push('unlink-temp'); },
     };
     driver.publishNegativeReceiptExclusive(path.resolve('negative.json'), Buffer.from('{}\n'), { fsImpl, platform: 'linux' });
@@ -380,36 +469,62 @@ test('negative receipt publication durably orders link, parent fsync, temp unlin
     assert.throws(() => driver.publishNegativeReceiptExclusive(path.resolve('negative-linux.json'), Buffer.from('{}\n'), { fsImpl: windowsFs, platform: 'linux' }), /directory fsync unsupported/);
 });
 
+test('second parent fsync failure removes only the task-owned final and fsyncs the cleanup', async () => {
+    const driver = await loadDriver();
+    const finalPath = path.resolve('negative-owned.json');
+    const { calls, entries, fsImpl } = secondDirectoryFsyncFailure(finalPath, false);
+    assert.throws(() => driver.publishNegativeReceiptExclusive(finalPath, Buffer.from('{}\n'), { fsImpl, platform: 'linux' }), /second parent fsync/);
+    assert.deepEqual(calls, ['fsync-temp', 'link', 'fsync-directory-1', 'unlink-temp', 'fsync-directory-2', 'unlink-final', 'fsync-directory-3']);
+    assert.equal(entries.has(finalPath), false);
+});
+
+test('second parent fsync failure preserves a foreign replacement and still fsyncs cleanup', async () => {
+    const driver = await loadDriver();
+    const finalPath = path.resolve('negative-foreign.json');
+    const { calls, entries, foreign, fsImpl } = secondDirectoryFsyncFailure(finalPath, true);
+    assert.throws(() => driver.publishNegativeReceiptExclusive(finalPath, Buffer.from('{}\n'), { fsImpl, platform: 'linux' }), /second parent fsync/);
+    assert.deepEqual(calls, ['fsync-temp', 'link', 'fsync-directory-1', 'unlink-temp', 'fsync-directory-2', 'fsync-directory-3']);
+    assert.deepEqual(entries.get(finalPath), foreign);
+});
+
+test('driver rejects 25 replayed audit objects without success lines or a final negative receipt', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-replayed-audits-');
+    const replayedAudit = auditReceipt(acceptedDir);
+    let successLines;
+    assert.throws(() => {
+        successLines = driver.runNegativeControlsFromConfig(configPath, {
+            auditPristine: () => replayedAudit,
+            spawnSyncImpl: (_file, args) => expectedAuditorRejection(args).result,
+        }).lines;
+    }, /negativeReceipt\.checkpoints\.unique/);
+    assert.equal(successLines, undefined);
+    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
+});
+
+test('driver rejects a hostile child-created audit receipt before accepting its expected rejection', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-hostile-child-');
+    let auditCalls = 0;
+    let successLines;
+    assert.throws(() => {
+        successLines = driver.runNegativeControlsFromConfig(configPath, {
+            auditPristine: () => auditReceipt(acceptedDir, new Date(Date.parse('2026-08-14T00:00:00.000Z') + auditCalls++).toISOString()),
+            spawnSyncImpl: (_file, args) => {
+                const rejection = expectedAuditorRejection(args);
+                writeJson(rejection.derived.auditReceiptPath, { attacker: true });
+                return rejection.result;
+            },
+        }).lines;
+    }, /negative\.auditor\.auditReceiptPath/);
+    assert.equal(successLines, undefined);
+    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
+});
+
 test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spawn, immutable authority, and exclusive receipt', async (t) => {
     const driver = await loadDriver();
     assert.equal(typeof driver.runNegativeControlsFromConfig, 'function', 'missing runNegativeControlsFromConfig production interface');
-    const root = tempRoot(t, 'r14-task3-driver-');
-    const workspace = path.join(root, 'workspace');
-    const project = path.join(workspace, 'project');
-    const releaseRoot = path.join(workspace, 'review', RELEASE_ID);
-    const acceptedDir = makeMutationFixture(releaseRoot);
-    const campaignDir = path.join(project, 'evidence', 'campaigns', '20260813T000000Z-r10-korean-release');
-    const sourceSnapshotDir = path.join(campaignDir, 'source');
-    const executionSourceDir = path.join(project, '.campaign-operations', '20260813T000000Z-r10-korean-release', 'source');
-    fs.mkdirSync(sourceSnapshotDir, { recursive: true });
-    fs.mkdirSync(executionSourceDir, { recursive: true });
-    const tool = path.join(workspace, 'wrangler.js');
-    fs.writeFileSync(tool, 'fixture');
-    const nodeExePath = fs.realpathSync(process.execPath);
-    const output = (name) => path.join(releaseRoot, name);
-    const config = {
-        schemaVersion: 2, releaseId: RELEASE_ID, releaseRoot, acceptedDir, failureRoot: output('failures'),
-        operationReceiptPath: output('operation-receipt.json'), auditReceiptPath: output('audit.json'), negativeReceiptPath: output('negative.json'),
-        closureRoot: output('closure'), closureReceiptPath: output('closure/receipt.json'), actualChromeEvidencePath: output('chrome.json'), releaseReceiptPath: output('release.json'),
-        workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'), campaignDir,
-        campaignSpecPath: path.join(workspace, 'spec.md'), campaignReceiptPath: path.join(workspace, 'campaign.json'), campaignRunId: '20260813T000000Z-r10-korean-release',
-        sourceSnapshotDir, executionSourceDir, authorityProjectRoot: project, authorityWorkspaceRoot: workspace,
-        deploymentRecordPath: output('deployment.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/',
-        nodeExePath, nodeExeSha256: smoke.sha256File(nodeExePath), wranglerJsPath: tool, wranglerJsSha256: smoke.sha256File(tool), projectName: 'penguin-exit-0',
-    };
-    const configPath = output('config.json');
-    writeJson(configPath, config);
-    fs.writeFileSync(config.operationReceiptPath, 'frozen operation receipt\n');
+    const { acceptedDir, config, configPath, nodeExePath, project } = makeDriverFixture(t, 'r14-task3-driver-');
     const configBefore = smoke.sha256File(configPath);
     const operationBefore = smoke.sha256File(config.operationReceiptPath);
     let auditCalls = 0;
@@ -421,11 +536,9 @@ test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spaw
             return auditReceipt(acceptedDir, createdUtc);
         },
         spawnSyncImpl: (file, args, options) => {
-            const derived = JSON.parse(fs.readFileSync(args[2], 'utf8'));
-            const expectedInvariant = REGISTRY.find(([id]) => id === derived.mutationId)[1];
-            const target = fs.realpathSync(derived.auditTargetRealpath);
+            const { target, result: rejection } = expectedAuditorRejection(args);
             spawns.push({ file, args, options, target });
-            return { status: 1, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.from(`AUDIT_TARGET_REALPATH=${target}\n${expectedInvariant}\n`) };
+            return rejection;
         },
         now: () => new Date('2026-08-14T00:00:00.000Z'),
     });

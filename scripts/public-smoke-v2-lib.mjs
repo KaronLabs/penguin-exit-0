@@ -1230,6 +1230,7 @@ export function validateNegativeReceipt(receipt, expected = {}) {
         sha(checkpoint.auditReceiptSha256, 'negativeReceipt.checkpoint.auditReceiptSha256');
         if (checkpoint.auditStatus !== 'VERIFIED') fail('negativeReceipt.checkpoint.auditStatus');
     });
+    if (new Set(receipt.checkpoints.map(({ auditReceiptSha256 }) => auditReceiptSha256)).size !== 25 || receipt.initialPristineAuditReceiptSha256 === receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.checkpoints.unique');
     if (receipt.checkpoints[0].auditReceiptSha256 !== receipt.initialPristineAuditReceiptSha256 || receipt.checkpoints.at(-1).auditReceiptSha256 !== receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.checkpoints.auditBinding');
 
     if (!Array.isArray(receipt.controls) || receipt.controls.length !== NEGATIVE_CONTROL_REGISTRY.length) fail('negativeReceipt.controls.cardinality');
@@ -1260,9 +1261,13 @@ export function validateNegativeReceipt(receipt, expected = {}) {
 
     if (expected.checkpointAuditReceipts !== undefined) {
         if (!Array.isArray(expected.checkpointAuditReceipts) || expected.checkpointAuditReceipts.length !== 25) fail('negativeReceipt.checkpointAuditReceipts');
-        expected.checkpointAuditReceipts.forEach((audit, index) => {
+        const auditHashes = expected.checkpointAuditReceipts.map((audit) => {
             validateAuditReceipt(audit);
-            const auditSha = sha256Bytes(Buffer.from(`${JSON.stringify(audit)}\n`));
+            return sha256Bytes(Buffer.from(`${JSON.stringify(audit)}\n`));
+        });
+        if (new Set(auditHashes).size !== 25) fail('negativeReceipt.checkpointAuditReceipts.unique');
+        expected.checkpointAuditReceipts.forEach((audit, index) => {
+            const auditSha = auditHashes[index];
             if (auditSha !== receipt.checkpoints[index].auditReceiptSha256 || audit.status !== receipt.checkpoints[index].auditStatus) fail('negativeReceipt.checkpoint.auditReceipt');
             if (expected.pristineAcceptedRealpath && audit.auditedTargetRealpath !== fs.realpathSync(expected.pristineAcceptedRealpath)) fail('negativeReceipt.checkpoint.auditTarget');
         });
