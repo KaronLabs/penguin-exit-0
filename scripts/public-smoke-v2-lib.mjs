@@ -1332,6 +1332,79 @@ export function validateClosureReceipt(receipt, expected = {}) {
     return receipt;
 }
 
+const ACTUAL_CHROME_VISIBLE_KEYS = ['chromeZoomMenu', 'heading', 'signatureRoast', 'quoteCounter', 'npc', 'ending'];
+const FINAL_RECEIPT_KEYS = ['schemaVersion', 'releaseId', 'status', 'createdUtc', 'finalizerPath', 'finalizerSha256', 'configSha256', 'campaignVerifierProofSha256', 'operationReceiptSha256', 'auditReceiptSha256', 'negativeReceiptSha256', 'closureReceiptSha256', 'actualChromeEvidencePath', 'actualChromeEvidenceSha256', 'acceptedManifestSha256', 'eventsSha256', 'finalEventSha256', 'deploymentId', 'immutableUrl', 'aliasUrl', 'fileGates', 'smokeGate', 'negativeGate', 'screenshotBindings', 'actualChrome', 'productFiles'];
+
+export function validateActualChromeEvidence(value, expected = {}) {
+    exactKeys(value, ['schemaVersion', 'releaseId', 'createdUtc', 'captureAuthority', 'browser', 'deployment', 'zoom200', 'restore100'], 'actualChrome');
+    if (value.schemaVersion !== 1 || !RELEASE_ID.test(string(value.releaseId, 'actualChrome.releaseId'))) fail('actualChrome.schemaVersion');
+    utc(value.createdUtc, 'actualChrome.createdUtc');
+    exactKeys(value.captureAuthority, ['kind', 'sessionId', 'recordPath', 'recordSha256'], 'actualChrome.captureAuthority');
+    if (value.captureAuthority.kind !== 'computer-use') fail('actualChrome.captureAuthority.kind');
+    string(value.captureAuthority.sessionId, 'actualChrome.captureAuthority.sessionId');
+    canonicalPath(value.captureAuthority.recordPath, 'actualChrome.captureAuthority.recordPath');
+    sha(value.captureAuthority.recordSha256, 'actualChrome.captureAuthority.recordSha256');
+    exactKeys(value.browser, ['name', 'version', 'executablePath'], 'actualChrome.browser');
+    if (value.browser.name !== 'Google Chrome') fail('actualChrome.browser.name');
+    string(value.browser.version, 'actualChrome.browser.version');
+    canonicalPath(value.browser.executablePath, 'actualChrome.browser.executablePath');
+    if (path.basename(value.browser.executablePath).toLowerCase() !== 'chrome.exe') fail('actualChrome.browser.executablePath');
+    exactKeys(value.deployment, ['deploymentId', 'immutableUrl', 'aliasUrl'], 'actualChrome.deployment');
+    string(value.deployment.deploymentId, 'actualChrome.deployment.deploymentId');
+    validateUrl(value.deployment.immutableUrl, 'actualChrome.deployment.immutableUrl');
+    validateUrl(value.deployment.aliasUrl, 'actualChrome.deployment.aliasUrl');
+    for (const [key, zoom, suffix] of [['zoom200', 200, 'actual-chrome-200.png'], ['restore100', 100, 'actual-chrome-restored-100.png']]) {
+        const row = value[key];
+        exactKeys(row, ['observedUtc', 'zoomPercent', 'url', 'screenshotPath', 'screenshotSha256', 'visibleChecks'], `actualChrome.${key}`);
+        utc(row.observedUtc, `actualChrome.${key}.observedUtc`);
+        if (row.zoomPercent !== zoom) fail(`actualChrome.${key}.zoomPercent`);
+        validateUrl(row.url, `actualChrome.${key}.url`);
+        canonicalPath(row.screenshotPath, `actualChrome.${key}.screenshotPath`);
+        if (!row.screenshotPath.endsWith(suffix)) fail(`actualChrome.${key}.screenshotPath`);
+        sha(row.screenshotSha256, `actualChrome.${key}.screenshotSha256`);
+        exactKeys(row.visibleChecks, ACTUAL_CHROME_VISIBLE_KEYS, `actualChrome.${key}.visibleChecks`);
+        if (ACTUAL_CHROME_VISIBLE_KEYS.some((name) => row.visibleChecks[name] !== true)) fail(`actualChrome.${key}.visibleChecks`);
+    }
+    if (value.zoom200.url !== value.deployment.aliasUrl) fail('actualChrome.zoom200.url');
+    if (value.restore100.url !== value.deployment.aliasUrl) fail('actualChrome.restore100.url');
+    if (Date.parse(value.restore100.observedUtc) <= Date.parse(value.zoom200.observedUtc)) fail('actualChrome.restore100.order');
+    if (expected.closureCreatedUtc !== undefined && Date.parse(value.zoom200.observedUtc) <= Date.parse(expected.closureCreatedUtc)) fail('actualChrome.zoom200.order');
+    for (const [name, actual] of [['releaseId', value.releaseId], ['deploymentId', value.deployment.deploymentId], ['immutableUrl', value.deployment.immutableUrl], ['aliasUrl', value.deployment.aliasUrl]]) {
+        if (expected[name] !== undefined && actual !== expected[name]) fail('actualChrome.deployment');
+    }
+    return value;
+}
+
+export function validateFinalReceipt(receipt, expected = {}) {
+    exactKeys(receipt, FINAL_RECEIPT_KEYS, 'finalReceipt');
+    if (receipt.schemaVersion !== 1 || receipt.status !== 'COMPLETE') fail('finalReceipt.status');
+    if (!RELEASE_ID.test(string(receipt.releaseId, 'finalReceipt.releaseId'))) fail('finalReceipt.releaseId');
+    utc(receipt.createdUtc, 'finalReceipt.createdUtc');
+    canonicalPath(receipt.finalizerPath, 'finalReceipt.finalizerPath');
+    canonicalPath(receipt.actualChromeEvidencePath, 'finalReceipt.actualChromeEvidencePath');
+    for (const key of ['finalizerSha256', 'configSha256', 'campaignVerifierProofSha256', 'operationReceiptSha256', 'auditReceiptSha256', 'negativeReceiptSha256', 'closureReceiptSha256', 'actualChromeEvidenceSha256', 'acceptedManifestSha256', 'eventsSha256', 'finalEventSha256']) sha(receipt[key], `finalReceipt.${key}`);
+    string(receipt.deploymentId, 'finalReceipt.deploymentId');
+    validateUrl(receipt.immutableUrl, 'finalReceipt.immutableUrl');
+    validateUrl(receipt.aliasUrl, 'finalReceipt.aliasUrl');
+    exactKeys(receipt.fileGates, ['initial', 'operationFinalAlias', 'closureFinalAlias'], 'finalReceipt.fileGates');
+    if (receipt.fileGates.initial !== '10/10' || receipt.fileGates.operationFinalAlias !== '5/5' || receipt.fileGates.closureFinalAlias !== '5/5') fail('finalReceipt.fileGates');
+    if (receipt.smokeGate !== '6/6') fail('finalReceipt.smokeGate');
+    if (receipt.negativeGate !== '12/12') fail('finalReceipt.negativeGate');
+    if (!Array.isArray(receipt.screenshotBindings) || receipt.screenshotBindings.length !== 18) fail('finalReceipt.screenshotBindings');
+    receipt.screenshotBindings.forEach((binding) => {
+        exactKeys(binding, ['case', 'stage', 'path', 'pngSha256', 'oracleSha256', 'captureStartUtc', 'captureEndUtc'], 'finalReceipt.screenshotBinding');
+        if (!expectedCaseLabels().includes(binding.case) || !STAGES.includes(binding.stage)) fail('finalReceipt.screenshotBinding.tuple');
+        relativeFile(binding.path, 'finalReceipt.screenshotBinding.path'); sha(binding.pngSha256, 'finalReceipt.screenshotBinding.pngSha256'); sha(binding.oracleSha256, 'finalReceipt.screenshotBinding.oracleSha256'); utc(binding.captureStartUtc, 'finalReceipt.screenshotBinding.captureStartUtc'); utc(binding.captureEndUtc, 'finalReceipt.screenshotBinding.captureEndUtc');
+        if (Date.parse(binding.captureEndUtc) <= Date.parse(binding.captureStartUtc)) fail('finalReceipt.screenshotBinding.timestamps');
+    });
+    exactKeys(receipt.actualChrome, ['browserName', 'browserVersion', 'deploymentId', 'url', 'observed200Utc', 'restored100Utc', 'zoomObserved', 'zoomRestored', 'evidencePath', 'evidenceSha256'], 'finalReceipt.actualChrome');
+    if (receipt.actualChrome.browserName !== 'Google Chrome' || receipt.actualChrome.zoomObserved !== 200 || receipt.actualChrome.zoomRestored !== 100) fail('finalReceipt.actualChrome');
+    string(receipt.actualChrome.browserVersion, 'finalReceipt.actualChrome.browserVersion'); string(receipt.actualChrome.deploymentId, 'finalReceipt.actualChrome.deploymentId'); validateUrl(receipt.actualChrome.url, 'finalReceipt.actualChrome.url'); utc(receipt.actualChrome.observed200Utc, 'finalReceipt.actualChrome.observed200Utc'); utc(receipt.actualChrome.restored100Utc, 'finalReceipt.actualChrome.restored100Utc'); canonicalPath(receipt.actualChrome.evidencePath, 'finalReceipt.actualChrome.evidencePath'); sha(receipt.actualChrome.evidenceSha256, 'finalReceipt.actualChrome.evidenceSha256');
+    validateProductFiles(receipt.productFiles, 'finalReceipt.productFiles');
+    for (const [key, actual] of Object.entries({ releaseId: receipt.releaseId, deploymentId: receipt.deploymentId, immutableUrl: receipt.immutableUrl, aliasUrl: receipt.aliasUrl })) if (expected[key] !== undefined && actual !== expected[key]) fail(`finalReceipt.${key}.binding`);
+    return receipt;
+}
+
 export function auditAcceptedRun(options) {
     const resolved = resolveConfig(options.configPath ?? options);
     const config = resolved.base;
