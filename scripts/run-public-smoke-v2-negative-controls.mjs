@@ -221,9 +221,11 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
     const temporary = path.join(directory, `.${path.basename(file)}.tmp-${temporaryToken}`);
     let linked = false;
     let temporaryIdentity;
+    let temporaryExpectedBytes;
     try {
         publicationGuard();
         const descriptor = fsImpl.openSync(temporary, 'wx');
+        temporaryExpectedBytes = Buffer.alloc(0);
         try {
             try {
                 const descriptorStat = fsImpl.fstatSync(descriptor);
@@ -240,6 +242,7 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
                 throw error;
             }
             fsImpl.writeFileSync(descriptor, bytes);
+            temporaryExpectedBytes = Buffer.from(bytes);
             fsImpl.fsyncSync(descriptor);
         } finally {
             fsImpl.closeSync(descriptor);
@@ -270,19 +273,13 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
         publicationGuard();
     } catch (error) {
         let cleanupChangedDirectory = false;
-        if (linked && fsImpl.existsSync(file)) {
-            const finalStat = fsImpl.lstatSync(file);
-            if (temporaryIdentity && finalStat.isFile() && !finalStat.isSymbolicLink() && sameIdentity(finalStat, temporaryIdentity)) {
-                fsImpl.unlinkSync(file);
-                cleanupChangedDirectory = true;
-            }
+        if (linked && fsImpl.existsSync(file) && temporaryIdentity && matchesPinnedFile(file, temporaryIdentity, bytes, fsImpl)) {
+            fsImpl.unlinkSync(file);
+            cleanupChangedDirectory = true;
         }
-        if (fsImpl.existsSync(temporary)) {
-            const temporaryStat = fsImpl.lstatSync(temporary);
-            if (temporaryIdentity && temporaryStat.isFile() && !temporaryStat.isSymbolicLink() && sameIdentity(temporaryStat, temporaryIdentity)) {
-                fsImpl.unlinkSync(temporary);
-                cleanupChangedDirectory = true;
-            }
+        if (fsImpl.existsSync(temporary) && temporaryIdentity && temporaryExpectedBytes && matchesPinnedFile(temporary, temporaryIdentity, temporaryExpectedBytes, fsImpl)) {
+            fsImpl.unlinkSync(temporary);
+            cleanupChangedDirectory = true;
         }
         if (linked || cleanupChangedDirectory) fsyncDirectory(directory, fsImpl, platform);
         throw error;
@@ -291,6 +288,17 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
 
 function sameIdentity(stat, identity) {
     return stat.dev === identity.dev && stat.ino === identity.ino;
+}
+
+function matchesPinnedFile(file, identity, expectedBytes, fsImpl) {
+    try {
+        const stat = fsImpl.lstatSync(file);
+        if (!stat.isFile() || stat.isSymbolicLink() || !sameIdentity(stat, identity)) return false;
+        const currentBytes = fsImpl.readFileSync(file);
+        return Buffer.isBuffer(currentBytes) && currentBytes.equals(expectedBytes) && sha256(currentBytes) === sha256(expectedBytes);
+    } catch {
+        return false;
+    }
 }
 
 function checkpointAuditFileName(checkpoint) {
@@ -385,13 +393,13 @@ function writeNegativeCheckpointAudit(publication, checkpoint, audit) {
         try {
             const openedStat = publication.fsImpl.fstatSync(descriptor);
             if (!openedStat.isFile()) fail('negativeCheckpointAudits.file');
-            publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes });
+            publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes: Buffer.alloc(0) });
         } catch (error) {
             try {
                 const openedStat = publication.fsImpl.fstatSync(descriptor);
                 const pathStat = publication.fsImpl.lstatSync(file);
                 if (openedStat.isFile() && pathStat.isFile() && !pathStat.isSymbolicLink() && sameIdentity(pathStat, openedStat)) {
-                    publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes });
+                    publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes: Buffer.alloc(0) });
                 }
             } catch {}
             throw error;
@@ -399,6 +407,7 @@ function writeNegativeCheckpointAudit(publication, checkpoint, audit) {
         const pathStat = publication.fsImpl.lstatSync(file);
         if (!pathStat.isFile() || pathStat.isSymbolicLink() || !sameIdentity(pathStat, publication.files.get(name))) fail('negativeCheckpointAudits.file');
         publication.fsImpl.writeFileSync(descriptor, bytes);
+        publication.files.get(name).bytes = bytes;
         publication.fsImpl.fsyncSync(descriptor);
     } finally {
         publication.fsImpl.closeSync(descriptor);
@@ -456,13 +465,13 @@ function rollbackNegativeCheckpointAuditPublication(publication) {
         fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
         return;
     }
-    if (directoryStat.isDirectory() && !directoryStat.isSymbolicLink() && sameIdentity(directoryStat, publication.identity)) {
+    if (directoryStat.isDirectory() && !directoryStat.isSymbolicLink() && sameIdentity(directoryStat, publication.identity)
+        && authenticatesCheckpointAuditCleanup(publication, directory)
+        && authenticatesCheckpointAuditCleanup(publication, directory)) {
         for (const [name, record] of publication.files) {
             const file = path.join(directory, name);
-            let stat;
-            try { stat = publication.fsImpl.lstatSync(file); }
-            catch (error) { if (error?.code === 'ENOENT') continue; else throw error; }
-            if (stat.isFile() && !stat.isSymbolicLink() && sameIdentity(stat, record)) publication.fsImpl.unlinkSync(file);
+            if (!matchesPinnedFile(file, record, record.bytes, publication.fsImpl)) break;
+            publication.fsImpl.unlinkSync(file);
         }
         const current = publication.fsImpl.lstatSync(directory);
         if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity) && publication.fsImpl.readdirSync(directory).length === 0) {
@@ -470,6 +479,22 @@ function rollbackNegativeCheckpointAuditPublication(publication) {
         }
     }
     fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
+}
+
+function authenticatesCheckpointAuditCleanup(publication, directory) {
+    try {
+        const directoryStat = publication.fsImpl.lstatSync(directory);
+        if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink() || !sameIdentity(directoryStat, publication.identity)) return false;
+        const expectedNames = [...publication.files.keys()].sort();
+        const actualNames = publication.fsImpl.readdirSync(directory).sort();
+        if (actualNames.length !== expectedNames.length || actualNames.some((name, index) => name !== expectedNames[index])) return false;
+        return expectedNames.every((name) => {
+            const record = publication.files.get(name);
+            return record && matchesPinnedFile(path.join(directory, name), record, record.bytes, publication.fsImpl);
+        });
+    } catch {
+        return false;
+    }
 }
 
 function failAfterCheckpointAuditRollback(error, publication) {

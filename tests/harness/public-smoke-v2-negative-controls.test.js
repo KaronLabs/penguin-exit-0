@@ -266,6 +266,11 @@ function publicationFaultFs(config, mode, foreignSource) {
         foreignCompanionIdentity: undefined,
         foreignReceiptBytes: undefined,
         foreignReceiptIdentity: undefined,
+        mutatedCompanionBytes: undefined,
+        mutatedCompanionIdentity: undefined,
+        mutatedCompanionPath: undefined,
+        mutatedReceiptBytes: undefined,
+        mutatedReceiptIdentity: undefined,
         foreignTemporaryIdentity: undefined,
         foreignTemporaryPath: undefined,
         ownedReceiptIdentity: undefined,
@@ -290,6 +295,17 @@ function publicationFaultFs(config, mode, foreignSource) {
                     target.renameSync(foreignSource, auditRoot);
                     const replacement = target.lstatSync(auditRoot);
                     state.foreignCompanionIdentity = { dev: replacement.dev, ino: replacement.ino };
+                }
+                if (mode === 'companion-audit-in-place-at-receipt-open' && !state.faultInjected && flags === 'wx' && path.dirname(file) === parent && path.basename(file).startsWith(`.${path.basename(config.negativeReceiptPath)}.tmp-`)) {
+                    const firstAudit = path.join(auditRoot, target.readdirSync(auditRoot).sort()[0]);
+                    const before = target.lstatSync(firstAudit);
+                    state.mutatedCompanionIdentity = { dev: before.dev, ino: before.ino };
+                    state.mutatedCompanionPath = firstAudit;
+                    state.mutatedCompanionBytes = Buffer.from('foreign-companion-in-place\n');
+                    target.writeFileSync(firstAudit, state.mutatedCompanionBytes);
+                    const after = target.lstatSync(firstAudit);
+                    assert.deepEqual({ dev: after.dev, ino: after.ino }, state.mutatedCompanionIdentity);
+                    state.faultInjected = true;
                 }
                 if (['stage-open', 'stage-lstat-open'].includes(mode) && !state.faultInjected && flags === 'r' && path.dirname(file) === parent && path.basename(file).startsWith('.negative-checkpoint-audits.stage-')) {
                     state.faultInjected = true;
@@ -371,6 +387,16 @@ function publicationFaultFs(config, mode, foreignSource) {
                     state.foreignReceiptIdentity = { dev: foreign.dev, ino: foreign.ino };
                     state.faultInjected = true;
                     throw new Error('injected.receipt-final-foreign');
+                }
+                if (mode === 'receipt-final-in-place' && !state.faultInjected && descriptorPath === path.resolve(parent) && target.existsSync(config.negativeReceiptPath)) {
+                    const before = target.lstatSync(config.negativeReceiptPath);
+                    state.mutatedReceiptIdentity = { dev: before.dev, ino: before.ino };
+                    state.mutatedReceiptBytes = Buffer.from('foreign-receipt-in-place\n');
+                    target.writeFileSync(config.negativeReceiptPath, state.mutatedReceiptBytes);
+                    const after = target.lstatSync(config.negativeReceiptPath);
+                    assert.deepEqual({ dev: after.dev, ino: after.ino }, state.mutatedReceiptIdentity);
+                    state.faultInjected = true;
+                    throw new Error('injected.receipt-final-in-place');
                 }
                 if (state.faultInjected && descriptorPath === path.resolve(parent)) state.cleanupParentFsyncs += 1;
                 return target.fsyncSync(descriptor);
@@ -1044,6 +1070,21 @@ test('rollback preserves a byte-identical foreign final receipt without claiming
     assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
 });
 
+test('rollback preserves a same-inode final receipt whose bytes drift during the second parent fsync', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-final-receipt-in-place-');
+    const fsImpl = publicationFaultFs(config, 'receipt-final-in-place');
+    let successLines;
+    assert.throws(() => {
+        successLines = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })).lines;
+    }, /injected\.receipt-final-in-place/);
+    assert.equal(successLines, undefined);
+    assert.equal(fs.existsSync(config.negativeReceiptPath), true);
+    assert.deepEqual(fs.readFileSync(config.negativeReceiptPath), fsImpl.__faultState.mutatedReceiptBytes);
+    const finalStat = fs.lstatSync(config.negativeReceiptPath);
+    assert.deepEqual({ dev: finalStat.dev, ino: finalStat.ino }, fsImpl.__faultState.mutatedReceiptIdentity);
+});
+
 test('companion replacement at receipt temp open cannot publish a receipt or success gate', async (t) => {
     const driver = await loadDriver();
     const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-companion-receipt-race-');
@@ -1067,6 +1108,23 @@ test('companion replacement at receipt temp open cannot publish a receipt or suc
     const finalStat = fs.lstatSync(checkpointAuditRoot(config));
     assert.deepEqual({ dev: finalStat.dev, ino: finalStat.ino }, fsImpl.__faultState.foreignCompanionIdentity);
     assert.equal(fs.readdirSync(path.join(parent, 'owned-checkpoint-audits-diagnostic')).length, 25);
+});
+
+test('rollback preserves the whole companion root when one audit drifts in place at receipt temp open', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-companion-audit-in-place-');
+    const fsImpl = publicationFaultFs(config, 'companion-audit-in-place-at-receipt-open');
+    let successLines;
+    assert.throws(() => {
+        successLines = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })).lines;
+    }, /negativeCheckpointAudits\.sha256/);
+    assert.equal(successLines, undefined);
+    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
+    assert.equal(fs.existsSync(checkpointAuditRoot(config)), true);
+    assert.equal(fs.readdirSync(checkpointAuditRoot(config)).length, 25);
+    assert.deepEqual(fs.readFileSync(fsImpl.__faultState.mutatedCompanionPath), fsImpl.__faultState.mutatedCompanionBytes);
+    const auditStat = fs.lstatSync(fsImpl.__faultState.mutatedCompanionPath);
+    assert.deepEqual({ dev: auditStat.dev, ino: auditStat.ino }, fsImpl.__faultState.mutatedCompanionIdentity);
 });
 
 test('companion replacement inside receipt hardlink is detected and rolls back the linked receipt', async (t) => {
