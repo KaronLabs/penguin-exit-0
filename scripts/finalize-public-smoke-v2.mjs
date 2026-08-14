@@ -186,6 +186,7 @@ function publishExclusive(file, receipt) {
         fsyncDirectory(parent);
         fs.unlinkSync(temporary);
     } catch (error) {
+        if (!linked && error.code === 'EEXIST' && pathExists(file)) throw new Error(`RELEASE_ID_CONSUMED: ${error.message}`, { cause: error });
         throw publicationError(linked ? 'PUBLICATION_INDETERMINATE' : 'FAILURE_ABSENT', error);
     } finally {
         if (pathExists(temporary)) {

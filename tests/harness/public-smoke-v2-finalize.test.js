@@ -369,10 +369,12 @@ test('a byte-identical pre-publication collision is never mistaken for the final
         return originalLink.call(this, source, destination);
     };
     try {
-        await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /EEXIST/);
+        await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /RELEASE_ID_CONSUMED:.*EEXIST/);
     } finally {
         fs.linkSync = originalLink;
     }
+    assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), expectedBytes);
+    await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /RELEASE_ID_CONSUMED/);
     assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), expectedBytes);
 });
 
