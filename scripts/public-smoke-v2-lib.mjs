@@ -1275,6 +1275,63 @@ export function validateNegativeReceipt(receipt, expected = {}) {
     return receipt;
 }
 
+const CLOSURE_BODY_TOKENS = Object.freeze(['root', 'content-js', 'game-core-js', 'script-js', 'style-css']);
+
+export function validateClosureReceipt(receipt, expected = {}) {
+    exactKeys(receipt, ['schemaVersion', 'releaseId', 'createdUtc', 'configSha256', 'operationReceiptSha256', 'auditReceiptSha256', 'negativeReceiptSha256', 'acceptedManifestSha256', 'ownershipRead', 'finalAliasProbe', 'status'], 'closureReceipt');
+    if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED') fail('closureReceipt.status');
+    if (!RELEASE_ID.test(string(receipt.releaseId, 'closureReceipt.releaseId'))) fail('closureReceipt.releaseId');
+    utc(receipt.createdUtc, 'closureReceipt.createdUtc');
+    for (const key of ['configSha256', 'operationReceiptSha256', 'auditReceiptSha256', 'negativeReceiptSha256', 'acceptedManifestSha256']) sha(receipt[key], `closureReceipt.${key}`);
+
+    const ownership = receipt.ownershipRead;
+    exactKeys(ownership, ['argv', 'cwd', 'startedUtc', 'finishedUtc', 'exitCode', 'signal', 'stdoutPath', 'stdoutBytes', 'stdoutSha256', 'stderrPath', 'stderrBytes', 'stderrSha256', 'deploymentId', 'sourcePrefix', 'immutableUrl'], 'closureReceipt.ownershipRead');
+    if (!Array.isArray(ownership.argv) || ownership.argv.length !== 10 || ownership.argv.some((value) => typeof value !== 'string')) fail('closureReceipt.ownershipRead.argv');
+    canonicalPath(ownership.cwd, 'closureReceipt.ownershipRead.cwd');
+    utc(ownership.startedUtc, 'closureReceipt.ownershipRead.startedUtc');
+    utc(ownership.finishedUtc, 'closureReceipt.ownershipRead.finishedUtc');
+    if (Date.parse(ownership.finishedUtc) < Date.parse(ownership.startedUtc)) fail('closureReceipt.ownershipRead.time');
+    if (integer(ownership.exitCode, 'closureReceipt.ownershipRead.exitCode') !== 0) fail('closureReceipt.ownershipRead.exitCode');
+    if (ownership.signal !== null) fail('closureReceipt.ownershipRead.signal');
+    relativeFile(ownership.stdoutPath, 'closureReceipt.ownershipRead.stdoutPath');
+    relativeFile(ownership.stderrPath, 'closureReceipt.ownershipRead.stderrPath');
+    nonNegative(ownership.stdoutBytes, 'closureReceipt.ownershipRead.stdoutBytes');
+    nonNegative(ownership.stderrBytes, 'closureReceipt.ownershipRead.stderrBytes');
+    sha(ownership.stdoutSha256, 'closureReceipt.ownershipRead.stdoutSha256');
+    sha(ownership.stderrSha256, 'closureReceipt.ownershipRead.stderrSha256');
+    string(ownership.deploymentId, 'closureReceipt.ownershipRead.deploymentId');
+    if (!/^[a-f0-9]{7}$/.test(string(ownership.sourcePrefix, 'closureReceipt.ownershipRead.sourcePrefix'))) fail('closureReceipt.ownershipRead.sourcePrefix');
+    validateUrl(ownership.immutableUrl, 'closureReceipt.ownershipRead.immutableUrl');
+
+    const probe = receipt.finalAliasProbe;
+    exactKeys(probe, ['receiptPath', 'receiptSha256', 'bodyPaths', 'bodySha256s', 'passed', 'total'], 'closureReceipt.finalAliasProbe');
+    if (probe.receiptPath !== 'file-probes/closure-final-alias-5.json') fail('closureReceipt.finalAliasProbe.receiptPath');
+    relativeFile(probe.receiptPath, 'closureReceipt.finalAliasProbe.receiptPath');
+    sha(probe.receiptSha256, 'closureReceipt.finalAliasProbe.receiptSha256');
+    if (!Array.isArray(probe.bodyPaths) || !Array.isArray(probe.bodySha256s) || probe.bodyPaths.length !== 5 || probe.bodySha256s.length !== 5) fail('closureReceipt.finalAliasProbe.bodyBindings');
+    probe.bodyPaths.forEach((bodyPath, index) => {
+        if (bodyPath !== `file-probes/bodies/closure-alias-${CLOSURE_BODY_TOKENS[index]}.bin`) fail('closureReceipt.finalAliasProbe.bodyPaths');
+        relativeFile(bodyPath, 'closureReceipt.finalAliasProbe.bodyPath');
+        sha(probe.bodySha256s[index], 'closureReceipt.finalAliasProbe.bodySha256');
+    });
+    if (probe.passed !== 5 || probe.total !== 5) fail('closureReceipt.finalAliasProbe.gate');
+
+    for (const [key, actual] of [
+        ['releaseId', receipt.releaseId],
+        ['configSha256', receipt.configSha256],
+        ['operationReceiptSha256', receipt.operationReceiptSha256],
+        ['auditReceiptSha256', receipt.auditReceiptSha256],
+        ['negativeReceiptSha256', receipt.negativeReceiptSha256],
+        ['acceptedManifestSha256', receipt.acceptedManifestSha256],
+        ['deploymentId', ownership.deploymentId],
+        ['sourcePrefix', ownership.sourcePrefix],
+        ['immutableUrl', ownership.immutableUrl],
+        ['cwd', ownership.cwd],
+    ]) if (expected[key] !== undefined && actual !== expected[key]) fail(`closureReceipt.${key}.binding`);
+    if (expected.argv !== undefined && canonicalJson(ownership.argv) !== canonicalJson(expected.argv)) fail('closureReceipt.ownershipRead.argv.binding');
+    return receipt;
+}
+
 export function auditAcceptedRun(options) {
     const resolved = resolveConfig(options.configPath ?? options);
     const config = resolved.base;
