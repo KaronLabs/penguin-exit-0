@@ -1015,3 +1015,49 @@ test('rollback post fence rejects Wrangler bytes changed during the post ownersh
     } }), /INDETERMINATE: rollback\.(source|post)/);
     await assert.rejects(fs.access(fixture.config.deploymentReceiptPath));
 });
+
+test('deploy post fence rejects an earlier raw capture changed during the post ownership child', async (t) => {
+    const fixture = await makeFixture(t);
+    await completeCampaign(fixture);
+    const operator = await loadOperator();
+    const oldRow = { Id: '11111111-1111-4111-8111-111111111111', Environment: 'Production', Branch: 'main', Source: fixture.config.sourceGitHead.slice(0, 7), Deployment: fixture.config.immutableUrl, Status: 'success', Build: 'success' };
+    const newRow = { ...oldRow, Id: '22222222-2222-4222-8222-222222222222', Deployment: 'https://22222222.penguin-exit-0.pages.dev/' };
+    let calls = 0;
+    await assert.rejects(() => operator.runOperator(fixture.config, {
+        runCampaignVerifier: async () => {},
+        spawnProcess: async () => {
+            calls += 1;
+            if (calls === 1) return { exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([oldRow])), stderr: Buffer.alloc(0) };
+            if (calls === 2) return { exitCode: 0, signal: null, stdout: Buffer.from('upload-complete\n'), stderr: Buffer.alloc(0) };
+            await fs.writeFile(path.join(fixture.operationalRoot, 'pre.json.stdout.bin'), 'foreign capture bytes\n');
+            return { exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([newRow])), stderr: Buffer.alloc(0) };
+        },
+    }), /INDETERMINATE: operator\.post\.capture/);
+    await assert.rejects(fs.access(fixture.config.deploymentReceiptPath));
+});
+
+test('rollback post fence rejects an earlier raw capture changed during the post ownership child', async (t) => {
+    const fixture = await makeFixture(t);
+    const operator = await loadOperator();
+    fixture.config.mode = 'rollback';
+    fixture.config.baselineRoot = path.join(fixture.operationalRoot, 'rollback-stage');
+    await fs.mkdir(path.join(fixture.operationalRoot, 'baseline'), { recursive: true });
+    const productFiles = {};
+    for (const [publicPath, [name, mime]] of Object.entries(fixture.product)) {
+        const bytes = await fs.readFile(path.join(fixture.sourceSnapshotDir, name));
+        productFiles[publicPath] = { bytes: bytes.length, mime, sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
+        await fs.writeFile(path.join(fixture.operationalRoot, 'baseline', name), bytes);
+    }
+    await fs.writeFile(fixture.config.rollbackBaselinePath, JSON.stringify({ schemaVersion: 1, projectName: 'penguin-exit-0', environment: 'Production', branch: 'main', deploymentId: '11111111-1111-4111-8111-111111111111', immutableUrl: fixture.config.immutableUrl, aliasUrl: fixture.config.aliasUrl, sourceGitHead: fixture.config.sourceGitHead, sourceGitTree: fixture.config.sourceGitTree, productFiles, capturedUtc: new Date().toISOString() }) + '\n');
+    const postRow = { Id: '11111111-1111-4111-8111-111111111111', Environment: 'Production', Branch: 'main', Source: fixture.config.sourceGitHead.slice(0, 7), Deployment: fixture.config.immutableUrl, Status: 'success', Build: 'success' };
+    const preRow = { ...postRow, Id: '33333333-3333-4333-8333-333333333333', Deployment: 'https://33333333.penguin-exit-0.pages.dev/' };
+    let calls = 0;
+    await assert.rejects(() => operator.runOperator(fixture.config, { spawnProcess: async () => {
+        calls += 1;
+        if (calls === 1) return { exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([preRow])), stderr: Buffer.alloc(0) };
+        if (calls === 2) return { exitCode: 0, signal: null, stdout: Buffer.from('rollback\n'), stderr: Buffer.alloc(0) };
+        await fs.writeFile(path.join(fixture.operationalRoot, 'rollback-pre.json.stdout.bin'), 'foreign capture bytes\n');
+        return { exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([postRow])), stderr: Buffer.alloc(0) };
+    } }), /INDETERMINATE: rollback\.post\.capture/);
+    await assert.rejects(fs.access(fixture.config.deploymentReceiptPath));
+});

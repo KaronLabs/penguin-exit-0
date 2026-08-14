@@ -622,6 +622,17 @@ async function persistCapture(capturePath, result) {
     await writeBinaryExclusive(`${capturePath}.stderr.bin`, normalized.stderr);
 }
 
+function assertCaptureStable(captureRecord, operationalRoot, invariant) {
+    if (captureRecord === null) return;
+    for (const stream of ['stdout', 'stderr']) {
+        const file = captureRecord[`${stream}Path`];
+        contained(operationalRoot, file, invariant);
+        noSymlinkAncestors(file, invariant);
+        const stat = fs.lstatSync(file);
+        if (stat.isSymbolicLink() || !stat.isFile() || stat.size !== captureRecord[`${stream}Bytes`] || sha256File(file) !== captureRecord[`${stream}Sha256`]) fail(invariant);
+    }
+}
+
 async function writeBinaryExclusive(file, bytes) {
     await fsp.mkdir(path.dirname(file), { recursive: true });
     const descriptor = fs.openSync(file, 'wx');
@@ -752,6 +763,9 @@ async function runDeploy(config, deps) {
         assertRootStable(config.stagingDir, stagingRealpathBefore, 'operator.staging.root.mutable', stagingIdentityBefore);
         validateStagingTree(config.stagingDir, productFiles, 'operator.staging.post');
     } catch (error) { throw new Error(`INDETERMINATE: operator.post.mutable: ${error.message}`); }
+    try {
+        for (const commandCapture of [campaignVerifierCapture, pre.capture, deploy.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'operator.capture.mutable');
+    } catch (error) { throw new Error(`INDETERMINATE: operator.post.capture: ${error.message}`); }
     const record = deploymentRecord(config, current, productFiles);
     const recordBytes = jsonBytes(record);
     const sourceFreezeSha256 = sha256File(config.sourceFreezePath);
@@ -858,6 +872,9 @@ async function runRollback(config, deps) {
     assertIdentityLocksStable(identity, 'INDETERMINATE: rollback.identity.lock.mutable');
     assertConfigSourceStable(configBinding, config);
     if (validateStagingTree(config.baselineRoot, productFiles, 'rollback.staging.post') !== baselineStageTreeDigest) fail('INDETERMINATE: rollback.staging.mutable');
+    try {
+        for (const commandCapture of [pre.capture, rollback.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'rollback.capture.mutable');
+    } catch (error) { throw new Error(`INDETERMINATE: rollback.post.capture: ${error.message}`); }
     const baselineBytes = fs.readFileSync(config.rollbackBaselinePath);
     const receipt = { schemaVersion: 1, operation: 'rollback', releaseId: config.releaseId, campaignRunId: config.campaignRunId, projectName: config.projectName, accountId: config.accountId, environment: config.environment, branch: config.branch, sourceGitHead: baseline.sourceGitHead, sourceGitTree: baseline.sourceGitTree, authorityRootRealpath: authority.rootRealpath, authorityManifestPath: authority.path, authorityManifestRealpath: authority.realpath, authorityManifestBytes: authority.bytes, authorityManifestSha256: authority.sha256, releaseIssuancePath: identity.releaseIssuance.path, releaseIssuanceRealpath: identity.releaseIssuance.realpath, releaseIssuanceBytes: identity.releaseIssuance.bytes, releaseIssuanceSha256: identity.releaseIssuance.sha256, campaignIssuancePath: identity.campaignIssuance.path, campaignIssuanceRealpath: identity.campaignIssuance.realpath, campaignIssuanceBytes: identity.campaignIssuance.bytes, campaignIssuanceSha256: identity.campaignIssuance.sha256, configBinding, operatorPath: fileURLToPath(import.meta.url), operatorRealpath: fs.realpathSync(fileURLToPath(import.meta.url)), operatorSha256: sha256File(fileURLToPath(import.meta.url)), executionScripts: executionScriptHashes(), sourceSnapshotDir: path.resolve(config.sourceSnapshotDir), sourceSnapshotRealpath: fs.realpathSync(config.sourceSnapshotDir), sourceSnapshotTreeDigest: sourceSnapshotTreeDigestAfter, nodeExePath: config.nodeExePath, nodeExeRealpath: fs.realpathSync(config.nodeExePath), nodeExeSha256: config.nodeExeSha256, wranglerJsPath: config.wranglerJsPath, wranglerJsRealpath: fs.realpathSync(config.wranglerJsPath), wranglerJsSha256: config.wranglerJsSha256, rollbackBaselinePath: path.resolve(config.rollbackBaselinePath), baselineRecordBytes: baselineBytes.length, baselineRecordSha256: sha256Bytes(baselineBytes), baselineTreeDigest: baselineTreeDigestBefore, baselineStageTreeDigest, baselineFiles, baselineDeploymentId: baseline.deploymentId, baselineImmutableUrl: baseline.immutableUrl, baselineRoot: path.resolve(config.baselineRoot), baselineRealpath: fs.realpathSync(config.baselineRoot), preOwnership: pre.capture, preDeploymentId: preRow.Id, preDeploymentUrl: preRow.Deployment, capture: rollback.capture, postOwnership: post.capture, postDeploymentId: postRow.Id, postDeploymentUrl: postRow.Deployment, createdUtc: utcNow() };
     Object.assign(receipt, identityLockReceiptFields(identity));
