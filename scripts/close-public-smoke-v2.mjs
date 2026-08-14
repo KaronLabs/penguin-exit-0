@@ -129,6 +129,30 @@ function validateControlEvidence(control, config, configPath, configSha256, oper
     if (sha256File(config.operationReceiptPath) !== operationReceiptSha256) fail('negativeReceipt.operationReceiptSha256');
 }
 
+function loadCheckpointAuditReceipts(config, negative, expectedAudit) {
+    const root = relativeContained(
+        config.releaseRoot,
+        path.join(path.dirname(config.negativeReceiptPath), 'negative-checkpoint-audits'),
+        'negativeReceipt.checkpointAuditReceipt.file',
+    );
+    const names = negative.checkpoints.map((checkpoint) => `${String(checkpoint.sequence).padStart(3, '0')}-${checkpoint.controlId.toLowerCase()}-${checkpoint.phase.toLowerCase()}.json`);
+    let entries;
+    try { entries = fs.readdirSync(root, { withFileTypes: true }); }
+    catch (error) { fail('negativeReceipt.checkpointAuditReceipt.file', error.message); }
+    if (entries.length !== 25 || entries.some((entry) => !entry.isFile() || !names.includes(entry.name)) || new Set(entries.map(({ name }) => name)).size !== 25) fail('negativeReceipt.checkpointAuditReceipt.file');
+    return names.map((name, index) => {
+        const file = relativeContained(config.releaseRoot, path.join(root, name), 'negativeReceipt.checkpointAuditReceipt.file');
+        requireRegularFile(file, 'negativeReceipt.checkpointAuditReceipt.file');
+        const bytes = fs.readFileSync(file);
+        if (sha256(bytes) !== negative.checkpoints[index].auditReceiptSha256) fail('negativeReceipt.checkpointAuditReceipt.sha256');
+        let audit;
+        try { audit = JSON.parse(bytes.toString('utf8')); }
+        catch (error) { fail('negativeReceipt.checkpointAuditReceipt.schema', error.message); }
+        validateAuditReceipt(audit, expectedAudit);
+        return audit;
+    });
+}
+
 function validateOffline(configPath) {
     const config = validateOperationConfig(readJson(configPath, 'closure.config'));
     if (path.resolve(config.closureReceiptPath) !== path.join(path.resolve(config.closureRoot), 'receipt.json')) fail('closureReceiptPath.binding');
@@ -143,11 +167,14 @@ function validateOffline(configPath) {
     const derivedAudit = auditAcceptedRun({ configPath });
     const audit = validateAuditReceipt(readJson(config.auditReceiptPath, 'closure.auditReceipt'), derivedAudit);
     const auditReceiptSha256 = sha256File(config.auditReceiptPath);
-    const negative = validateNegativeReceipt(readJson(config.negativeReceiptPath, 'closure.negativeReceipt'), {
+    const negativeExpected = {
         pristineAcceptedRealpath: fs.realpathSync(config.acceptedDir),
         nodeExePath: config.nodeExePath,
         auditorPath: path.join(config.authorityProjectRoot, 'scripts', 'verify-public-smoke-v2.mjs'),
-    });
+    };
+    const negative = validateNegativeReceipt(readJson(config.negativeReceiptPath, 'closure.negativeReceipt'), negativeExpected);
+    const checkpointAuditReceipts = loadCheckpointAuditReceipts(config, negative, derivedAudit);
+    validateNegativeReceipt(negative, { ...negativeExpected, checkpointAuditReceipts });
     const negativeReceiptSha256 = sha256File(config.negativeReceiptPath);
     const manifestPath = requireRegularFile(path.join(config.acceptedDir, 'artifact-manifest.json'), 'closure.acceptedManifestPath');
     const manifest = validateManifest(fs.realpathSync(config.acceptedDir), readJson(manifestPath, 'closure.acceptedManifest'));
@@ -282,6 +309,20 @@ function publishDiagnostic(config, stage, error, deps) {
     return diagnostic;
 }
 
+function trustedPublishedClosure(config, identity) {
+    try {
+        if (!identity || !pathEntryExists(config.closureRoot)) return undefined;
+        const root = path.resolve(config.closureRoot);
+        const stat = fs.lstatSync(root);
+        if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(root) !== root || stat.dev !== identity.dev || stat.ino !== identity.ino) return undefined;
+        const receiptPath = path.join(root, 'receipt.json');
+        requireRegularFile(receiptPath, 'closure.recovery.receipt');
+        const receipt = readJson(receiptPath, 'closure.recovery.receipt');
+        if (sha256File(receiptPath) !== identity.receiptSha256 || receipt.releaseId !== config.releaseId || receipt.status !== 'VERIFIED') return undefined;
+        return root;
+    } catch { return undefined; }
+}
+
 export async function runClosureFromConfig(configPath, overrides = {}) {
     if (!path.isAbsolute(configPath)) fail('config.path', 'must be absolute');
     const canonicalConfigPath = path.resolve(configPath);
@@ -295,6 +336,7 @@ export async function runClosureFromConfig(configPath, overrides = {}) {
     let config;
     let stage;
     let stageOwned = false;
+    let publishedIdentity;
     try {
         config = validateOperationConfig(readJson(canonicalConfigPath, 'closure.config'));
         const offline = validateOffline(canonicalConfigPath);
@@ -334,14 +376,18 @@ export async function runClosureFromConfig(configPath, overrides = {}) {
         writeExclusive(path.join(stage, 'receipt.json'), Buffer.from(`${canonicalJson(receipt)}\n`));
         sealStage(stage);
         if (pathEntryExists(config.closureRoot)) fail('closureRoot.exists');
+        const stageStat = fs.lstatSync(stage);
+        publishedIdentity = { dev: stageStat.dev, ino: stageStat.ino, receiptSha256: sha256File(path.join(stage, 'receipt.json')) };
         fs.renameSync(stage, config.closureRoot);
         stage = undefined;
         stageOwned = false;
         fsyncDirectory(path.dirname(config.closureRoot));
+        publishedIdentity = undefined;
         return receipt;
     } catch (error) {
         if (config) {
-            try { publishDiagnostic(config, stageOwned ? stage : undefined, error, deps); }
+            const diagnosticStage = stageOwned ? stage : trustedPublishedClosure(config, publishedIdentity);
+            try { publishDiagnostic(config, diagnosticStage, error, deps); }
             catch (diagnosticError) { error.message += `; closure.diagnostic=${diagnosticError.message}`; }
         }
         throw error;

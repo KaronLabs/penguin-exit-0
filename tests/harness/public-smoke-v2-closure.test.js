@@ -96,10 +96,22 @@ function buildNegativeReceipt(fixture, audit) {
         sequence: index + 1,
         ...checkpoint,
         treeDigest: fixture.operationReceipt.accepted.treeDigest,
-        auditReceiptSha256: sha(`fresh-audit-${index}`),
+        auditReceiptSha256: '0'.repeat(64),
         auditStatus: 'VERIFIED',
     }));
-    return {
+    const checkpointAuditPaths = rows.map((checkpoint, index) => {
+        const auditReceipt = structuredClone(audit);
+        auditReceipt.createdUtc = new Date(Date.parse('2026-08-14T00:02:00.000Z') + index).toISOString();
+        const file = path.join(
+            path.dirname(fixture.config.negativeReceiptPath),
+            'negative-checkpoint-audits',
+            `${String(checkpoint.sequence).padStart(3, '0')}-${checkpoint.controlId.toLowerCase()}-${checkpoint.phase.toLowerCase()}.json`,
+        );
+        writeJson(file, auditReceipt);
+        checkpoint.auditReceiptSha256 = smoke.sha256File(file);
+        return file;
+    });
+    const receipt = {
         schemaVersion: 1,
         releaseId: fixture.config.releaseId,
         status: 'VERIFIED',
@@ -113,6 +125,7 @@ function buildNegativeReceipt(fixture, audit) {
         checkpoints: rows,
         controls,
     };
+    return { receipt, checkpointAuditPaths };
 }
 
 async function makeClosureFixture(t) {
@@ -120,9 +133,9 @@ async function makeClosureFixture(t) {
     const fixture = createAcceptedFixture(t);
     const audit = smoke.auditAcceptedRun({ configPath: fixture.configPath });
     writeJson(fixture.config.auditReceiptPath, audit);
-    const negative = buildNegativeReceipt(fixture, audit);
+    const { receipt: negative, checkpointAuditPaths } = buildNegativeReceipt(fixture, audit);
     writeJson(fixture.config.negativeReceiptPath, negative);
-    return { ...fixture, audit, negative };
+    return { ...fixture, audit, negative, checkpointAuditPaths };
 }
 
 function ownershipRows(fixture) {
@@ -274,6 +287,39 @@ test('offline receipt and accepted-evidence drift fails before ownership or alia
         ['negative exit', (fixture) => { fixture.negative.controls[0].exitCode = 0; writeJson(fixture.config.negativeReceiptPath, fixture.negative); }, /negativeReceipt.control.exitCode/],
         ['manifest binding', (fixture) => { fixture.negative.pristineManifestSha256 = 'f'.repeat(64); writeJson(fixture.config.negativeReceiptPath, fixture.negative); }, /negativeReceipt.pristineManifestSha256/],
     ]) {
+        await t.test(name, async (t) => {
+            const fixture = await makeClosureFixture(t);
+            mutate(fixture);
+            const local = localOnlyOverrides(fixture);
+            await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), invariant);
+            assert.equal(local.ownershipCalls.length, 0);
+            assert.equal(local.getCalls.length, 0);
+            assert.equal(fs.existsSync(fixture.config.closureReceiptPath), false);
+        });
+    }
+});
+
+test('closure authenticates all 25 materialized checkpoint audit receipts before external reads', async (t) => {
+    const closure = await import('../../scripts/close-public-smoke-v2.mjs');
+    const cases = [
+        ['missing object', (fixture) => fs.unlinkSync(fixture.checkpointAuditPaths[7]), /negativeReceipt\.checkpointAuditReceipt\.file/],
+        ['tampered bytes', (fixture) => fs.appendFileSync(fixture.checkpointAuditPaths[8], ' '), /negativeReceipt\.checkpointAuditReceipt\.sha256/],
+        ['replayed bytes', (fixture) => fs.copyFileSync(fixture.checkpointAuditPaths[0], fixture.checkpointAuditPaths[9]), /negativeReceipt\.checkpointAuditReceipt\.sha256/],
+        ['foreign valid object with rethreaded hash', (fixture) => {
+            const index = 10;
+            const foreign = JSON.parse(fs.readFileSync(fixture.checkpointAuditPaths[index], 'utf8'));
+            foreign.releaseId = '20260815T000000Z-r14-public-smoke-v2';
+            writeJson(fixture.checkpointAuditPaths[index], foreign);
+            fixture.negative.checkpoints[index].auditReceiptSha256 = smoke.sha256File(fixture.checkpointAuditPaths[index]);
+            writeJson(fixture.config.negativeReceiptPath, fixture.negative);
+        }, /auditReceipt\.binding/],
+        ['duplicate object and hash', (fixture) => {
+            fs.copyFileSync(fixture.checkpointAuditPaths[0], fixture.checkpointAuditPaths[1]);
+            fixture.negative.checkpoints[1].auditReceiptSha256 = fixture.negative.checkpoints[0].auditReceiptSha256;
+            writeJson(fixture.config.negativeReceiptPath, fixture.negative);
+        }, /negativeReceipt\.checkpoints\.unique/],
+    ];
+    for (const [name, mutate, invariant] of cases) {
         await t.test(name, async (t) => {
             const fixture = await makeClosureFixture(t);
             mutate(fixture);
@@ -461,6 +507,119 @@ test('write, fsync, and rename failures publish diagnostics without a receipt an
             if (failure === 'rename') assert.equal(fs.readFileSync(path.join(fixture.config.closureRoot, 'foreign.txt'), 'utf8'), 'foreign-final');
         });
     }
+});
+
+test('post-rename parent fsync failure rolls back the same-identity closure into one diagnostic', async (t) => {
+    const closure = await import('../../scripts/close-public-smoke-v2.mjs');
+    const fixture = await makeClosureFixture(t);
+    const local = localOnlyOverrides(fixture);
+    const originalRename = fs.renameSync;
+    const originalFsync = fs.fsyncSync;
+    let finalRenamed = false;
+    let injected = false;
+    fs.renameSync = function (source, destination) {
+        const result = originalRename.call(this, source, destination);
+        if (path.resolve(destination) === path.resolve(fixture.config.closureRoot)) finalRenamed = true;
+        return result;
+    };
+    fs.fsyncSync = function (...args) {
+        if (finalRenamed && !injected) {
+            injected = true;
+            throw new Error('parent-fsync-after-final-rename');
+        }
+        return originalFsync.apply(this, args);
+    };
+    try {
+        await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), /parent-fsync-after-final-rename/);
+    } finally {
+        fs.renameSync = originalRename;
+        fs.fsyncSync = originalFsync;
+    }
+    const siblings = fs.readdirSync(fixture.releaseRoot);
+    const diagnostics = siblings.filter((name) => name.startsWith(`${path.basename(fixture.config.closureRoot)}-failure-`));
+    assert.equal(fs.existsSync(fixture.config.closureRoot), false);
+    assert.equal(fs.existsSync(fixture.config.closureReceiptPath), false);
+    assert.equal(siblings.some((name) => name.startsWith(`.${path.basename(fixture.config.closureRoot)}.stage-`)), false);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.existsSync(path.join(fixture.releaseRoot, diagnostics[0], 'receipt.json')), false);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.releaseRoot, diagnostics[0], 'diagnostic.json'), 'utf8')).status, 'FAILED');
+});
+
+test('post-rename recovery preserves a foreign replacement and publishes one separate diagnostic', async (t) => {
+    const closure = await import('../../scripts/close-public-smoke-v2.mjs');
+    const fixture = await makeClosureFixture(t);
+    const local = localOnlyOverrides(fixture);
+    const originalRename = fs.renameSync;
+    const originalFsync = fs.fsyncSync;
+    let finalRenamed = false;
+    let injected = false;
+    fs.renameSync = function (source, destination) {
+        const result = originalRename.call(this, source, destination);
+        if (path.resolve(destination) === path.resolve(fixture.config.closureRoot)) finalRenamed = true;
+        return result;
+    };
+    fs.fsyncSync = function (...args) {
+        if (finalRenamed && !injected) {
+            injected = true;
+            fs.rmSync(fixture.config.closureRoot, { recursive: true });
+            fs.mkdirSync(fixture.config.closureRoot);
+            fs.writeFileSync(path.join(fixture.config.closureRoot, 'foreign.txt'), 'foreign-replacement');
+            throw new Error('parent-fsync-with-foreign-replacement');
+        }
+        return originalFsync.apply(this, args);
+    };
+    try {
+        await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), /parent-fsync-with-foreign-replacement/);
+    } finally {
+        fs.renameSync = originalRename;
+        fs.fsyncSync = originalFsync;
+    }
+    const diagnostics = fs.readdirSync(fixture.releaseRoot).filter((name) => name.startsWith(`${path.basename(fixture.config.closureRoot)}-failure-`));
+    assert.equal(fs.readFileSync(path.join(fixture.config.closureRoot, 'foreign.txt'), 'utf8'), 'foreign-replacement');
+    assert.equal(fs.existsSync(fixture.config.closureReceiptPath), false);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.existsSync(path.join(fixture.releaseRoot, diagnostics[0], 'receipt.json')), false);
+});
+
+test('post-rename recovery reports cleanup parent fsync failure after removing the success path', async (t) => {
+    const closure = await import('../../scripts/close-public-smoke-v2.mjs');
+    const fixture = await makeClosureFixture(t);
+    const local = localOnlyOverrides(fixture);
+    const originalRename = fs.renameSync;
+    const originalFsync = fs.fsyncSync;
+    let finalRenamed = false;
+    let diagnosticRenamed = false;
+    let publicationInjected = false;
+    let cleanupInjected = false;
+    fs.renameSync = function (source, destination) {
+        const result = originalRename.call(this, source, destination);
+        if (path.resolve(destination) === path.resolve(fixture.config.closureRoot)) finalRenamed = true;
+        if (path.resolve(source) === path.resolve(fixture.config.closureRoot) && path.basename(destination).startsWith(`${path.basename(fixture.config.closureRoot)}-failure-`)) diagnosticRenamed = true;
+        return result;
+    };
+    fs.fsyncSync = function (...args) {
+        if (finalRenamed && !publicationInjected) {
+            publicationInjected = true;
+            throw new Error('parent-fsync-after-final-rename');
+        }
+        if (diagnosticRenamed && !cleanupInjected) {
+            cleanupInjected = true;
+            throw new Error('cleanup-parent-fsync');
+        }
+        return originalFsync.apply(this, args);
+    };
+    try {
+        await assert.rejects(closure.runClosureFromConfig(fixture.configPath, local.overrides), /parent-fsync-after-final-rename; closure\.diagnostic=cleanup-parent-fsync/);
+    } finally {
+        fs.renameSync = originalRename;
+        fs.fsyncSync = originalFsync;
+    }
+    const siblings = fs.readdirSync(fixture.releaseRoot);
+    const diagnostics = siblings.filter((name) => name.startsWith(`${path.basename(fixture.config.closureRoot)}-failure-`));
+    assert.equal(fs.existsSync(fixture.config.closureRoot), false);
+    assert.equal(siblings.some((name) => name.startsWith(`.${path.basename(fixture.config.closureRoot)}.stage-`)), false);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.existsSync(path.join(fixture.releaseRoot, diagnostics[0], 'receipt.json')), false);
 });
 
 test('a symlinked closure output is rejected before ownership and remains untouched', async (t) => {
