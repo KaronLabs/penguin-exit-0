@@ -1032,7 +1032,9 @@ test('deploy post fence rejects an earlier raw capture changed during the post o
             await fs.writeFile(path.join(fixture.operationalRoot, 'pre.json.stdout.bin'), 'foreign capture bytes\n');
             return { exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([newRow])), stderr: Buffer.alloc(0) };
         },
-    }), /INDETERMINATE: operator\.post\.capture/);
+    }), /INDETERMINATE: operator\.publication\.fence/);
+    const residue = JSON.parse(await fs.readFile(fixture.config.deploymentRecordPath, 'utf8'));
+    assert.equal(residue.deploymentId, newRow.Id);
     await assert.rejects(fs.access(fixture.config.deploymentReceiptPath));
 });
 

@@ -218,8 +218,8 @@ function makeDriverFixture(t, prefix) {
         workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'), campaignDir,
         campaignSpecPath: path.join(workspace, 'spec.md'), campaignReceiptPath: path.join(workspace, 'campaign.json'), campaignRunId: '20260813T000000Z-r10-korean-release',
         sourceSnapshotDir, executionSourceDir, authorityProjectRoot: project, authorityWorkspaceRoot: workspace,
-        deploymentRecordPath: output('deployment.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/',
-        nodeExePath, nodeExeSha256: smoke.sha256File(nodeExePath), wranglerJsPath: tool, wranglerJsSha256: smoke.sha256File(tool), projectName: 'penguin-exit-0',
+        deploymentRecordPath: output('deployment.json'), deploymentOperatorReceiptPath: output('operator-deployment-receipt.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/',
+        nodeExePath, nodeExeSha256: smoke.sha256File(nodeExePath), wranglerJsPath: tool, wranglerJsSha256: smoke.sha256File(tool), projectName: 'penguin-exit-0', accountId: '0123456789abcdef0123456789abcdef', sourceGitTree: 'b'.repeat(40),
     };
     const configPath = output('config.json');
     writeJson(configPath, config);

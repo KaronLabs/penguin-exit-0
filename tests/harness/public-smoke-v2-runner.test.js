@@ -386,6 +386,7 @@ test('concrete operation CLI authenticates schema 2 config, exact verifier argv,
       authorityProjectRoot: file(root, 'project'),
       authorityWorkspaceRoot: root,
       deploymentRecordPath: file(releaseRoot, 'deployment.json'),
+      deploymentOperatorReceiptPath: file(releaseRoot, 'operator-deployment-receipt.json'),
       immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/',
       aliasUrl: 'https://penguin-exit-0.pages.dev/',
       nodeExePath: await (await import('node:fs/promises')).realpath(process.execPath),
@@ -393,6 +394,8 @@ test('concrete operation CLI authenticates schema 2 config, exact verifier argv,
       wranglerJsPath: file(root, 'wrangler.js'),
       wranglerJsSha256: '2'.repeat(64),
       projectName: 'penguin-exit-0',
+      accountId: '0123456789abcdef0123456789abcdef',
+      sourceGitTree: 'b'.repeat(40),
     };
     await writeFile(configPath, JSON.stringify(config));
     await writeFile(config.auditReceiptPath, '');
@@ -1205,7 +1208,7 @@ test('operation parser preflight fails missing or drifted pinned authority befor
     const config = {
       schemaVersion: 2, releaseId: '20260814T000000Z-r14-public-smoke-v2', releaseRoot,
       acceptedDir: output('accepted'), failureRoot: output('failures'), operationReceiptPath: output('operation.json'), auditReceiptPath: output('audit.json'), negativeReceiptPath: output('negative.json'), closureRoot: output('closure'), closureReceiptPath: output('closure.json'), actualChromeEvidencePath: output('chrome.json'), releaseReceiptPath: output('release.json'), workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'),
-      campaignDir, campaignSpecPath: path.join(root, 'spec.json'), campaignReceiptPath: path.join(root, 'campaign.json'), campaignRunId: '20260813T000000Z-r10-korean-release', sourceSnapshotDir, executionSourceDir: path.join(root, 'execution'), authorityProjectRoot: root, authorityWorkspaceRoot: path.dirname(root), deploymentRecordPath: output('deployment.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: await (await import('node:fs/promises')).realpath(process.execPath), nodeExeSha256: '1'.repeat(64), wranglerJsPath: path.join(root, 'wrangler.js'), wranglerJsSha256: '2'.repeat(64), projectName: 'penguin-exit-0',
+      campaignDir, campaignSpecPath: path.join(root, 'spec.json'), campaignReceiptPath: path.join(root, 'campaign.json'), campaignRunId: '20260813T000000Z-r10-korean-release', sourceSnapshotDir, executionSourceDir: path.join(root, 'execution'), authorityProjectRoot: root, authorityWorkspaceRoot: path.dirname(root), deploymentRecordPath: output('deployment.json'), deploymentOperatorReceiptPath: output('operator-deployment-receipt.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: await (await import('node:fs/promises')).realpath(process.execPath), nodeExeSha256: '1'.repeat(64), wranglerJsPath: path.join(root, 'wrangler.js'), wranglerJsSha256: '2'.repeat(64), projectName: 'penguin-exit-0', accountId: '0123456789abcdef0123456789abcdef', sourceGitTree: 'b'.repeat(40),
     };
     await writeFile(configPath, JSON.stringify(config));
     for (const [label, parserPath] of [['missing', path.join(root, 'missing.exe')], ['drift', drift]]) {
@@ -1374,7 +1377,7 @@ test('production operation executes the real preflight seal without a validatePr
     await writeFile(path.join(sourceSnapshotDir, 'scripts', 'verify-r10-campaign.mjs'), '// fixture\n');
     const nodeExePath = await (await import('node:fs/promises')).realpath(process.execPath); const wranglerJsPath = path.join(root, 'wrangler.js'); await writeFile(wranglerJsPath, 'fixture');
     const sha = async (file) => (await import('node:crypto')).createHash('sha256').update(await readFile(file)).digest('hex'); const output = (name) => path.join(releaseRoot, name);
-    const config = { schemaVersion: 2, releaseId: '20260814T000000Z-r14-public-smoke-v2', releaseRoot, acceptedDir: output('accepted'), failureRoot: output('failures'), operationReceiptPath: output('operation-receipt.json'), auditReceiptPath: output('audit.json'), negativeReceiptPath: output('negative.json'), closureRoot: output('closure'), closureReceiptPath: output('closure.json'), actualChromeEvidencePath: output('chrome.json'), releaseReceiptPath: output('release.json'), workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'), campaignDir, campaignSpecPath: path.join(root, 'spec.json'), campaignReceiptPath: path.join(root, 'campaign-receipt.json'), campaignRunId: '20260813T000000Z-r10-korean-release', sourceSnapshotDir, executionSourceDir: path.join(root, 'execution'), authorityProjectRoot: root, authorityWorkspaceRoot: path.dirname(root), deploymentRecordPath: output('deployment.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath, nodeExeSha256: await sha(nodeExePath), wranglerJsPath, wranglerJsSha256: await sha(wranglerJsPath), projectName: 'penguin-exit-0' };
+    const config = { schemaVersion: 2, releaseId: '20260814T000000Z-r14-public-smoke-v2', releaseRoot, acceptedDir: output('accepted'), failureRoot: output('failures'), operationReceiptPath: output('operation-receipt.json'), auditReceiptPath: output('audit.json'), negativeReceiptPath: output('negative.json'), closureRoot: output('closure'), closureReceiptPath: output('closure.json'), actualChromeEvidencePath: output('chrome.json'), releaseReceiptPath: output('release.json'), workerStdoutPath: output('worker.out'), workerStderrPath: output('worker.err'), campaignDir, campaignSpecPath: path.join(root, 'spec.json'), campaignReceiptPath: path.join(root, 'campaign-receipt.json'), campaignRunId: '20260813T000000Z-r10-korean-release', sourceSnapshotDir, executionSourceDir: path.join(root, 'execution'), authorityProjectRoot: root, authorityWorkspaceRoot: path.dirname(root), deploymentRecordPath: output('deployment.json'), deploymentOperatorReceiptPath: output('operator-deployment-receipt.json'), immutableUrl: 'https://01234567.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath, nodeExeSha256: await sha(nodeExePath), wranglerJsPath, wranglerJsSha256: await sha(wranglerJsPath), projectName: 'penguin-exit-0', accountId: '0123456789abcdef0123456789abcdef', sourceGitTree: 'b'.repeat(40) };
     await writeFile(configPath, JSON.stringify(config)); let spawns = 0;
     await assert.rejects(operation.runOperationFromArgv(['--config', configPath], { spawnProcess: async ({ stdoutPath, stderrPath }) => { spawns += 1; await writeFile(stdoutPath, 'NOT_VERIFIED\n', { flag: 'wx' }); await writeFile(stderrPath, '', { flag: 'wx' }); return { exitCode: 0, signal: null }; } }), /operation\.campaignVerifier/);
     assert.equal(spawns, 1);

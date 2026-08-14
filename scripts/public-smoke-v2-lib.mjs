@@ -30,6 +30,7 @@ const CAMPAIGN_ID = /^[0-9]{8}T[0-9]{6}Z-r10-korean-release$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const EXTERNAL_SHA256 = /^[A-Fa-f0-9]{64}$/;
 const GIT_SHA1 = /^[a-f0-9]{40}$/;
+const ACCOUNT_ID = /^[a-f0-9]{32}$/;
 const ZERO_SHA256 = '0'.repeat(64);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -736,7 +737,7 @@ function readJson(file, invariant) {
     try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) { fail(invariant, error.message); }
 }
 
-const OPERATION_CONFIG_KEYS = ['schemaVersion', 'releaseId', 'releaseRoot', 'acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'campaignDir', 'campaignSpecPath', 'campaignReceiptPath', 'campaignRunId', 'sourceSnapshotDir', 'executionSourceDir', 'authorityProjectRoot', 'authorityWorkspaceRoot', 'deploymentRecordPath', 'immutableUrl', 'aliasUrl', 'nodeExePath', 'nodeExeSha256', 'wranglerJsPath', 'wranglerJsSha256', 'projectName'];
+const OPERATION_CONFIG_KEYS = ['schemaVersion', 'releaseId', 'releaseRoot', 'acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'campaignDir', 'campaignSpecPath', 'campaignReceiptPath', 'campaignRunId', 'sourceSnapshotDir', 'executionSourceDir', 'authorityProjectRoot', 'authorityWorkspaceRoot', 'deploymentRecordPath', 'deploymentOperatorReceiptPath', 'immutableUrl', 'aliasUrl', 'nodeExePath', 'nodeExeSha256', 'wranglerJsPath', 'wranglerJsSha256', 'projectName', 'accountId', 'sourceGitTree'];
 const DERIVED_CONFIG_KEYS = ['schemaVersion', 'baseConfigPath', 'baseConfigSha256', 'mutationId', 'mutationRootRealpath', 'auditTargetRealpath', 'externalOperationReceiptPath', 'auditReceiptPath'];
 
 export function validateOperationConfig(config) {
@@ -744,7 +745,8 @@ export function validateOperationConfig(config) {
     if (config.schemaVersion !== 2 || !RELEASE_ID.test(string(config.releaseId, 'config.releaseId'))) fail('config.schemaVersion');
     for (const key of OPERATION_CONFIG_KEYS.filter((key) => /(?:Path|Dir|Root)$/.test(key))) canonicalPath(config[key], `config.${key}`);
     if (!CAMPAIGN_ID.test(string(config.campaignRunId, 'config.campaignRunId'))) fail('config.campaignRunId');
-    sha(config.nodeExeSha256, 'config.nodeExeSha256'); sha(config.wranglerJsSha256, 'config.wranglerJsSha256');
+    sha(config.nodeExeSha256, 'config.nodeExeSha256'); sha(config.wranglerJsSha256, 'config.wranglerJsSha256'); gitSha(config.sourceGitTree, 'config.sourceGitTree');
+    if (!ACCOUNT_ID.test(string(config.accountId, 'config.accountId'))) fail('config.accountId');
     validateUrl(config.immutableUrl, 'config.immutableUrl'); validateUrl(config.aliasUrl, 'config.aliasUrl'); string(config.projectName, 'config.projectName');
     const release = canonicalPath(config.releaseRoot, 'config.releaseRoot');
     for (const key of ['acceptedDir', 'failureRoot', 'operationReceiptPath', 'auditReceiptPath', 'negativeReceiptPath', 'closureRoot', 'closureReceiptPath', 'actualChromeEvidencePath', 'releaseReceiptPath', 'workerStdoutPath', 'workerStderrPath', 'deploymentRecordPath']) contained(release, config[key], `config.${key}.containment`);
@@ -753,6 +755,7 @@ export function validateOperationConfig(config) {
     contained(config.authorityProjectRoot, config.executionSourceDir, 'config.executionSourceDir.containment');
     contained(config.authorityWorkspaceRoot, config.campaignSpecPath, 'config.campaignSpecPath.containment');
     contained(config.authorityWorkspaceRoot, config.campaignReceiptPath, 'config.campaignReceiptPath.containment');
+    contained(config.authorityWorkspaceRoot, config.deploymentOperatorReceiptPath, 'config.deploymentOperatorReceiptPath.containment');
     contained(config.authorityWorkspaceRoot, config.authorityProjectRoot, 'config.authorityProjectRoot.containment');
     for (const key of OPERATION_CONFIG_KEYS.filter((key) => /(?:Path|Dir|Root)$/.test(key))) noSymlinkAncestors(config[key], `config.${key}.symlink`);
     return config;
@@ -954,6 +957,18 @@ function validateDeploymentRecord(record) {
     return record;
 }
 
+function validateDeploymentOperatorReceipt(config, deployment, recordBytes) {
+    const receipt = object(readJson(config.deploymentOperatorReceiptPath, 'deploymentOperatorReceipt.json'), 'deploymentOperatorReceipt');
+    if (receipt.schemaVersion !== 1 || receipt.operation !== 'deploy') fail('deploymentOperatorReceipt.identity');
+    if (receipt.releaseId !== config.releaseId || receipt.campaignRunId !== config.campaignRunId || receipt.projectName !== config.projectName || receipt.accountId !== config.accountId || receipt.environment !== 'Production' || receipt.branch !== 'main') fail('deploymentOperatorReceipt.identity');
+    if (receipt.sourceGitHead !== deployment.sourceGitHead || receipt.sourceGitTree !== config.sourceGitTree) fail('deploymentOperatorReceipt.source');
+    if (receipt.deploymentId !== deployment.deploymentId || receipt.immutableUrl !== deployment.immutableUrl || receipt.aliasUrl !== deployment.aliasUrl) fail('deploymentOperatorReceipt.deployment');
+    if (canonicalPath(receipt.deploymentRecordPath, 'deploymentOperatorReceipt.deploymentRecordPath') !== canonicalPath(config.deploymentRecordPath, 'config.deploymentRecordPath')) fail('deploymentOperatorReceipt.deploymentRecordPath');
+    if (nonNegative(receipt.deploymentRecordBytes, 'deploymentOperatorReceipt.deploymentRecordBytes') !== recordBytes.length || !sameHash(sha(receipt.deploymentRecordSha256, 'deploymentOperatorReceipt.deploymentRecordSha256'), sha256Bytes(recordBytes))) fail('deploymentOperatorReceipt.deploymentRecord');
+    utc(receipt.createdUtc, 'deploymentOperatorReceipt.createdUtc');
+    return receipt;
+}
+
 function validateEvents(events, receipt) {
     if (events.length !== 278) fail('events.cardinality');
     const schedule = [{ type: 'operation-start', case: null }];
@@ -1087,11 +1102,22 @@ function validateExternalCaptureFiles(capture, invariant) {
     return { stdout, stderr };
 }
 
-export function loadOperationAuthority(config) {
+function loadCommittedOperationAuthority(config) {
+    validateOperationConfig(config);
     const campaign = authenticateCampaign(config);
-    const deployment = validateDeploymentRecord(readJson(config.deploymentRecordPath, 'deploymentRecord.json'));
-    if (deployment.projectName !== config.projectName || deployment.immutableUrl !== config.immutableUrl || deployment.aliasUrl !== config.aliasUrl || deployment.sourceGitHead !== campaign.claims.sourceGit.headSha || canonicalJson(deployment.productFiles) !== canonicalJson(campaign.productFiles)) fail('authority.binding');
-    return { deployment, productFiles: campaign.productFiles, sourceGitHead: campaign.claims.sourceGit.headSha };
+    const recordBytes = fs.readFileSync(config.deploymentRecordPath);
+    let deployment;
+    try { deployment = validateDeploymentRecord(JSON.parse(recordBytes.toString('utf8'))); } catch (error) { fail('deploymentRecord.json', error.message); }
+    if (deployment.projectName !== config.projectName || deployment.immutableUrl !== config.immutableUrl || deployment.aliasUrl !== config.aliasUrl) fail('deploymentRecord.configBinding');
+    if (deployment.sourceGitHead !== campaign.claims.sourceGit.headSha) fail('campaign.deployment.sourceGitHead');
+    if (canonicalJson(deployment.productFiles) !== canonicalJson(campaign.productFiles)) fail('campaign.deployment.productFiles');
+    const deploymentOperatorReceipt = validateDeploymentOperatorReceipt(config, deployment, recordBytes);
+    return { campaign, deployment, deploymentOperatorReceipt, productFiles: campaign.productFiles, sourceGitHead: campaign.claims.sourceGit.headSha };
+}
+
+export function loadOperationAuthority(config) {
+    const authority = loadCommittedOperationAuthority(config);
+    return { deployment: authority.deployment, productFiles: authority.productFiles, sourceGitHead: authority.sourceGitHead };
 }
 
 function authenticateProcessCaptures(config, operation, configPath) {
@@ -1414,11 +1440,7 @@ export function auditAcceptedRun(options) {
     const operation = validateOperationReceipt(suppliedOperation ?? readJson(operationReceiptPath, 'operationReceipt.json'));
     if (operation.releaseId !== config.releaseId || operation.configSha256 !== sha256File(resolved.baseConfigPath)) fail('operationReceipt.binding');
     authenticateProcessCaptures(config, operation, resolved.baseConfigPath);
-    const campaign = authenticateCampaign(config);
-    const deployment = validateDeploymentRecord(readJson(config.deploymentRecordPath, 'deploymentRecord.json'));
-    if (deployment.projectName !== config.projectName || deployment.immutableUrl !== config.immutableUrl || deployment.aliasUrl !== config.aliasUrl) fail('deploymentRecord.configBinding');
-    if (deployment.sourceGitHead !== campaign.claims.sourceGit.headSha) fail('campaign.deployment.sourceGitHead');
-    if (canonicalJson(deployment.productFiles) !== canonicalJson(campaign.productFiles)) fail('campaign.deployment.productFiles');
+    const { campaign, deployment } = loadCommittedOperationAuthority(config);
     if (sha256File(config.nodeExePath) !== config.nodeExeSha256 || sha256File(config.wranglerJsPath) !== config.wranglerJsSha256) fail('config.toolingSha256');
     const root = fs.realpathSync(resolved.target);
     if (resolved.config.schemaVersion === 2 && fs.realpathSync(operation.accepted.realpath) !== root) fail('operationReceipt.accepted.realpath');

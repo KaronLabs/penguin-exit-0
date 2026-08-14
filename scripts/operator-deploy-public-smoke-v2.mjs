@@ -41,7 +41,7 @@ const APPROVED_PRODUCT_SHA = Object.freeze({
     '/style.css': '7b16c4a5956cc6babb7eb199bead9e66291f4b25cfd38673dee3e19d862f3c05',
 });
 const APPROVED_SOURCE_FILES = Object.freeze({
-    'scripts/public-smoke-v2-lib.mjs': '90e1b6451307bd30909d3ea562c1f89a2f80592c2fd8c9b261bd965d7ab47a20',
+    'scripts/public-smoke-v2-lib.mjs': '300f6d26ef3e0485ad96a3b5d8916ee65eaba4f7de220718509dd3653ee6ca83',
     'scripts/run-public-smoke-v2.mjs': '4179f37cacdd0013f1c9b181141e721c9a27f0969cf24e288e6ea9e716924009',
     'scripts/run-public-smoke-v2-operation.mjs': 'ce89d9aa5b71e237c46a9552fa27c2e1325502364b0cf2b1e8391cfc5c637d2a',
     'scripts/run-public-smoke-v2-negative-controls.mjs': '32e0258123388a67d79a20d730db5cf4dc569e8f1da61a842ef3c8333f9734b0',
@@ -786,8 +786,19 @@ async function runDeploy(config, deps) {
         throw new Error(`INDETERMINATE: operator.publication: ${error.message}`);
     }
     try {
+        validateOperatorConfig(config);
+        assertRootStable(config.sourceSnapshotDir, sourceSnapshotRealpathBefore, 'operator.source.root.mutable', sourceSnapshotIdentityBefore);
+        assertRootStable(campaignInput.campaign, campaignRealpathBefore, 'operator.campaign.root.mutable', campaignIdentityBefore);
+        if (treeDigest(config.sourceSnapshotDir, 'operator.source.tree') !== sourceSnapshotTreeDigestAfter || JSON.stringify(executionScriptHashes()) !== JSON.stringify(executionScriptsAfter) || treeDigest(campaignInput.campaign, 'operator.campaign.tree') !== campaignTreeDigestAfter) fail('operator.publication.mutable');
+        assertAuthorityManifestStable(authority);
+        assertIssuanceStable(identity.releaseIssuance, 'operator.identity.release.issuance.mutable');
+        assertIssuanceStable(identity.campaignIssuance, 'operator.identity.campaign.issuance.mutable');
+        assertIdentityLocksStable(identity, 'operator.identity.lock.mutable');
+        assertConfigSourceStable(configBinding, config);
+        assertRootStable(config.stagingDir, stagingRealpathBefore, 'operator.staging.root.mutable', stagingIdentityBefore);
+        validateStagingTree(config.stagingDir, productFiles, 'operator.staging.publication');
         for (const commandCapture of [campaignVerifierCapture, pre.capture, deploy.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'operator.capture.mutable');
-    } catch (error) { throw new Error(`INDETERMINATE: operator.post.capture: ${error.message}`); }
+    } catch (error) { throw new Error(`INDETERMINATE: operator.publication.fence: ${error.message}`); }
     try { writeJsonExclusiveSync(config.deploymentReceiptPath, receipt); }
     catch (error) { throw new Error(`INDETERMINATE: operator.publication: ${error.message}`); }
     return { status: 'DEPLOYED', record, receipt };

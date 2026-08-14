@@ -94,7 +94,7 @@ test('schema validators fail closed on missing, unknown, and wrong-type config f
         releaseId: '20260813T010203Z-r14-public-smoke-v2',
         releaseRoot: '/authority/release', acceptedDir: '/authority/release/accepted', failureRoot: '/authority/release/failure',
         operationReceiptPath: '/authority/release/operation.json', auditReceiptPath: '/authority/release/audit.json', negativeReceiptPath: '/authority/release/negative.json', closureRoot: '/authority/release/closure', closureReceiptPath: '/authority/release/closure.json', actualChromeEvidencePath: '/authority/release/chrome.json', releaseReceiptPath: '/authority/release/final.json', workerStdoutPath: '/authority/release/worker.out', workerStderrPath: '/authority/release/worker.err',
-        campaignDir: '/authority/project/campaign', campaignSpecPath: '/authority/campaign/spec.md', campaignReceiptPath: '/authority/campaign/receipt.json', campaignRunId: '20260813T010203Z-r10-korean-release', sourceSnapshotDir: '/authority/project/campaign/source-snapshot', executionSourceDir: '/authority/project/execution', authorityProjectRoot: '/authority/project', authorityWorkspaceRoot: '/authority', deploymentRecordPath: '/authority/release/deployment.json', immutableUrl: 'https://abcdef12.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: '/node', nodeExeSha256: 'a'.repeat(64), wranglerJsPath: '/wrangler', wranglerJsSha256: 'b'.repeat(64), projectName: 'penguin-exit-0',
+        campaignDir: '/authority/project/campaign', campaignSpecPath: '/authority/campaign/spec.md', campaignReceiptPath: '/authority/campaign/receipt.json', campaignRunId: '20260813T010203Z-r10-korean-release', sourceSnapshotDir: '/authority/project/campaign/source-snapshot', executionSourceDir: '/authority/project/execution', authorityProjectRoot: '/authority/project', authorityWorkspaceRoot: '/authority', deploymentRecordPath: '/authority/release/deployment.json', deploymentOperatorReceiptPath: '/authority/operations/operator-deployment-receipt.json', immutableUrl: 'https://abcdef12.penguin-exit-0.pages.dev/', aliasUrl: 'https://penguin-exit-0.pages.dev/', nodeExePath: '/node', nodeExeSha256: 'a'.repeat(64), wranglerJsPath: '/wrangler', wranglerJsSha256: 'b'.repeat(64), projectName: 'penguin-exit-0', accountId: '0123456789abcdef0123456789abcdef', sourceGitTree: 'b'.repeat(40),
     };
     assert.doesNotThrow(() => smoke.validateOperationConfig(config));
     const missing = { ...config }; delete missing.projectName;
@@ -187,6 +187,8 @@ test('a case rejects exact signature drift and every forbidden error channel', (
 const RELEASE_ID = '20260813T010203Z-r14-public-smoke-v2';
 const CAMPAIGN_ID = '20260813T000000Z-r10-korean-release';
 const SOURCE_HEAD = 'c'.repeat(40);
+const SOURCE_TREE = 'b'.repeat(40);
+const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
 const DEPLOYMENT_ID = 'deadbeef-1234-5678-9abc-def012345678';
 const IMMUTABLE_URL = 'https://deadbeef.penguin-exit-0.pages.dev/';
 const ALIAS_URL = 'https://penguin-exit-0.pages.dev/';
@@ -614,6 +616,7 @@ function createAcceptedFixture(t) {
     const configPath = path.join(releaseRoot, 'operation-config.json');
     const operationReceiptPath = path.join(releaseRoot, 'operation-receipt.json');
     const deploymentRecordPath = path.join(releaseRoot, 'deployment-record.json');
+    const deploymentOperatorReceiptPath = path.join(releaseRoot, 'operator-deployment-receipt.json');
     const nodeExePath = path.join(workspace, 'tools', 'node.exe');
     const wranglerJsPath = path.join(workspace, 'tools', 'wrangler.js');
     writeFile(nodeExePath, 'fixture node executable\n');
@@ -627,14 +630,16 @@ function createAcceptedFixture(t) {
         actualChromeEvidencePath: path.join(releaseRoot, 'actual-chrome.json'), releaseReceiptPath: path.join(releaseRoot, 'final-receipt.json'),
         workerStdoutPath: path.join(releaseRoot, 'worker.stdout.bin'), workerStderrPath: path.join(releaseRoot, 'worker.stderr.bin'),
         campaignDir, campaignSpecPath, campaignReceiptPath, campaignRunId: CAMPAIGN_ID, sourceSnapshotDir: sourceSnapshot,
-        executionSourceDir: executionSource, authorityProjectRoot: project, authorityWorkspaceRoot: workspace, deploymentRecordPath,
+        executionSourceDir: executionSource, authorityProjectRoot: project, authorityWorkspaceRoot: workspace, deploymentRecordPath, deploymentOperatorReceiptPath,
         immutableUrl: IMMUTABLE_URL, aliasUrl: ALIAS_URL, nodeExePath, nodeExeSha256: sha256File(nodeExePath),
-        wranglerJsPath, wranglerJsSha256: sha256File(wranglerJsPath), projectName: 'penguin-exit-0',
+        wranglerJsPath, wranglerJsSha256: sha256File(wranglerJsPath), projectName: 'penguin-exit-0', accountId: ACCOUNT_ID, sourceGitTree: SOURCE_TREE,
     };
-    const fixture = { temp, workspace, project, releaseRoot, acceptedDir, campaignDir, sourceSnapshot, executionSource, campaignSpecPath, campaignReceiptPath, configPath, operationReceiptPath, deploymentRecordPath, config };
+    const fixture = { temp, workspace, project, releaseRoot, acceptedDir, campaignDir, sourceSnapshot, executionSource, campaignSpecPath, campaignReceiptPath, configPath, operationReceiptPath, deploymentRecordPath, deploymentOperatorReceiptPath, config };
     createCampaign(fixture);
     const productFiles = sourceProductFiles(sourceSnapshot);
     writeJson(deploymentRecordPath, { schemaVersion: 1, projectName: 'penguin-exit-0', deploymentId: DEPLOYMENT_ID, environment: 'Production', branch: 'main', sourceGitHead: SOURCE_HEAD, immutableUrl: IMMUTABLE_URL, aliasUrl: ALIAS_URL, productFiles, capturedUtc: utcAt(-100) });
+    const deploymentRecordBytes = fs.readFileSync(deploymentRecordPath);
+    writeJson(deploymentOperatorReceiptPath, { schemaVersion: 1, operation: 'deploy', releaseId: RELEASE_ID, campaignRunId: CAMPAIGN_ID, projectName: 'penguin-exit-0', accountId: ACCOUNT_ID, environment: 'Production', branch: 'main', sourceGitHead: SOURCE_HEAD, sourceGitTree: SOURCE_TREE, deploymentRecordPath, deploymentRecordBytes: deploymentRecordBytes.length, deploymentRecordSha256: sha256(deploymentRecordBytes), deploymentId: DEPLOYMENT_ID, immutableUrl: IMMUTABLE_URL, aliasUrl: ALIAS_URL, createdUtc: utcAt(-50) });
     writeJson(configPath, config);
 
     const cases = expectedCaseLabels().map((label, index) => {
@@ -825,6 +830,49 @@ function expectedAuditReceipt(fixture) {
         initialFileGate: { passed: 10, total: 10 }, finalAliasGate: { passed: 5, total: 5 }, screenshotBindings: fixture.operationReceipt.screenshotBindings,
     };
 }
+
+test('record without operator receipt is not deployment authority', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const config = {
+        ...fixture.config,
+        accountId: ACCOUNT_ID,
+        sourceGitTree: SOURCE_TREE,
+        deploymentOperatorReceiptPath: path.join(fixture.releaseRoot, 'missing-operator-receipt.json'),
+    };
+    assert.throws(() => smoke.loadOperationAuthority(config), /deploymentOperatorReceipt/);
+});
+
+test('operator receipt record binding rejects a mismatched record hash', (t) => {
+    const fixture = createAcceptedFixture(t);
+    const deploymentOperatorReceiptPath = path.join(fixture.releaseRoot, 'operator-deployment-receipt.json');
+    writeJson(deploymentOperatorReceiptPath, {
+        schemaVersion: 1,
+        operation: 'deploy',
+        releaseId: fixture.config.releaseId,
+        campaignRunId: fixture.config.campaignRunId,
+        projectName: fixture.config.projectName,
+        accountId: ACCOUNT_ID,
+        environment: 'Production',
+        branch: 'main',
+        sourceGitHead: SOURCE_HEAD,
+        sourceGitTree: SOURCE_TREE,
+        deploymentRecordPath: fixture.deploymentRecordPath,
+        deploymentRecordBytes: fs.statSync(fixture.deploymentRecordPath).size,
+        deploymentRecordSha256: '0'.repeat(64),
+        deploymentId: DEPLOYMENT_ID,
+        immutableUrl: IMMUTABLE_URL,
+        aliasUrl: ALIAS_URL,
+        createdUtc: utcAt(-50),
+    });
+    const config = { ...fixture.config, deploymentOperatorReceiptPath };
+    assert.throws(() => smoke.loadOperationAuthority(config), /deploymentOperatorReceipt\.deploymentRecord/);
+});
+
+test('INDETERMINATE residue cannot become deployment authority', (t) => {
+    const fixture = createAcceptedFixture(t);
+    fs.unlinkSync(fixture.deploymentOperatorReceiptPath);
+    assert.throws(() => smoke.auditAcceptedRun({ configPath: fixture.configPath }), /deploymentOperatorReceipt/);
+});
 
 test('a complete accepted fixture authenticates every external authority and all 278 events end to end', (t) => {
     const fixture = createAcceptedFixture(t);
