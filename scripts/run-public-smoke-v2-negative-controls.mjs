@@ -213,7 +213,7 @@ function pathEntryExistsWith(file, fsImpl) {
     catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
 }
 
-export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, platform = process.platform, publicationGuard = () => {} } = {}) {
+export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, platform = process.platform, publicationGuard = () => {}, randomUUID = () => crypto.randomUUID() } = {}) {
     if (fsImpl.existsSync(file)) fail('negativeReceiptPath.exists');
     const directory = path.dirname(file);
     fsImpl.mkdirSync(directory, { recursive: true });
@@ -275,6 +275,9 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
             if (temporaryIdentity && finalStat.isFile() && !finalStat.isSymbolicLink() && sameIdentity(finalStat, temporaryIdentity)) {
                 fsImpl.unlinkSync(file);
                 cleanupChangedDirectory = true;
+            } else {
+                quarantineForeignPathExclusive(file, '.negative-receipt.foreign-', fsImpl, randomUUID);
+                cleanupChangedDirectory = true;
             }
         }
         if (fsImpl.existsSync(temporary)) {
@@ -283,9 +286,7 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
                 fsImpl.unlinkSync(temporary);
                 cleanupChangedDirectory = true;
             } else {
-                const diagnostic = path.join(directory, `.negative-receipt.foreign-${temporaryToken}`);
-                if (pathEntryExistsWith(diagnostic, fsImpl)) fail('negativeReceiptPath.diagnosticExists');
-                fsImpl.renameSync(temporary, diagnostic);
+                quarantineForeignPathExclusive(temporary, '.negative-receipt.foreign-', fsImpl, randomUUID);
                 cleanupChangedDirectory = true;
             }
         }
@@ -298,19 +299,63 @@ function sameIdentity(stat, identity) {
     return stat.dev === identity.dev && stat.ino === identity.ino;
 }
 
+function quarantineSnapshot(file, fsImpl) {
+    const stat = fsImpl.lstatSync(file);
+    if (stat.isSymbolicLink()) fail('negative.quarantine.symlink');
+    const identity = { dev: stat.dev, ino: stat.ino };
+    if (stat.isFile()) return { type: 'file', identity, bytes: fsImpl.readFileSync(file) };
+    if (!stat.isDirectory()) fail('negative.quarantine.type');
+    return {
+        type: 'directory',
+        identity,
+        entries: fsImpl.readdirSync(file).sort().map((name) => [name, quarantineSnapshot(path.join(file, name), fsImpl)]),
+    };
+}
+
+function sameQuarantineSnapshot(actual, expected) {
+    if (actual.type !== expected.type || !sameIdentity(actual.identity, expected.identity)) return false;
+    if (actual.type === 'file') return Buffer.isBuffer(actual.bytes) && Buffer.isBuffer(expected.bytes) && actual.bytes.equals(expected.bytes);
+    return actual.entries.length === expected.entries.length && actual.entries.every(([name, snapshot], index) => name === expected.entries[index][0] && sameQuarantineSnapshot(snapshot, expected.entries[index][1]));
+}
+
+function quarantineForeignPathExclusive(sourcePath, diagnosticPrefix, fsImpl, randomUUID) {
+    const expected = quarantineSnapshot(sourcePath, fsImpl);
+    const parent = path.dirname(sourcePath);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        const uuid = randomUUID();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)) fail('negative.quarantine.uuid');
+        const diagnostic = path.join(parent, `${diagnosticPrefix}${uuid}`);
+        try { fsImpl.mkdirSync(diagnostic); }
+        catch (error) { if (error?.code === 'EEXIST') continue; throw error; }
+        if (fsImpl.readdirSync(diagnostic).length !== 0) fail('negative.quarantine.claim');
+        const current = quarantineSnapshot(sourcePath, fsImpl);
+        if (!sameQuarantineSnapshot(current, expected)) fail('negative.quarantine.source');
+        const destination = path.join(diagnostic, path.basename(sourcePath));
+        fsImpl.renameSync(sourcePath, destination);
+        const quarantined = quarantineSnapshot(destination, fsImpl);
+        if (!sameQuarantineSnapshot(quarantined, expected)) fail('negative.quarantine.destination');
+        fsyncDirectory(diagnostic, fsImpl, process.platform);
+        fsyncDirectory(parent, fsImpl, process.platform);
+        return destination;
+    }
+    fail('negative.quarantine.collision');
+}
+
 function checkpointAuditFileName(checkpoint) {
     return `${String(checkpoint.sequence).padStart(3, '0')}-${checkpoint.controlId.toLowerCase()}-${checkpoint.phase.toLowerCase()}.json`;
 }
 
-function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl = fs, platform = process.platform, randomHex = () => crypto.randomBytes(16).toString('hex') } = {}) {
+function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl = fs, platform = process.platform, randomHex = () => crypto.randomBytes(16).toString('hex'), randomUUID = () => crypto.randomUUID() } = {}) {
     const root = path.join(path.dirname(negativeReceiptPath), 'negative-checkpoint-audits');
     if (pathEntryExistsWith(root, fsImpl)) fail('negativeCheckpointAudits.exists');
     const token = randomHex();
     if (!/^[0-9a-f]{32}$/.test(token)) fail('negativeCheckpointAudits.stageToken');
     const stage = path.join(path.dirname(root), `.${path.basename(root)}.stage-${token}`);
     let identity;
+    let created = false;
     try {
         fsImpl.mkdirSync(stage);
+        created = true;
         let stageStatError;
         try {
             const stageStat = fsImpl.lstatSync(stage);
@@ -333,13 +378,14 @@ function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl =
         if (stageStatError) throw stageStatError;
     } catch (error) {
         let removed = false;
-        if (identity && pathEntryExistsWith(stage, fsImpl)) {
+        if (created && identity && pathEntryExistsWith(stage, fsImpl)) {
             const current = fsImpl.lstatSync(stage);
             if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, identity) && fsImpl.readdirSync(stage).length === 0) {
                 fsImpl.rmdirSync(stage);
                 removed = true;
             }
         }
+        if (created && !removed && pathEntryExistsWith(stage, fsImpl)) quarantineForeignPathExclusive(stage, '.negative-checkpoint-audits.foreign-', fsImpl, randomUUID);
         if (removed) fsyncDirectory(path.dirname(stage), fsImpl, platform);
         if (error?.code === 'EEXIST') fail('negativeCheckpointAudits.stage', error.message);
         throw error;
@@ -351,6 +397,7 @@ function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl =
         stage,
         parent: path.dirname(root),
         identity,
+        randomUUID,
         files: new Map(),
         published: false,
     };
@@ -437,7 +484,9 @@ function rollbackNegativeCheckpointAuditPublication(publication) {
         fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
         return;
     }
-    if (directoryStat.isDirectory() && !directoryStat.isSymbolicLink() && sameIdentity(directoryStat, publication.identity)) {
+    if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink() || !sameIdentity(directoryStat, publication.identity)) {
+        quarantineForeignPathExclusive(directory, '.negative-checkpoint-audits.foreign-', publication.fsImpl, publication.randomUUID);
+    } else {
         for (const [name, record] of publication.files) {
             const file = path.join(directory, name);
             let stat;
@@ -449,10 +498,7 @@ function rollbackNegativeCheckpointAuditPublication(publication) {
         if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity) && publication.fsImpl.readdirSync(directory).length === 0) {
             publication.fsImpl.rmdirSync(directory);
         } else if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity)) {
-            const token = path.basename(publication.stage).slice('.negative-checkpoint-audits.stage-'.length);
-            const diagnostic = path.join(publication.parent, `.negative-checkpoint-audits.foreign-${token}`);
-            if (pathEntryExistsWith(diagnostic, publication.fsImpl)) fail('negativeCheckpointAudits.diagnosticExists');
-            publication.fsImpl.renameSync(directory, diagnostic);
+            quarantineForeignPathExclusive(directory, '.negative-checkpoint-audits.foreign-', publication.fsImpl, publication.randomUUID);
         }
     }
     fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
@@ -608,6 +654,7 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
         fsImpl: checkpointAuditPublication.fsImpl,
         platform: checkpointAuditPublication.platform,
         publicationGuard,
+        randomUUID: checkpointAuditPublication.randomUUID,
     });
     const lines = [...NEGATIVE_CONTROL_REGISTRY.map(({ id }) => `EXPECTED_REJECTION=${id}`), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12'];
     return { receipt, lines };

@@ -261,6 +261,7 @@ function publicationFaultFs(config, mode, foreignSource) {
         cleanupParentFsyncs: 0,
         closedPaths: [],
         faultInjected: false,
+        foreignReceiptBytes: undefined,
     };
     let auditRenamed = false;
     let parentFsyncsAfterRename = 0;
@@ -281,9 +282,9 @@ function publicationFaultFs(config, mode, foreignSource) {
                     target.renameSync(auditRoot, path.join(parent, 'owned-checkpoint-audits-diagnostic'));
                     target.renameSync(foreignSource, auditRoot);
                 }
-                if (mode === 'stage-open' && !state.faultInjected && flags === 'r' && path.dirname(file) === parent && path.basename(file).startsWith('.negative-checkpoint-audits.stage-')) {
+                if (['stage-open', 'stage-lstat-open'].includes(mode) && !state.faultInjected && flags === 'r' && path.dirname(file) === parent && path.basename(file).startsWith('.negative-checkpoint-audits.stage-')) {
                     state.faultInjected = true;
-                    throw new Error('injected.stage-open');
+                    throw new Error(`injected.${mode}`);
                 }
                 const descriptor = target.openSync(file, flags, ...args);
                 descriptorPaths.set(descriptor, path.resolve(file));
@@ -329,14 +330,24 @@ function publicationFaultFs(config, mode, foreignSource) {
                 if (mode === 'receipt-fsync' && receiptTemporary) throw new Error('injected.receipt-fsync');
                 if (auditRenamed && descriptorPath === path.resolve(parent)) {
                     parentFsyncsAfterRename += 1;
-                    if (parentFsyncsAfterRename === 1 && ['post-rename-fsync', 'cleanup-fsync', 'foreign-replacement'].includes(mode)) {
-                        if (mode === 'foreign-replacement') {
+                    if (parentFsyncsAfterRename === 1 && ['post-rename-fsync', 'cleanup-fsync', 'foreign-replacement', 'foreign-replacement-collision'].includes(mode)) {
+                        if (['foreign-replacement', 'foreign-replacement-collision'].includes(mode)) {
                             target.rmSync(auditRoot, { recursive: true });
                             target.renameSync(foreignSource, auditRoot);
                         }
+                        state.faultInjected = true;
                         throw new Error('injected.post-rename-fsync');
                     }
                     if (parentFsyncsAfterRename === 2 && mode === 'cleanup-fsync') throw new Error('injected.cleanup-fsync');
+                }
+                if (['receipt-final-foreign', 'receipt-final-foreign-collision'].includes(mode) && !state.faultInjected && descriptorPath === path.resolve(parent) && target.existsSync(config.negativeReceiptPath)) {
+                    state.foreignReceiptBytes = target.readFileSync(config.negativeReceiptPath);
+                    const replacement = path.join(parent, 'foreign-final-negative-receipt');
+                    target.writeFileSync(replacement, state.foreignReceiptBytes, { flag: 'wx' });
+                    target.unlinkSync(config.negativeReceiptPath);
+                    target.renameSync(replacement, config.negativeReceiptPath);
+                    state.faultInjected = true;
+                    throw new Error('injected.receipt-final-foreign');
                 }
                 if (state.faultInjected && descriptorPath === path.resolve(parent)) state.cleanupParentFsyncs += 1;
                 return target.fsyncSync(descriptor);
@@ -374,9 +385,9 @@ function publicationFaultFs(config, mode, foreignSource) {
                     state.faultInjected = true;
                     throw new Error('injected.audit-file-lstat');
                 }
-                if (mode === 'stage-lstat' && stagedRoot && !stageLstatInjected) {
+                if (['stage-lstat', 'stage-lstat-open'].includes(mode) && stagedRoot && !stageLstatInjected) {
                     stageLstatInjected = true;
-                    throw new Error('injected.stage-lstat');
+                    throw new Error(`injected.${mode}`);
                 }
                 return target.lstatSync(file, ...args);
             };
@@ -404,16 +415,33 @@ function publicationInventory(config) {
     };
 }
 
+function diagnosticFiles(parent, prefix) {
+    const files = [];
+    function visit(entry) {
+        const stat = fs.lstatSync(entry);
+        if (stat.isFile() && !stat.isSymbolicLink()) { files.push(entry); return; }
+        if (!stat.isDirectory() || stat.isSymbolicLink()) return;
+        for (const name of fs.readdirSync(entry)) visit(path.join(entry, name));
+    }
+    for (const name of fs.readdirSync(parent).filter((entry) => entry.startsWith(prefix)).sort()) visit(path.join(parent, name));
+    return files;
+}
+
 function secondDirectoryFsyncFailure(finalPath, replaceWithForeign) {
     const calls = [];
-    const owned = { dev: 1, ino: 100 };
-    const foreign = { dev: 1, ino: 200 };
+    const owned = { dev: 1, ino: 100, type: 'file', bytes: Buffer.from('{}\n') };
+    const foreign = { dev: 1, ino: 200, type: 'file', bytes: Buffer.from('{}\n') };
     const entries = new Map();
     let directoryFsyncs = 0;
-    const stat = (identity) => ({ ...identity, isFile: () => true, isSymbolicLink: () => false });
+    let nextIno = 300;
+    const stat = (entry) => ({ ...entry, isFile: () => entry.type === 'file', isDirectory: () => entry.type === 'directory', isSymbolicLink: () => false });
     const fsImpl = {
         existsSync: (file) => entries.has(file),
-        mkdirSync: () => {},
+        mkdirSync: (file, options) => {
+            if (options?.recursive) return;
+            if (entries.has(file)) { const error = new Error('exists'); error.code = 'EEXIST'; throw error; }
+            entries.set(file, { dev: 1, ino: nextIno++, type: 'directory' });
+        },
         openSync: (file, flags) => {
             if (flags === 'wx') { entries.set(file, owned); return `temp:${file}`; }
             return 'directory';
@@ -432,7 +460,9 @@ function secondDirectoryFsyncFailure(finalPath, replaceWithForeign) {
         closeSync: () => {},
         linkSync: (temporary, file) => { entries.set(file, entries.get(temporary)); calls.push('link'); },
         lstatSync: (file) => stat(entries.get(file)),
-        readFileSync: () => Buffer.from('{}\n'),
+        readFileSync: (file) => entries.get(file)?.bytes ?? Buffer.from('{}\n'),
+        readdirSync: (directory) => [...entries.keys()].filter((file) => path.dirname(file) === directory).map((file) => path.basename(file)),
+        renameSync: (source, destination) => { entries.set(destination, entries.get(source)); entries.delete(source); calls.push('quarantine'); },
         unlinkSync: (file) => { calls.push(file === finalPath ? 'unlink-final' : 'unlink-temp'); entries.delete(file); },
     };
     return { calls, entries, foreign, fsImpl };
@@ -648,13 +678,17 @@ test('second parent fsync failure removes only the task-owned final and fsyncs t
     assert.equal(entries.has(finalPath), false);
 });
 
-test('second parent fsync failure preserves a foreign replacement and still fsyncs cleanup', async () => {
+test('second parent fsync failure quarantines a foreign replacement and still fsyncs cleanup', async () => {
     const driver = await loadDriver();
     const finalPath = path.resolve('negative-foreign.json');
     const { calls, entries, foreign, fsImpl } = secondDirectoryFsyncFailure(finalPath, true);
-    assert.throws(() => driver.publishNegativeReceiptExclusive(finalPath, Buffer.from('{}\n'), { fsImpl, platform: 'linux' }), /second parent fsync/);
-    assert.deepEqual(calls, ['fsync-temp', 'link', 'fsync-directory-1', 'unlink-temp', 'fsync-directory-2', 'fsync-directory-3']);
-    assert.deepEqual(entries.get(finalPath), foreign);
+    const uuid = '55555555-5555-4555-8555-555555555555';
+    assert.throws(() => driver.publishNegativeReceiptExclusive(finalPath, Buffer.from('{}\n'), { fsImpl, platform: 'linux', randomUUID: () => uuid }), /second parent fsync/);
+    assert.equal(entries.has(finalPath), false);
+    const destination = path.join(path.dirname(finalPath), `.negative-receipt.foreign-${uuid}`, path.basename(finalPath));
+    assert.deepEqual(entries.get(destination), foreign);
+    assert.equal(calls.includes('quarantine'), true);
+    assert.equal(calls.filter((call) => call.startsWith('fsync-directory-')).length >= 4, true);
 });
 
 test('driver rejects 25 replayed audit objects without success lines or a final negative receipt', async (t) => {
@@ -819,11 +853,10 @@ test('post-rename rollback preserves a foreign replacement and does not publish 
         () => driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })),
         /injected\.post-rename-fsync/,
     );
-    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
-    assert.equal(fs.readFileSync(path.join(checkpointAuditRoot(config), 'marker'), 'utf8'), 'foreign\n');
-    const names = fs.readdirSync(path.dirname(config.negativeReceiptPath));
-    assert.equal(names.some((name) => name.startsWith('.negative-checkpoint-audits.stage-')), false);
-    assert.equal(names.some((name) => name.startsWith(`.${path.basename(config.negativeReceiptPath)}.tmp-`)), false);
+    assertNoOwnedPublicationResidue(config);
+    const diagnostics = diagnosticFiles(path.dirname(config.negativeReceiptPath), '.negative-checkpoint-audits.foreign-');
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign\n');
 });
 
 test('receipt temp first descriptor fstat failure closes and durably removes the whole owned publication inventory', async (t) => {
@@ -852,9 +885,9 @@ test('receipt temp first fstat failure quarantines rather than deleting a foreig
         /injected\.receipt-temp-fstat/,
     );
     assertNoOwnedPublicationResidue(config);
-    const diagnostics = fs.readdirSync(parent).filter((name) => name.startsWith('.negative-receipt.foreign-'));
+    const diagnostics = diagnosticFiles(parent, '.negative-receipt.foreign-');
     assert.equal(diagnostics.length, 1);
-    assert.equal(fs.readFileSync(path.join(parent, diagnostics[0]), 'utf8'), 'foreign-receipt-fstat\n');
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign-receipt-fstat\n');
 });
 
 test('stage directory first open failure stops before audits and durably removes the exact publication inventory', async (t) => {
@@ -916,11 +949,133 @@ test('checkpoint path lstat failure quarantines the owned stage rather than dele
         /injected\.audit-file-lstat/,
     );
     assertNoOwnedPublicationResidue(config);
-    const diagnostics = fs.readdirSync(parent).filter((name) => name.startsWith('.negative-checkpoint-audits.foreign-'));
+    const diagnostics = diagnosticFiles(parent, '.negative-checkpoint-audits.foreign-');
     assert.equal(diagnostics.length, 1);
-    const foreignFiles = fs.readdirSync(path.join(parent, diagnostics[0]));
-    assert.equal(foreignFiles.length, 1);
-    assert.equal(fs.readFileSync(path.join(parent, diagnostics[0], foreignFiles[0]), 'utf8'), 'foreign-checkpoint\n');
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign-checkpoint\n');
+});
+
+test('combined stage lstat and directory open failures remove every live publication name', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-stage-double-acquisition-');
+    const parent = path.dirname(config.negativeReceiptPath);
+    const fsImpl = publicationFaultFs(config, 'stage-lstat-open');
+    let auditCalls = 0;
+    let spawnCalls = 0;
+    assert.throws(() => driver.runNegativeControlsFromConfig(configPath, {
+        ...successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform }),
+        auditPristine: () => { auditCalls += 1; return auditReceipt(acceptedDir); },
+        spawnSyncImpl: () => { spawnCalls += 1; throw new Error('unexpected spawn'); },
+    }), /injected\.stage-lstat-open/);
+    assert.equal(auditCalls, 0);
+    assert.equal(spawnCalls, 0);
+    assertNoOwnedPublicationResidue(config);
+    assert.equal(fs.readdirSync(parent).filter((name) => name.startsWith('.negative-checkpoint-audits.foreign-')).length, 1);
+    assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
+});
+
+test('rollback quarantines a foreign final companion root and the same operation can run again', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-final-companion-foreign-');
+    const parent = path.dirname(config.negativeReceiptPath);
+    const foreignSource = path.join(parent, 'foreign-final-checkpoint-audits');
+    fs.mkdirSync(foreignSource);
+    fs.writeFileSync(path.join(foreignSource, 'marker'), 'foreign-final-companion\n');
+    const fsImpl = publicationFaultFs(config, 'foreign-replacement', foreignSource);
+    assert.throws(
+        () => driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })),
+        /injected\.post-rename-fsync/,
+    );
+    assertNoOwnedPublicationResidue(config);
+    const diagnostics = diagnosticFiles(parent, '.negative-checkpoint-audits.foreign-');
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign-final-companion\n');
+    assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
+
+    const rerun = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir));
+    assert.equal(rerun.lines.at(-1), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12');
+    assert.equal(fs.existsSync(config.negativeReceiptPath), true);
+    assert.equal(fs.existsSync(checkpointAuditRoot(config)), true);
+});
+
+test('rollback quarantines a byte-identical foreign final receipt and the same operation can run again', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-final-receipt-foreign-');
+    const parent = path.dirname(config.negativeReceiptPath);
+    const fsImpl = publicationFaultFs(config, 'receipt-final-foreign');
+    assert.throws(
+        () => driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })),
+        /injected\.receipt-final-foreign/,
+    );
+    assertNoOwnedPublicationResidue(config);
+    const diagnostics = diagnosticFiles(parent, '.negative-receipt.foreign-');
+    assert.equal(diagnostics.length, 1);
+    assert.deepEqual(fs.readFileSync(diagnostics[0]), fsImpl.__faultState.foreignReceiptBytes);
+    assert.equal(JSON.parse(fsImpl.__faultState.foreignReceiptBytes).status, 'VERIFIED');
+    assert.equal(fs.existsSync(config.negativeReceiptPath), false, 'byte-identical foreign receipt remained hidden at the success path');
+    assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
+
+    const rerun = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir));
+    assert.equal(rerun.lines.at(-1), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12');
+    assert.equal(fs.existsSync(config.negativeReceiptPath), true);
+    assert.equal(fs.existsSync(checkpointAuditRoot(config)), true);
+});
+
+test('receipt quarantine collision allocates a fresh exclusive diagnostic without overwriting foreign bytes', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-receipt-quarantine-collision-');
+    const parent = path.dirname(config.negativeReceiptPath);
+    const collisionUuid = '11111111-1111-4111-8111-111111111111';
+    const freshUuid = '22222222-2222-4222-8222-222222222222';
+    const collision = path.join(parent, `.negative-receipt.foreign-${collisionUuid}`);
+    fs.mkdirSync(collision);
+    fs.writeFileSync(path.join(collision, 'marker'), 'preexisting-receipt-diagnostic\n');
+    let uuidCalls = 0;
+    const fsImpl = publicationFaultFs(config, 'receipt-final-foreign-collision');
+    assert.throws(() => driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, {
+        fsImpl,
+        platform: process.platform,
+        randomUUID: () => [collisionUuid, freshUuid][uuidCalls++],
+    })), /injected\.receipt-final-foreign/);
+    assertNoOwnedPublicationResidue(config);
+    assert.equal(fs.readFileSync(path.join(collision, 'marker'), 'utf8'), 'preexisting-receipt-diagnostic\n');
+    const diagnostics = fs.readdirSync(parent).filter((name) => name.startsWith('.negative-receipt.foreign-')).sort();
+    assert.deepEqual(diagnostics, [path.basename(collision), `.negative-receipt.foreign-${freshUuid}`].sort());
+    const foreignReceipts = diagnosticFiles(parent, `.negative-receipt.foreign-${freshUuid}`);
+    assert.equal(foreignReceipts.length, 1);
+    assert.deepEqual(fs.readFileSync(foreignReceipts[0]), fsImpl.__faultState.foreignReceiptBytes);
+    assert.equal(uuidCalls, 2);
+    assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
+});
+
+test('stage quarantine collision allocates a fresh exclusive diagnostic without overwriting foreign bytes', async (t) => {
+    const driver = await loadDriver();
+    const { acceptedDir, config, configPath } = makeDriverFixture(t, 'r14-task3-stage-quarantine-collision-');
+    const parent = path.dirname(config.negativeReceiptPath);
+    const collisionUuid = '33333333-3333-4333-8333-333333333333';
+    const freshUuid = '44444444-4444-4444-8444-444444444444';
+    const collision = path.join(parent, `.negative-checkpoint-audits.foreign-${collisionUuid}`);
+    fs.mkdirSync(collision);
+    fs.writeFileSync(path.join(collision, 'marker'), 'preexisting-stage-diagnostic\n');
+    const foreignSource = path.join(parent, 'foreign-final-checkpoint-audits-collision');
+    fs.mkdirSync(foreignSource);
+    fs.writeFileSync(path.join(foreignSource, 'marker'), 'foreign-stage-collision\n');
+    let uuidCalls = 0;
+    const fsImpl = publicationFaultFs(config, 'foreign-replacement-collision', foreignSource);
+    assert.throws(() => driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, {
+        fsImpl,
+        platform: process.platform,
+        randomHex: () => 'a'.repeat(32),
+        randomUUID: () => [collisionUuid, freshUuid][uuidCalls++],
+    })), /injected\.post-rename-fsync/);
+    assertNoOwnedPublicationResidue(config);
+    assert.equal(fs.readFileSync(path.join(collision, 'marker'), 'utf8'), 'preexisting-stage-diagnostic\n');
+    const diagnostics = fs.readdirSync(parent).filter((name) => name.startsWith('.negative-checkpoint-audits.foreign-')).sort();
+    assert.deepEqual(diagnostics, [path.basename(collision), `.negative-checkpoint-audits.foreign-${freshUuid}`].sort());
+    const foreignStageFiles = diagnosticFiles(parent, `.negative-checkpoint-audits.foreign-${freshUuid}`);
+    assert.equal(foreignStageFiles.length, 1);
+    assert.equal(fs.readFileSync(foreignStageFiles[0], 'utf8'), 'foreign-stage-collision\n');
+    assert.equal(uuidCalls, 2);
+    assert.equal(fsImpl.__faultState.cleanupParentFsyncs >= 1, true);
 });
 
 test('companion replacement at receipt temp open cannot publish a receipt or success gate', async (t) => {
@@ -936,8 +1091,10 @@ test('companion replacement at receipt temp open cannot publish a receipt or suc
         successLines = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })).lines;
     }, /negativeCheckpointAudits/);
     assert.equal(successLines, undefined);
-    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
-    assert.equal(fs.readFileSync(path.join(checkpointAuditRoot(config), 'marker'), 'utf8'), 'foreign\n');
+    assertNoOwnedPublicationResidue(config);
+    const diagnostics = diagnosticFiles(parent, '.negative-checkpoint-audits.foreign-');
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign\n');
     assert.equal(fs.readdirSync(path.join(parent, 'owned-checkpoint-audits-diagnostic')).length, 25);
 });
 
@@ -954,8 +1111,10 @@ test('companion replacement inside receipt hardlink is detected and rolls back t
         successLines = driver.runNegativeControlsFromConfig(configPath, successfulDriverOverrides(acceptedDir, { fsImpl, platform: process.platform })).lines;
     }, /negativeCheckpointAudits/);
     assert.equal(successLines, undefined);
-    assert.equal(fs.existsSync(config.negativeReceiptPath), false);
-    assert.equal(fs.readFileSync(path.join(checkpointAuditRoot(config), 'marker'), 'utf8'), 'foreign\n');
+    assertNoOwnedPublicationResidue(config);
+    const diagnostics = diagnosticFiles(parent, '.negative-checkpoint-audits.foreign-');
+    assert.equal(diagnostics.length, 1);
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign\n');
     assert.equal(fs.readdirSync(path.join(parent, 'owned-checkpoint-audits-diagnostic')).length, 25);
 });
 
@@ -986,9 +1145,9 @@ test('receipt temp replacement after close is never linked and the foreign bytes
     assert.equal(fs.existsSync(config.negativeReceiptPath), false);
     assert.equal(fs.existsSync(checkpointAuditRoot(config)), false);
     assertNoOwnedPublicationResidue(config);
-    const diagnostics = fs.readdirSync(parent).filter((name) => name.startsWith('.negative-receipt.foreign-'));
+    const diagnostics = diagnosticFiles(parent, '.negative-receipt.foreign-');
     assert.equal(diagnostics.length, 1);
-    assert.equal(fs.readFileSync(path.join(parent, diagnostics[0]), 'utf8'), 'foreign-receipt\n');
+    assert.equal(fs.readFileSync(diagnostics[0], 'utf8'), 'foreign-receipt\n');
     assert.equal(fs.existsSync(path.join(parent, 'owned-negative-receipt-diagnostic')), true);
 });
 
