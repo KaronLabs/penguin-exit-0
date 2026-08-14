@@ -9,6 +9,20 @@ export const SMOKE_SCHEMA_VERSION = 2;
 export const ENGINES = Object.freeze(['chromium', 'firefox', 'webkit']);
 export const ORIGINS = Object.freeze(['immutable', 'alias']);
 export const STAGES = Object.freeze(['initial', 'progress', 'ending']);
+export const NEGATIVE_CONTROL_REGISTRY = Object.freeze([
+    ['NC01_INTRUSION_SEQUENCE_BROKEN', 'intrusion.sequence'],
+    ['NC02_PENALTY_DELTA_BROKEN', 'penalty.starDelta'],
+    ['NC03_RECOVER_UNITS_BROKEN', 'recover.unitsDelta'],
+    ['NC04_ENDING_ACCESSIBLE_NAME_BROKEN', 'ending.accessibleName'],
+    ['NC05_CLOUDFLARE_PRE_ID_DRIFT', 'cloudflare.preDeploymentId'],
+    ['NC06_FINAL_ALIAS_SCRIPT_DRIFT', 'fileGate.finalAlias.scriptSha256'],
+    ['NC07_SCREENSHOT_CASE_SWAP_REHASHED', 'screenshot.operationReceiptBinding'],
+    ['NC08_SCREENSHOT_COPY_REHASHED', 'screenshot.operationReceiptBinding'],
+    ['NC09_SIGNATURE_ROAST_BROKEN', 'signature.roast'],
+    ['NC10_QUOTE_RELOAD_PERSISTENCE_BROKEN', 'quote.reloadPersistence'],
+    ['NC11_ENDING_DISPLAY_NONE', 'ending.computedVisibility'],
+    ['NC12_FAILED_REQUEST_INJECTED', 'errors.requestFailed'],
+].map(([id, expectedInvariant]) => Object.freeze({ id, expectedInvariant })));
 
 const PRODUCT_PATHS = Object.freeze(['/', '/content.js', '/game-core.js', '/script.js', '/style.css']);
 const RELEASE_ID = /^[0-9]{8}T[0-9]{6}Z-r14-public-smoke-v2$/;
@@ -508,7 +522,12 @@ export function validateTask2FairPingObservations(observations) {
 export function validateTask2Signature(value) {
     if (value?.fairPing?.provenance === undefined) fail('task2.fairPing.provenance');
     const { fairPing, ...legacySignature } = value;
-    try { validateSignature(legacySignature); validateFairPing(fairPing); }
+    try { validateSignature(legacySignature); }
+    catch (error) {
+        if (error.message?.startsWith('signature.roast')) throw error;
+        fail('task2.fairPing.provenance', error.message);
+    }
+    try { validateFairPing(fairPing); }
     catch (error) { fail('task2.fairPing.provenance', error.message); }
     return value;
 }
@@ -606,7 +625,7 @@ function validateIntrusions(value) {
 
 function validatePenalty(value) {
     exactKeys(value, ['actionSeq', 'controlAccessibleName', 'before', 'after', 'starDelta'], 'penalty');
-    if (value.controlAccessibleName !== '페널티 수락 (-500★)' || value.starDelta !== -500) fail('penalty.starDelta');
+    if (value.controlAccessibleName !== '페널티 수락 (-500★)' || value.starDelta !== -500 || value.after?.stars - value.before?.stars !== value.starDelta) fail('penalty.starDelta');
     integer(value.actionSeq, 'penalty.actionSeq'); if (value.actionSeq !== 11) fail('penalty.actionSeq');
     exactState(value.before, 'penalty.before', { units: 50, stars: 750, incidentCost: 0, activeIntrusion: 'copilot' });
     exactState(value.after, 'penalty.after', { units: 50, stars: 250, incidentCost: 500, activeIntrusion: null });
@@ -619,6 +638,7 @@ function validateRecoveries(value) {
         exactKeys(recovery, ['actionSeq', 'controlAccessibleName', 'before', 'after', 'starDelta'], 'recovery');
         const delta = Math.min(150, 3000 - stars);
         if (recovery.controlAccessibleName !== 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구' || recovery.starDelta !== delta) fail('recover.starDelta');
+        if (recovery.after?.units - recovery.before?.units !== 0) fail('recover.unitsDelta');
         integer(recovery.actionSeq, 'recover.actionSeq'); if (recovery.actionSeq !== 30 + index) fail('recover.actionSeq');
         exactState(recovery.before, 'recover.before', { units: 200, stars, incidentCost: 1000, activeIntrusion: null });
         stars += delta;
@@ -638,7 +658,8 @@ function validateInitial(value) {
 function validateEnding(value) {
     exactKeys(value, ['visibility', 'role', 'ariaModal', 'ariaLabelledby', 'accessibleName', 'initialFocusId', 'tabFocusId', 'shiftTabFocusId', 'backgroundInert', 'produceDisabled', 'produceAccessibleName', 'tokens'], 'ending');
     if (!deriveVisibility(value.visibility) || value.visibility.display !== 'flex' || value.visibility.position !== 'fixed') fail('ending.computedVisibility');
-    if (value.role !== 'dialog' || value.ariaModal !== 'true' || value.ariaLabelledby !== 'ending-process-heading' || value.accessibleName !== '프로세스는 살아남았습니다' || value.initialFocusId !== 'btn-play-again' || value.tabFocusId !== 'btn-play-again' || value.shiftTabFocusId !== 'btn-play-again' || value.produceDisabled !== true || value.produceAccessibleName !== 'EXIT 0 달성') fail('ending.accessibility');
+    if (value.accessibleName !== '프로세스는 살아남았습니다') fail('ending.accessibleName');
+    if (value.role !== 'dialog' || value.ariaModal !== 'true' || value.ariaLabelledby !== 'ending-process-heading' || value.initialFocusId !== 'btn-play-again' || value.tabFocusId !== 'btn-play-again' || value.shiftTabFocusId !== 'btn-play-again' || value.produceDisabled !== true || value.produceAccessibleName !== 'EXIT 0 달성') fail('ending.accessibility');
     exactKeys(value.backgroundInert, ['header', 'dashboard', 'intrusionBanner', 'mainGrid'], 'ending.backgroundInert');
     if (Object.values(value.backgroundInert).some((inert) => inert !== true)) fail('ending.backgroundInert');
     const requiredTokens = ['PROCESS EXIT CODE: 0', 'FINANCIAL EXIT CODE: 1', '+$3,000', '-$3,001', '-$1', '샘 알트먼의 인수 제안', 'Chief Tuna Prompt Engineer'];
@@ -1188,6 +1209,60 @@ export function validateAuditReceipt(receipt, expected) {
     const actualTuples = receipt.screenshotBindings.map((binding) => `${binding.case}\0${binding.stage}\0${binding.path}`);
     sameArray(actualTuples, expectedTuples, 'auditReceipt.screenshotBindings');
     if (expected !== undefined && canonicalJson({ ...receipt, createdUtc: expected.createdUtc }) !== canonicalJson(expected)) fail('auditReceipt.binding');
+    return receipt;
+}
+
+export function validateNegativeReceipt(receipt, expected = {}) {
+    const keys = ['schemaVersion', 'releaseId', 'status', 'createdUtc', 'configSha256', 'operationReceiptSha256', 'pristineManifestSha256', 'pristineTreeDigest', 'initialPristineAuditReceiptSha256', 'finalPristineAuditReceiptSha256', 'checkpoints', 'controls'];
+    exactKeys(receipt, keys, 'negativeReceipt');
+    if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED') fail('negativeReceipt.status');
+    if (!RELEASE_ID.test(string(receipt.releaseId, 'negativeReceipt.releaseId'))) fail('negativeReceipt.releaseId');
+    utc(receipt.createdUtc, 'negativeReceipt.createdUtc');
+    for (const key of ['configSha256', 'operationReceiptSha256', 'pristineManifestSha256', 'pristineTreeDigest', 'initialPristineAuditReceiptSha256', 'finalPristineAuditReceiptSha256']) sha(receipt[key], `negativeReceipt.${key}`);
+    if (receipt.initialPristineAuditReceiptSha256 !== receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.pristineAuditReceiptSha256');
+
+    if (!Array.isArray(receipt.checkpoints) || receipt.checkpoints.length !== 25) fail('negativeReceipt.checkpoints.cardinality');
+    const expectedCheckpoints = [{ controlId: 'BASELINE', phase: 'BASELINE' }];
+    for (const { id } of NEGATIVE_CONTROL_REGISTRY) expectedCheckpoints.push({ controlId: id, phase: 'BEFORE' }, { controlId: id, phase: 'AFTER' });
+    receipt.checkpoints.forEach((checkpoint, index) => {
+        exactKeys(checkpoint, ['sequence', 'controlId', 'phase', 'treeDigest', 'auditReceiptSha256', 'auditStatus'], 'negativeReceipt.checkpoint');
+        if (checkpoint.sequence !== index + 1 || checkpoint.controlId !== expectedCheckpoints[index].controlId || checkpoint.phase !== expectedCheckpoints[index].phase) fail('negativeReceipt.checkpoints.order');
+        if (checkpoint.treeDigest !== receipt.pristineTreeDigest) fail('negativeReceipt.checkpoint.treeDigest');
+        sha(checkpoint.auditReceiptSha256, 'negativeReceipt.checkpoint.auditReceiptSha256');
+        if (checkpoint.auditStatus !== 'VERIFIED') fail('negativeReceipt.checkpoint.auditStatus');
+    });
+    if (receipt.checkpoints[0].auditReceiptSha256 !== receipt.initialPristineAuditReceiptSha256 || receipt.checkpoints.at(-1).auditReceiptSha256 !== receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.checkpoints.auditBinding');
+
+    if (!Array.isArray(receipt.controls) || receipt.controls.length !== NEGATIVE_CONTROL_REGISTRY.length) fail('negativeReceipt.controls.cardinality');
+    receipt.controls.forEach((control, index) => {
+        exactKeys(control, ['id', 'expectedInvariant', 'derivedConfigSha256', 'mutationRootRealpath', 'targetRealpath', 'auditorArgv', 'exitCode', 'signal', 'stdoutSha256', 'stderrSha256', 'emittedTargetRealpath', 'successGateAbsent', 'observedInvariant'], 'negativeReceipt.control');
+        const registry = NEGATIVE_CONTROL_REGISTRY[index];
+        if (control.id !== registry.id || control.expectedInvariant !== registry.expectedInvariant) fail('negativeReceipt.controls.order');
+        sha(control.derivedConfigSha256, 'negativeReceipt.control.derivedConfigSha256');
+        const mutationRoot = canonicalPath(control.mutationRootRealpath, 'negativeReceipt.control.mutationRootRealpath');
+        const target = canonicalPath(control.targetRealpath, 'negativeReceipt.control.targetRealpath');
+        if (fs.realpathSync(mutationRoot) !== mutationRoot || fs.realpathSync(target) !== target || target !== path.join(mutationRoot, 'accepted') || control.emittedTargetRealpath !== target || (expected.pristineAcceptedRealpath && target === fs.realpathSync(expected.pristineAcceptedRealpath))) fail('negativeReceipt.control.targetRealpath');
+        if (!Array.isArray(control.auditorArgv) || control.auditorArgv.length !== 4 || control.auditorArgv.some((item) => typeof item !== 'string')) fail('negativeReceipt.control.auditorArgv');
+        const expectedConfigPath = path.join(mutationRoot, 'audit-config.json');
+        if (!path.isAbsolute(control.auditorArgv[0]) || !path.isAbsolute(control.auditorArgv[1]) || control.auditorArgv[2] !== '--config' || control.auditorArgv[3] !== expectedConfigPath) fail('negativeReceipt.control.auditorArgv');
+        if (expected.nodeExePath && control.auditorArgv[0] !== expected.nodeExePath) fail('negativeReceipt.control.auditorArgv');
+        if (expected.auditorPath && control.auditorArgv[1] !== expected.auditorPath) fail('negativeReceipt.control.auditorArgv');
+        if (integer(control.exitCode, 'negativeReceipt.control.exitCode') === 0) fail('negativeReceipt.control.exitCode');
+        if (control.signal !== null) fail('negativeReceipt.control.signal');
+        sha(control.stdoutSha256, 'negativeReceipt.control.stdoutSha256'); sha(control.stderrSha256, 'negativeReceipt.control.stderrSha256');
+        if (control.successGateAbsent !== true) fail('negativeReceipt.control.successGateAbsent');
+        if (control.observedInvariant !== registry.expectedInvariant) fail('negativeReceipt.control.observedInvariant');
+    });
+
+    if (expected.checkpointAuditReceipts !== undefined) {
+        if (!Array.isArray(expected.checkpointAuditReceipts) || expected.checkpointAuditReceipts.length !== 25) fail('negativeReceipt.checkpointAuditReceipts');
+        expected.checkpointAuditReceipts.forEach((audit, index) => {
+            validateAuditReceipt(audit);
+            const auditSha = sha256Bytes(Buffer.from(`${JSON.stringify(audit)}\n`));
+            if (auditSha !== receipt.checkpoints[index].auditReceiptSha256 || audit.status !== receipt.checkpoints[index].auditStatus) fail('negativeReceipt.checkpoint.auditReceipt');
+            if (expected.pristineAcceptedRealpath && audit.auditedTargetRealpath !== fs.realpathSync(expected.pristineAcceptedRealpath)) fail('negativeReceipt.checkpoint.auditTarget');
+        });
+    }
     return receipt;
 }
 

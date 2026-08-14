@@ -1,0 +1,358 @@
+#!/usr/bin/env node
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+import {
+    NEGATIVE_CONTROL_REGISTRY,
+    auditAcceptedRun,
+    canonicalJson,
+    sha256File,
+    validateAuditReceipt,
+    validateManifest,
+    validateNegativeReceipt,
+    validateOperationConfig,
+} from './public-smoke-v2-lib.mjs';
+
+const AUDITOR_TIMEOUT_MS = 120000;
+const SUCCESS_GATE = /(?:^|\r?\n)PUBLIC_SMOKE_V2_GATE=/;
+
+function fail(invariant, detail = '') {
+    throw new Error(`${invariant}${detail ? `: ${detail}` : ''}`);
+}
+
+function sha256(bytes) {
+    return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function readJson(file, invariant) {
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+        fail(invariant, error.message);
+    }
+}
+
+function writeJson(file, value) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: 'wx' });
+}
+
+function replaceJson(file, value) {
+    fs.writeFileSync(file, `${JSON.stringify(value)}\n`);
+}
+
+function copyTreeWithoutSymlinks(source, destination) {
+    const sourceStat = fs.lstatSync(source);
+    if (sourceStat.isSymbolicLink()) fail('negative.copy.symlink', source);
+    if (!sourceStat.isDirectory()) fail('negative.copy.source', source);
+    fs.mkdirSync(destination);
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+        const from = path.join(source, entry.name);
+        const to = path.join(destination, entry.name);
+        if (entry.isSymbolicLink()) fail('negative.copy.symlink', from);
+        if (entry.isDirectory()) copyTreeWithoutSymlinks(from, to);
+        else if (entry.isFile()) fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+        else fail('negative.copy.regular', from);
+    }
+}
+
+function manifestFor(root, releaseId) {
+    const files = [];
+    function walk(directory) {
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
+            const absolute = path.join(directory, entry.name);
+            if (entry.isSymbolicLink()) fail('negative.manifest.symlink', absolute);
+            if (entry.isDirectory()) walk(absolute);
+            else if (entry.isFile()) {
+                const relative = path.relative(root, absolute).split(path.sep).join('/');
+                if (relative === 'artifact-manifest.json') continue;
+                const bytes = fs.readFileSync(absolute);
+                files.push({ path: relative, bytes: bytes.length, sha256: sha256(bytes) });
+            } else fail('negative.manifest.regular', absolute);
+        }
+    }
+    walk(root);
+    files.sort((left, right) => left.path.localeCompare(right.path, 'en'));
+    const manifest = { schemaVersion: 1, releaseId, files };
+    manifest.manifestPayloadSha256 = sha256(canonicalJson(manifest));
+    return manifest;
+}
+
+function resealManifest(root) {
+    const manifestPath = path.join(root, 'artifact-manifest.json');
+    const current = readJson(manifestPath, 'negative.manifest');
+    const manifest = manifestFor(root, current.releaseId);
+    replaceJson(manifestPath, manifest);
+    validateManifest(root, manifest);
+    return manifest;
+}
+
+function rehashEvents(events) {
+    let previousEventSha256 = '0'.repeat(64);
+    events.forEach((event, index) => {
+        event.seq = index + 1;
+        event.previousEventSha256 = previousEventSha256;
+        const unhashed = { ...event };
+        delete unhashed.eventSha256;
+        event.eventSha256 = sha256(canonicalJson(unhashed));
+        previousEventSha256 = event.eventSha256;
+    });
+}
+
+function syncScreenshotEvent(events, screenshot) {
+    const written = events.find((event) => event.case === screenshot.caseLabel && event.type === 'screenshot-written' && event.payload?.stage === screenshot.stage);
+    if (!written) fail('negative.screenshot.event', `${screenshot.caseLabel}/${screenshot.stage}`);
+    written.payload.path = screenshot.relativePath;
+    written.payload.pngSha256 = screenshot.sha256;
+    written.payload.oracleSha256 = screenshot.oracleSnapshotSha256;
+    const oracle = events.find((event) => event.case === screenshot.caseLabel && event.type === 'screenshot-oracle' && event.payload?.stage === screenshot.stage);
+    if (oracle) oracle.payload.oracleSha256 = screenshot.oracleSnapshotSha256;
+}
+
+function changeNibble(value) {
+    return `${value[0] === '0' ? '1' : '0'}${value.slice(1)}`;
+}
+
+export function applyNegativeControlMutation(acceptedRoot, controlId) {
+    const observationsPath = path.join(acceptedRoot, 'observations.json');
+    const observations = readJson(observationsPath, 'negative.observations');
+    const first = observations[0];
+    let observationsChanged = true;
+
+    if (controlId === 'NC01_INTRUSION_SEQUENCE_BROKEN') first.intrusions[1].type = 'copilot';
+    else if (controlId === 'NC02_PENALTY_DELTA_BROKEN') first.penalty.after.stars += 1;
+    else if (controlId === 'NC03_RECOVER_UNITS_BROKEN') first.recoveries[0].after.units += 1;
+    else if (controlId === 'NC04_ENDING_ACCESSIBLE_NAME_BROKEN') first.ending.accessibleName += '!';
+    else if (controlId === 'NC05_CLOUDFLARE_PRE_ID_DRIFT') {
+        observationsChanged = false;
+        const stdoutPath = path.join(acceptedRoot, 'control-plane', 'pre.stdout.bin');
+        const rows = JSON.parse(fs.readFileSync(stdoutPath, 'utf8'));
+        rows[0].Id = rows[0].Id === 'feedface-1234-5678-9abc-def012345678' ? 'deadbeef-1234-5678-9abc-def012345678' : 'feedface-1234-5678-9abc-def012345678';
+        const bytes = Buffer.from(`${JSON.stringify(rows)}\n`);
+        fs.writeFileSync(stdoutPath, bytes);
+        const capturePath = path.join(acceptedRoot, 'control-plane', 'pre.command.json');
+        const capture = readJson(capturePath, 'negative.cloudflare.pre');
+        capture.stdoutBytes = bytes.length;
+        capture.stdoutSha256 = sha256(bytes);
+        replaceJson(capturePath, capture);
+    } else if (controlId === 'NC06_FINAL_ALIAS_SCRIPT_DRIFT') {
+        observationsChanged = false;
+        const probePath = path.join(acceptedRoot, 'file-probes', 'final-alias-5.json');
+        const probe = readJson(probePath, 'negative.fileProbe.finalAlias');
+        const script = probe.results.find((result) => result.path === '/script.js');
+        if (!script) fail('negative.fileProbe.finalAlias.script');
+        script.sha256 = changeNibble(script.sha256);
+        replaceJson(probePath, probe);
+    } else if (controlId === 'NC07_SCREENSHOT_CASE_SWAP_REHASHED' || controlId === 'NC08_SCREENSHOT_COPY_REHASHED') {
+        const destinationCase = observations.find((record) => record.label === 'firefox-alias');
+        const sourceCase = observations.find((record) => record.label === 'chromium-immutable');
+        const stage = controlId === 'NC07_SCREENSHOT_CASE_SWAP_REHASHED' ? 'initial' : 'progress';
+        const destination = destinationCase?.screenshots.find((screenshot) => screenshot.stage === stage);
+        const source = sourceCase?.screenshots.find((screenshot) => screenshot.stage === stage);
+        if (!destination || !source) fail('negative.screenshot.tuple', stage);
+        const destinationPath = path.join(acceptedRoot, destination.relativePath);
+        const sourcePath = path.join(acceptedRoot, source.relativePath);
+        const destinationBytes = fs.readFileSync(destinationPath);
+        const sourceBytes = fs.readFileSync(sourcePath);
+        const destinationOracleSha256 = destination.oracleSnapshotSha256;
+        const sourceOracleSha256 = source.oracleSnapshotSha256;
+        fs.writeFileSync(destinationPath, sourceBytes);
+        destination.bytes = sourceBytes.length;
+        destination.sha256 = sha256(sourceBytes);
+        destination.oracleSnapshotSha256 = sourceOracleSha256;
+        if (controlId === 'NC07_SCREENSHOT_CASE_SWAP_REHASHED') {
+            fs.writeFileSync(sourcePath, destinationBytes);
+            source.bytes = destinationBytes.length;
+            source.sha256 = sha256(destinationBytes);
+            source.oracleSnapshotSha256 = destinationOracleSha256;
+        }
+        const eventsPath = path.join(acceptedRoot, 'runner-events.jsonl');
+        const text = fs.readFileSync(eventsPath, 'utf8');
+        const events = text.trimEnd().split(/\r?\n/).map((line) => JSON.parse(line));
+        syncScreenshotEvent(events, destination);
+        if (controlId === 'NC07_SCREENSHOT_CASE_SWAP_REHASHED') syncScreenshotEvent(events, source);
+        rehashEvents(events);
+        fs.writeFileSync(eventsPath, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
+    } else if (controlId === 'NC09_SIGNATURE_ROAST_BROKEN') first.signature.roast += '!';
+    else if (controlId === 'NC10_QUOTE_RELOAD_PERSISTENCE_BROKEN') first.quotePersistence.afterReload.counter = 0;
+    else if (controlId === 'NC11_ENDING_DISPLAY_NONE') first.ending.visibility.display = 'none';
+    else if (controlId === 'NC12_FAILED_REQUEST_INJECTED') {
+        const baseUrl = first.requestedUrl ?? first.finalUrl ?? 'https://01234567.penguin-exit-0.pages.dev/';
+        first.errors.requestFailed.push({ url: new URL('/script.js', baseUrl).href, method: 'GET', errorText: 'net::ERR_FAILED' });
+    } else fail('negative.controlId', controlId);
+
+    if (observationsChanged) replaceJson(observationsPath, observations);
+    resealManifest(acceptedRoot);
+}
+
+function pristineState(acceptedDir) {
+    const manifestPath = path.join(acceptedDir, 'artifact-manifest.json');
+    const manifest = validateManifest(acceptedDir, readJson(manifestPath, 'negative.pristineManifest'));
+    const manifestSha256 = sha256File(manifestPath);
+    return { manifestSha256, treeDigest: sha256(canonicalJson({ files: manifest.files, manifestSha256 })) };
+}
+
+function publishExclusive(file, bytes) {
+    if (fs.existsSync(file)) fail('negativeReceiptPath.exists');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${crypto.randomBytes(16).toString('hex')}`);
+    try {
+        const descriptor = fs.openSync(temporary, 'wx');
+        try {
+            fs.writeFileSync(descriptor, bytes);
+            fs.fsyncSync(descriptor);
+        } finally {
+            fs.closeSync(descriptor);
+        }
+        fs.linkSync(temporary, file);
+    } finally {
+        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
+}
+
+function ensureAuthorityUnchanged(configPath, configSha256, operationReceiptPath, operationReceiptSha256) {
+    if (sha256File(configPath) !== configSha256) fail('negative.config.immutable');
+    if (sha256File(operationReceiptPath) !== operationReceiptSha256) fail('negative.operationReceipt.immutable');
+}
+
+function parseAuditorResult(result, targetRealpath, expectedInvariant) {
+    if (result?.error) fail('negative.auditor.launch', result.error.message);
+    if (!Number.isInteger(result?.status)) fail('negative.auditor.exitCode');
+    if (result.signal !== null) fail('negative.auditor.signal', String(result.signal));
+    if (result.status === 0) fail('negative.auditor.exitCode');
+    const stdout = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout ?? '');
+    const stderr = Buffer.isBuffer(result.stderr) ? result.stderr : Buffer.from(result.stderr ?? '');
+    if (SUCCESS_GATE.test(stdout.toString('utf8'))) fail('negative.auditor.successGate');
+    const lines = stderr.toString('utf8').trimEnd().split(/\r?\n/);
+    const expectedTargetLine = `AUDIT_TARGET_REALPATH=${targetRealpath}`;
+    if (lines[0] !== expectedTargetLine) fail('negative.auditor.targetRealpath');
+    const observedInvariant = lines[1]?.split(':', 1)[0];
+    if (observedInvariant !== expectedInvariant) fail('negative.auditor.observedInvariant', observedInvariant ?? 'missing');
+    return { exitCode: result.status, signal: null, stdout, stderr, emittedTargetRealpath: targetRealpath, successGateAbsent: true, observedInvariant };
+}
+
+export function runNegativeControlsFromConfig(configPath, overrides = {}) {
+    if (!path.isAbsolute(configPath)) fail('config.path', 'must be absolute');
+    const canonicalConfigPath = path.resolve(configPath);
+    const config = validateOperationConfig(readJson(canonicalConfigPath, 'negative.config'));
+    if (fs.existsSync(config.negativeReceiptPath)) fail('negativeReceiptPath.exists');
+    const pristineAcceptedRealpath = fs.realpathSync(config.acceptedDir);
+    const configSha256 = sha256File(canonicalConfigPath);
+    const operationReceiptSha256 = sha256File(config.operationReceiptPath);
+    const pristine = pristineState(pristineAcceptedRealpath);
+    const auditPristine = overrides.auditPristine ?? (() => auditAcceptedRun({ configPath: canonicalConfigPath }));
+    const spawnSyncImpl = overrides.spawnSyncImpl ?? spawnSync;
+    const now = overrides.now ?? (() => new Date());
+    const checkpoints = [];
+    const checkpointAuditReceipts = [];
+    let baselineAudit;
+    let baselineAuditSha256;
+
+    function checkpoint(controlId, phase) {
+        ensureAuthorityUnchanged(canonicalConfigPath, configSha256, config.operationReceiptPath, operationReceiptSha256);
+        const current = pristineState(pristineAcceptedRealpath);
+        if (current.manifestSha256 !== pristine.manifestSha256 || current.treeDigest !== pristine.treeDigest) fail('negative.pristine.checkpoint');
+        const freshAudit = auditPristine({ configPath: canonicalConfigPath, controlId, phase });
+        validateAuditReceipt(freshAudit, baselineAudit);
+        if (freshAudit.auditedTargetRealpath !== pristineAcceptedRealpath || freshAudit.status !== 'VERIFIED') fail('negative.pristine.audit');
+        if (!baselineAudit) {
+            baselineAudit = structuredClone(freshAudit);
+            baselineAuditSha256 = sha256(Buffer.from(`${JSON.stringify(baselineAudit)}\n`));
+        }
+        checkpoints.push({ sequence: checkpoints.length + 1, controlId, phase, treeDigest: pristine.treeDigest, auditReceiptSha256: baselineAuditSha256, auditStatus: 'VERIFIED' });
+        checkpointAuditReceipts.push(structuredClone(baselineAudit));
+    }
+
+    checkpoint('BASELINE', 'BASELINE');
+    const controls = [];
+    const auditorPath = path.join(config.authorityProjectRoot, 'scripts', 'verify-public-smoke-v2.mjs');
+    for (const { id, expectedInvariant } of NEGATIVE_CONTROL_REGISTRY) {
+        checkpoint(id, 'BEFORE');
+        const mutationRoot = fs.mkdtempSync(path.join(os.tmpdir(), `${id.toLowerCase()}-`));
+        const mutationRootRealpath = fs.realpathSync(mutationRoot);
+        const target = path.join(mutationRootRealpath, 'accepted');
+        copyTreeWithoutSymlinks(pristineAcceptedRealpath, target);
+        const targetRealpath = fs.realpathSync(target);
+        if (targetRealpath === pristineAcceptedRealpath || targetRealpath !== path.join(mutationRootRealpath, 'accepted')) fail('negative.mutation.targetRealpath');
+        applyNegativeControlMutation(targetRealpath, id);
+        const derivedConfigPath = path.join(mutationRootRealpath, 'audit-config.json');
+        const derivedConfig = {
+            schemaVersion: 3,
+            baseConfigPath: canonicalConfigPath,
+            baseConfigSha256: configSha256,
+            mutationId: id,
+            mutationRootRealpath,
+            auditTargetRealpath: targetRealpath,
+            externalOperationReceiptPath: config.operationReceiptPath,
+            auditReceiptPath: path.join(mutationRootRealpath, 'audit-receipt.json'),
+        };
+        writeJson(derivedConfigPath, derivedConfig);
+        const auditorArgv = [config.nodeExePath, auditorPath, '--config', derivedConfigPath];
+        const result = spawnSyncImpl(auditorArgv[0], auditorArgv.slice(1), {
+            cwd: config.authorityProjectRoot,
+            shell: false,
+            timeout: AUDITOR_TIMEOUT_MS,
+            windowsHide: true,
+            maxBuffer: 64 * 1024 * 1024,
+            encoding: null,
+        });
+        const captured = parseAuditorResult(result, targetRealpath, expectedInvariant);
+        fs.writeFileSync(path.join(mutationRootRealpath, 'auditor.stdout.bin'), captured.stdout, { flag: 'wx' });
+        fs.writeFileSync(path.join(mutationRootRealpath, 'auditor.stderr.bin'), captured.stderr, { flag: 'wx' });
+        controls.push({
+            id,
+            expectedInvariant,
+            derivedConfigSha256: sha256File(derivedConfigPath),
+            mutationRootRealpath,
+            targetRealpath,
+            auditorArgv,
+            exitCode: captured.exitCode,
+            signal: captured.signal,
+            stdoutSha256: sha256(captured.stdout),
+            stderrSha256: sha256(captured.stderr),
+            emittedTargetRealpath: captured.emittedTargetRealpath,
+            successGateAbsent: captured.successGateAbsent,
+            observedInvariant: captured.observedInvariant,
+        });
+        checkpoint(id, 'AFTER');
+    }
+    ensureAuthorityUnchanged(canonicalConfigPath, configSha256, config.operationReceiptPath, operationReceiptSha256);
+    const receipt = {
+        schemaVersion: 1,
+        releaseId: config.releaseId,
+        status: 'VERIFIED',
+        createdUtc: now().toISOString(),
+        configSha256,
+        operationReceiptSha256,
+        pristineManifestSha256: pristine.manifestSha256,
+        pristineTreeDigest: pristine.treeDigest,
+        initialPristineAuditReceiptSha256: checkpoints[0].auditReceiptSha256,
+        finalPristineAuditReceiptSha256: checkpoints.at(-1).auditReceiptSha256,
+        checkpoints,
+        controls,
+    };
+    validateNegativeReceipt(receipt, { pristineAcceptedRealpath, nodeExePath: config.nodeExePath, auditorPath, checkpointAuditReceipts });
+    publishExclusive(config.negativeReceiptPath, Buffer.from(`${JSON.stringify(receipt)}\n`));
+    const lines = [...NEGATIVE_CONTROL_REGISTRY.map(({ id }) => `EXPECTED_REJECTION=${id}`), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12'];
+    return { receipt, lines };
+}
+
+export function runNegativeControlsFromArgv(argv, overrides = {}) {
+    if (argv.length !== 2 || argv[0] !== '--config' || !path.isAbsolute(argv[1])) fail('usage', 'run-public-smoke-v2-negative-controls.mjs --config <absolute schema-2 config>');
+    return runNegativeControlsFromConfig(path.resolve(argv[1]), overrides);
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+    try {
+        const result = runNegativeControlsFromArgv(process.argv.slice(2));
+        process.stdout.write(`${result.lines.join('\n')}\n`);
+    } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+    }
+}
