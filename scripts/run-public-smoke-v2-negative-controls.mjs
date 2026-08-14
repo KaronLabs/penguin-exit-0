@@ -217,16 +217,28 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
     if (fsImpl.existsSync(file)) fail('negativeReceiptPath.exists');
     const directory = path.dirname(file);
     fsImpl.mkdirSync(directory, { recursive: true });
-    const temporary = path.join(directory, `.${path.basename(file)}.tmp-${crypto.randomBytes(16).toString('hex')}`);
+    const temporaryToken = crypto.randomBytes(16).toString('hex');
+    const temporary = path.join(directory, `.${path.basename(file)}.tmp-${temporaryToken}`);
     let linked = false;
     let temporaryIdentity;
     try {
         publicationGuard();
         const descriptor = fsImpl.openSync(temporary, 'wx');
         try {
-            const descriptorStat = fsImpl.fstatSync(descriptor);
-            if (!descriptorStat.isFile()) fail('negativeReceiptPath.temporaryDescriptor');
-            temporaryIdentity = { dev: descriptorStat.dev, ino: descriptorStat.ino };
+            try {
+                const descriptorStat = fsImpl.fstatSync(descriptor);
+                if (!descriptorStat.isFile()) fail('negativeReceiptPath.temporaryDescriptor');
+                temporaryIdentity = { dev: descriptorStat.dev, ino: descriptorStat.ino };
+            } catch (error) {
+                try {
+                    const descriptorStat = fsImpl.fstatSync(descriptor);
+                    const pathStat = fsImpl.lstatSync(temporary);
+                    if (descriptorStat.isFile() && pathStat.isFile() && !pathStat.isSymbolicLink() && sameIdentity(pathStat, descriptorStat)) {
+                        temporaryIdentity = { dev: descriptorStat.dev, ino: descriptorStat.ino };
+                    }
+                } catch {}
+                throw error;
+            }
             fsImpl.writeFileSync(descriptor, bytes);
             fsImpl.fsyncSync(descriptor);
         } finally {
@@ -270,6 +282,11 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
             if (temporaryIdentity && temporaryStat.isFile() && !temporaryStat.isSymbolicLink() && sameIdentity(temporaryStat, temporaryIdentity)) {
                 fsImpl.unlinkSync(temporary);
                 cleanupChangedDirectory = true;
+            } else {
+                const diagnostic = path.join(directory, `.negative-receipt.foreign-${temporaryToken}`);
+                if (pathEntryExistsWith(diagnostic, fsImpl)) fail('negativeReceiptPath.diagnosticExists');
+                fsImpl.renameSync(temporary, diagnostic);
+                cleanupChangedDirectory = true;
             }
         }
         if (linked || cleanupChangedDirectory) fsyncDirectory(directory, fsImpl, platform);
@@ -294,16 +311,26 @@ function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl =
     let identity;
     try {
         fsImpl.mkdirSync(stage);
+        let stageStatError;
+        try {
+            const stageStat = fsImpl.lstatSync(stage);
+            if (!stageStat.isDirectory() || stageStat.isSymbolicLink()) fail('negativeCheckpointAudits.stage');
+            identity = { dev: stageStat.dev, ino: stageStat.ino };
+        } catch (error) {
+            stageStatError = error;
+        }
         const descriptor = fsImpl.openSync(stage, 'r');
         try {
             const descriptorStat = fsImpl.fstatSync(descriptor);
             if (!descriptorStat.isDirectory()) fail('negativeCheckpointAudits.stage');
+            if (identity && !sameIdentity(descriptorStat, identity)) fail('negativeCheckpointAudits.stage');
             identity = { dev: descriptorStat.dev, ino: descriptorStat.ino };
         } finally {
             fsImpl.closeSync(descriptor);
         }
         const stageStat = fsImpl.lstatSync(stage);
         if (!stageStat.isDirectory() || stageStat.isSymbolicLink() || !sameIdentity(stageStat, identity)) fail('negativeCheckpointAudits.stage');
+        if (stageStatError) throw stageStatError;
     } catch (error) {
         let removed = false;
         if (identity && pathEntryExistsWith(stage, fsImpl)) {
@@ -336,11 +363,22 @@ function writeNegativeCheckpointAudit(publication, checkpoint, audit) {
     const file = path.join(publication.stage, name);
     const descriptor = publication.fsImpl.openSync(file, 'wx');
     try {
+        try {
+            const openedStat = publication.fsImpl.fstatSync(descriptor);
+            if (!openedStat.isFile()) fail('negativeCheckpointAudits.file');
+            publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes });
+        } catch (error) {
+            try {
+                const openedStat = publication.fsImpl.fstatSync(descriptor);
+                const pathStat = publication.fsImpl.lstatSync(file);
+                if (openedStat.isFile() && pathStat.isFile() && !pathStat.isSymbolicLink() && sameIdentity(pathStat, openedStat)) {
+                    publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino, bytes });
+                }
+            } catch {}
+            throw error;
+        }
         const pathStat = publication.fsImpl.lstatSync(file);
-        if (!pathStat.isFile() || pathStat.isSymbolicLink()) fail('negativeCheckpointAudits.file');
-        publication.files.set(name, { dev: pathStat.dev, ino: pathStat.ino, bytes });
-        const openedStat = publication.fsImpl.fstatSync(descriptor);
-        if (!openedStat.isFile() || !sameIdentity(openedStat, publication.files.get(name))) fail('negativeCheckpointAudits.file');
+        if (!pathStat.isFile() || pathStat.isSymbolicLink() || !sameIdentity(pathStat, publication.files.get(name))) fail('negativeCheckpointAudits.file');
         publication.fsImpl.writeFileSync(descriptor, bytes);
         publication.fsImpl.fsyncSync(descriptor);
     } finally {
@@ -410,6 +448,11 @@ function rollbackNegativeCheckpointAuditPublication(publication) {
         const current = publication.fsImpl.lstatSync(directory);
         if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity) && publication.fsImpl.readdirSync(directory).length === 0) {
             publication.fsImpl.rmdirSync(directory);
+        } else if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity)) {
+            const token = path.basename(publication.stage).slice('.negative-checkpoint-audits.stage-'.length);
+            const diagnostic = path.join(publication.parent, `.negative-checkpoint-audits.foreign-${token}`);
+            if (pathEntryExistsWith(diagnostic, publication.fsImpl)) fail('negativeCheckpointAudits.diagnosticExists');
+            publication.fsImpl.renameSync(directory, diagnostic);
         }
     }
     fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
