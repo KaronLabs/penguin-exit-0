@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,9 +133,9 @@ function screenshotBindings() {
     })));
 }
 
-function auditReceipt(target) {
+function auditReceipt(target, createdUtc = '2026-08-14T00:00:00.000Z') {
     return {
-        schemaVersion: 1, releaseId: RELEASE_ID, status: 'VERIFIED', createdUtc: '2026-08-14T00:00:00.000Z',
+        schemaVersion: 1, releaseId: RELEASE_ID, status: 'VERIFIED', createdUtc,
         auditedTargetRealpath: fs.realpathSync(target), configSha256: '3'.repeat(64), operationReceiptSha256: '4'.repeat(64),
         acceptedManifestSha256: '5'.repeat(64), eventsSha256: '6'.repeat(64), finalEventSha256: '7'.repeat(64),
         deploymentId: '01234567-89ab-cdef-0123-456789abcdef', passedCases: 6, totalCases: 6, controlPlaneReads: 3,
@@ -183,6 +184,16 @@ async function loadDriver() {
     }
 }
 
+async function loadCompleteFixtureFactory() {
+    const contractTestUrl = new URL('./public-smoke-v2-contract.test.js', import.meta.url);
+    const smokeLibraryUrl = new URL('../../scripts/public-smoke-v2-lib.mjs', import.meta.url).href;
+    const source = fs.readFileSync(contractTestUrl, 'utf8')
+        .replace("import test from 'node:test';", 'const test = () => {};')
+        .replaceAll("'../../scripts/public-smoke-v2-lib.mjs'", JSON.stringify(smokeLibraryUrl));
+    const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\nexport { createAcceptedFixture };\n`).toString('base64')}`;
+    return (await import(moduleUrl)).createAcceptedFixture;
+}
+
 test('library exposes the exact ordered negative-control registry and recursive receipt validator', () => {
     assert.equal(typeof smoke.validateNegativeReceipt, 'function', 'missing validateNegativeReceipt production interface');
     assert.deepEqual(smoke.NEGATIVE_CONTROL_REGISTRY.map(({ id, expectedInvariant }) => [id, expectedInvariant]), REGISTRY);
@@ -207,6 +218,30 @@ test('negative receipt validator rejects nested drift, ordering drift, and false
         mutate(copy);
         assert.throws(() => smoke.validateNegativeReceipt(copy, { pristineAcceptedRealpath: fs.realpathSync(pristine) }), invariant, label);
     }
+});
+
+test('negative receipt validator rejects a hostile reuse of all twelve mutation roots, targets, and derived-config paths', (t) => {
+    const { receipt, pristine } = validNegativeReceipt(t);
+    const first = receipt.controls[0];
+    for (const control of receipt.controls.slice(1)) {
+        control.mutationRootRealpath = first.mutationRootRealpath;
+        control.targetRealpath = first.targetRealpath;
+        control.emittedTargetRealpath = first.emittedTargetRealpath;
+        control.auditorArgv[3] = first.auditorArgv[3];
+    }
+    assert.throws(
+        () => smoke.validateNegativeReceipt(receipt, { pristineAcceptedRealpath: fs.realpathSync(pristine) }),
+        /negativeReceipt\.controls\.unique/,
+    );
+});
+
+test('negative receipt binds distinct initial and final audits to the first and last of 25 fresh checkpoints', (t) => {
+    const { receipt, pristine } = validNegativeReceipt(t);
+    receipt.checkpoints.forEach((checkpoint, index) => { checkpoint.auditReceiptSha256 = sha(`fresh-audit-${index}`); });
+    receipt.initialPristineAuditReceiptSha256 = receipt.checkpoints[0].auditReceiptSha256;
+    receipt.finalPristineAuditReceiptSha256 = receipt.checkpoints.at(-1).auditReceiptSha256;
+    assert.notEqual(receipt.initialPristineAuditReceiptSha256, receipt.finalPristineAuditReceiptSha256);
+    assert.equal(smoke.validateNegativeReceipt(receipt, { pristineAcceptedRealpath: fs.realpathSync(pristine) }), receipt);
 });
 
 test('Task2 signature keeps the NC09 roast invariant without weakening fairPing provenance', () => {
@@ -279,6 +314,72 @@ test('all twelve real mutations change only disposable accepted evidence and res
     }
 });
 
+test('all twelve production mutations are rejected end to end by the real auditor against a complete accepted fixture', async (t) => {
+    const driver = await loadDriver();
+    const createAcceptedFixture = await loadCompleteFixtureFactory();
+    const auditorPath = path.resolve('scripts/verify-public-smoke-v2.mjs');
+    for (const [id, expectedInvariant] of REGISTRY) {
+        const fixture = createAcceptedFixture(t);
+        assert.equal(smoke.auditAcceptedRun({ configPath: fixture.configPath }).status, 'VERIFIED', `${id} pristine fixture`);
+        const frozenOperationReceipt = fs.readFileSync(fixture.operationReceiptPath);
+        const mutationRoot = tempRoot(t, `r14-task3-e2e-${id.toLowerCase()}-`);
+        const mutationRootRealpath = fs.realpathSync(mutationRoot);
+        const target = path.join(mutationRootRealpath, 'accepted');
+        fs.cpSync(fixture.acceptedDir, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
+        const targetRealpath = fs.realpathSync(target);
+        driver.applyNegativeControlMutation(targetRealpath, id);
+        const derivedConfigPath = path.join(mutationRootRealpath, 'audit-config.json');
+        const auditReceiptPath = path.join(mutationRootRealpath, 'audit-receipt.json');
+        writeJson(derivedConfigPath, {
+            schemaVersion: 3,
+            baseConfigPath: fixture.configPath,
+            baseConfigSha256: smoke.sha256File(fixture.configPath),
+            mutationId: id,
+            mutationRootRealpath,
+            auditTargetRealpath: targetRealpath,
+            externalOperationReceiptPath: fixture.operationReceiptPath,
+            auditReceiptPath,
+        });
+
+        const result = spawnSync(process.execPath, [auditorPath, '--config', derivedConfigPath], {
+            cwd: path.resolve('.'), shell: false, timeout: 120000, windowsHide: true, encoding: 'utf8',
+        });
+        const stderrLines = result.stderr.trimEnd().split(/\r?\n/);
+        assert.notEqual(result.status, 0, `${id} unexpectedly succeeded`);
+        assert.equal(result.signal, null, `${id} was terminated by a signal`);
+        assert.equal(stderrLines[0], `AUDIT_TARGET_REALPATH=${targetRealpath}`, `${id} target line`);
+        assert.equal(stderrLines[1]?.split(':', 1)[0], expectedInvariant, `${id} first invariant`);
+        assert.equal(result.stdout.includes('PUBLIC_SMOKE_V2_GATE='), false, `${id} emitted a success gate`);
+        assert.equal(fs.existsSync(auditReceiptPath), false, `${id} published an audit receipt`);
+        assert.deepEqual(fs.readFileSync(fixture.operationReceiptPath), frozenOperationReceipt, `${id} changed the frozen operation receipt`);
+    }
+});
+
+test('negative receipt publication durably orders link, parent fsync, temp unlink, parent fsync and applies the Windows EPERM policy', async () => {
+    const driver = await loadDriver();
+    assert.equal(typeof driver.publishNegativeReceiptExclusive, 'function', 'missing publishNegativeReceiptExclusive production interface');
+    const calls = [];
+    let directoryOpenCount = 0;
+    const fsImpl = {
+        existsSync: () => false,
+        mkdirSync: () => {},
+        openSync: (_file, flags) => flags === 'wx' ? 'temp' : `directory-${++directoryOpenCount}`,
+        writeFileSync: () => {},
+        fsyncSync: (descriptor) => { calls.push(`fsync:${descriptor}`); },
+        closeSync: () => {},
+        linkSync: () => { calls.push('link'); },
+        unlinkSync: () => { calls.push('unlink-temp'); },
+    };
+    driver.publishNegativeReceiptExclusive(path.resolve('negative.json'), Buffer.from('{}\n'), { fsImpl, platform: 'linux' });
+    assert.deepEqual(calls, ['fsync:temp', 'link', 'fsync:directory-1', 'unlink-temp', 'fsync:directory-2']);
+
+    const windowsFs = { ...fsImpl, fsyncSync: (descriptor) => {
+        if (descriptor !== 'temp') { const error = new Error('directory fsync unsupported'); error.code = 'EPERM'; throw error; }
+    } };
+    assert.doesNotThrow(() => driver.publishNegativeReceiptExclusive(path.resolve('negative-windows.json'), Buffer.from('{}\n'), { fsImpl: windowsFs, platform: 'win32' }));
+    assert.throws(() => driver.publishNegativeReceiptExclusive(path.resolve('negative-linux.json'), Buffer.from('{}\n'), { fsImpl: windowsFs, platform: 'linux' }), /directory fsync unsupported/);
+});
+
 test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spawn, immutable authority, and exclusive receipt', async (t) => {
     const driver = await loadDriver();
     assert.equal(typeof driver.runNegativeControlsFromConfig, 'function', 'missing runNegativeControlsFromConfig production interface');
@@ -311,11 +412,14 @@ test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spaw
     fs.writeFileSync(config.operationReceiptPath, 'frozen operation receipt\n');
     const configBefore = smoke.sha256File(configPath);
     const operationBefore = smoke.sha256File(config.operationReceiptPath);
-    const baselineAudit = auditReceipt(acceptedDir);
     let auditCalls = 0;
     const spawns = [];
     const result = driver.runNegativeControlsFromConfig(configPath, {
-        auditPristine: () => { auditCalls += 1; return structuredClone(baselineAudit); },
+        auditPristine: () => {
+            const createdUtc = new Date(Date.parse('2026-08-14T00:00:00.000Z') + auditCalls).toISOString();
+            auditCalls += 1;
+            return auditReceipt(acceptedDir, createdUtc);
+        },
         spawnSyncImpl: (file, args, options) => {
             const derived = JSON.parse(fs.readFileSync(args[2], 'utf8'));
             const expectedInvariant = REGISTRY.find(([id]) => id === derived.mutationId)[1];
@@ -337,9 +441,12 @@ test('driver preserves 25 pristine checkpoints, exact auditor argv, bounded spaw
     assert.deepEqual(result.lines, [...REGISTRY.map(([id]) => `EXPECTED_REJECTION=${id}`), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12']);
     assert.equal(result.receipt.checkpoints.length, 25);
     assert.equal(result.receipt.controls.length, 12);
-    assert.equal(result.receipt.initialPristineAuditReceiptSha256, result.receipt.finalPristineAuditReceiptSha256);
+    assert.equal(new Set(result.receipt.checkpoints.map(({ auditReceiptSha256 }) => auditReceiptSha256)).size, 25);
+    assert.equal(result.receipt.initialPristineAuditReceiptSha256, result.receipt.checkpoints[0].auditReceiptSha256);
+    assert.equal(result.receipt.finalPristineAuditReceiptSha256, result.receipt.checkpoints.at(-1).auditReceiptSha256);
+    assert.notEqual(result.receipt.initialPristineAuditReceiptSha256, result.receipt.finalPristineAuditReceiptSha256);
     assert.equal(smoke.sha256File(configPath), configBefore);
     assert.equal(smoke.sha256File(config.operationReceiptPath), operationBefore);
     assert.equal(JSON.parse(fs.readFileSync(config.negativeReceiptPath, 'utf8')).status, 'VERIFIED');
-    assert.throws(() => driver.runNegativeControlsFromConfig(configPath, { auditPristine: () => baselineAudit }), /negativeReceiptPath.*exists/);
+    assert.throws(() => driver.runNegativeControlsFromConfig(configPath, { auditPristine: () => auditReceipt(acceptedDir) }), /negativeReceiptPath.*exists/);
 });

@@ -196,21 +196,39 @@ function pristineState(acceptedDir) {
     return { manifestSha256, treeDigest: sha256(canonicalJson({ files: manifest.files, manifestSha256 })) };
 }
 
-function publishExclusive(file, bytes) {
-    if (fs.existsSync(file)) fail('negativeReceiptPath.exists');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const temporary = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${crypto.randomBytes(16).toString('hex')}`);
+function fsyncDirectory(directory, fsImpl, platform) {
+    const descriptor = fsImpl.openSync(directory, 'r');
+    try { fsImpl.fsyncSync(descriptor); }
+    catch (error) { if (platform !== 'win32' || error?.code !== 'EPERM') throw error; }
+    finally { fsImpl.closeSync(descriptor); }
+}
+
+export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, platform = process.platform } = {}) {
+    if (fsImpl.existsSync(file)) fail('negativeReceiptPath.exists');
+    const directory = path.dirname(file);
+    fsImpl.mkdirSync(directory, { recursive: true });
+    const temporary = path.join(directory, `.${path.basename(file)}.tmp-${crypto.randomBytes(16).toString('hex')}`);
+    let linked = false;
     try {
-        const descriptor = fs.openSync(temporary, 'wx');
+        const descriptor = fsImpl.openSync(temporary, 'wx');
         try {
-            fs.writeFileSync(descriptor, bytes);
-            fs.fsyncSync(descriptor);
+            fsImpl.writeFileSync(descriptor, bytes);
+            fsImpl.fsyncSync(descriptor);
         } finally {
-            fs.closeSync(descriptor);
+            fsImpl.closeSync(descriptor);
         }
-        fs.linkSync(temporary, file);
-    } finally {
-        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+        fsImpl.linkSync(temporary, file);
+        linked = true;
+        fsyncDirectory(directory, fsImpl, platform);
+        fsImpl.unlinkSync(temporary);
+        fsyncDirectory(directory, fsImpl, platform);
+    } catch (error) {
+        if (linked && fsImpl.existsSync(file) && fsImpl.existsSync(temporary)) {
+            const finalStat = fsImpl.lstatSync(file), temporaryStat = fsImpl.lstatSync(temporary);
+            if (finalStat.isFile() && !finalStat.isSymbolicLink() && finalStat.dev === temporaryStat.dev && finalStat.ino === temporaryStat.ino) fsImpl.unlinkSync(file);
+        }
+        if (fsImpl.existsSync(temporary)) fsImpl.unlinkSync(temporary);
+        throw error;
     }
 }
 
@@ -250,7 +268,6 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
     const checkpoints = [];
     const checkpointAuditReceipts = [];
     let baselineAudit;
-    let baselineAuditSha256;
 
     function checkpoint(controlId, phase) {
         ensureAuthorityUnchanged(canonicalConfigPath, configSha256, config.operationReceiptPath, operationReceiptSha256);
@@ -261,10 +278,10 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
         if (freshAudit.auditedTargetRealpath !== pristineAcceptedRealpath || freshAudit.status !== 'VERIFIED') fail('negative.pristine.audit');
         if (!baselineAudit) {
             baselineAudit = structuredClone(freshAudit);
-            baselineAuditSha256 = sha256(Buffer.from(`${JSON.stringify(baselineAudit)}\n`));
         }
-        checkpoints.push({ sequence: checkpoints.length + 1, controlId, phase, treeDigest: pristine.treeDigest, auditReceiptSha256: baselineAuditSha256, auditStatus: 'VERIFIED' });
-        checkpointAuditReceipts.push(structuredClone(baselineAudit));
+        const freshAuditSha256 = sha256(Buffer.from(`${JSON.stringify(freshAudit)}\n`));
+        checkpoints.push({ sequence: checkpoints.length + 1, controlId, phase, treeDigest: pristine.treeDigest, auditReceiptSha256: freshAuditSha256, auditStatus: 'VERIFIED' });
+        checkpointAuditReceipts.push(structuredClone(freshAudit));
     }
 
     checkpoint('BASELINE', 'BASELINE');
@@ -336,7 +353,7 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
         controls,
     };
     validateNegativeReceipt(receipt, { pristineAcceptedRealpath, nodeExePath: config.nodeExePath, auditorPath, checkpointAuditReceipts });
-    publishExclusive(config.negativeReceiptPath, Buffer.from(`${JSON.stringify(receipt)}\n`));
+    publishNegativeReceiptExclusive(config.negativeReceiptPath, Buffer.from(`${JSON.stringify(receipt)}\n`));
     const lines = [...NEGATIVE_CONTROL_REGISTRY.map(({ id }) => `EXPECTED_REJECTION=${id}`), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12'];
     return { receipt, lines };
 }

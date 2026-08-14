@@ -1219,7 +1219,6 @@ export function validateNegativeReceipt(receipt, expected = {}) {
     if (!RELEASE_ID.test(string(receipt.releaseId, 'negativeReceipt.releaseId'))) fail('negativeReceipt.releaseId');
     utc(receipt.createdUtc, 'negativeReceipt.createdUtc');
     for (const key of ['configSha256', 'operationReceiptSha256', 'pristineManifestSha256', 'pristineTreeDigest', 'initialPristineAuditReceiptSha256', 'finalPristineAuditReceiptSha256']) sha(receipt[key], `negativeReceipt.${key}`);
-    if (receipt.initialPristineAuditReceiptSha256 !== receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.pristineAuditReceiptSha256');
 
     if (!Array.isArray(receipt.checkpoints) || receipt.checkpoints.length !== 25) fail('negativeReceipt.checkpoints.cardinality');
     const expectedCheckpoints = [{ controlId: 'BASELINE', phase: 'BASELINE' }];
@@ -1234,6 +1233,7 @@ export function validateNegativeReceipt(receipt, expected = {}) {
     if (receipt.checkpoints[0].auditReceiptSha256 !== receipt.initialPristineAuditReceiptSha256 || receipt.checkpoints.at(-1).auditReceiptSha256 !== receipt.finalPristineAuditReceiptSha256) fail('negativeReceipt.checkpoints.auditBinding');
 
     if (!Array.isArray(receipt.controls) || receipt.controls.length !== NEGATIVE_CONTROL_REGISTRY.length) fail('negativeReceipt.controls.cardinality');
+    const mutationRoots = [], targets = [], derivedConfigPaths = [];
     receipt.controls.forEach((control, index) => {
         exactKeys(control, ['id', 'expectedInvariant', 'derivedConfigSha256', 'mutationRootRealpath', 'targetRealpath', 'auditorArgv', 'exitCode', 'signal', 'stdoutSha256', 'stderrSha256', 'emittedTargetRealpath', 'successGateAbsent', 'observedInvariant'], 'negativeReceipt.control');
         const registry = NEGATIVE_CONTROL_REGISTRY[index];
@@ -1245,6 +1245,7 @@ export function validateNegativeReceipt(receipt, expected = {}) {
         if (!Array.isArray(control.auditorArgv) || control.auditorArgv.length !== 4 || control.auditorArgv.some((item) => typeof item !== 'string')) fail('negativeReceipt.control.auditorArgv');
         const expectedConfigPath = path.join(mutationRoot, 'audit-config.json');
         if (!path.isAbsolute(control.auditorArgv[0]) || !path.isAbsolute(control.auditorArgv[1]) || control.auditorArgv[2] !== '--config' || control.auditorArgv[3] !== expectedConfigPath) fail('negativeReceipt.control.auditorArgv');
+        mutationRoots.push(mutationRoot); targets.push(target); derivedConfigPaths.push(control.auditorArgv[3]);
         if (expected.nodeExePath && control.auditorArgv[0] !== expected.nodeExePath) fail('negativeReceipt.control.auditorArgv');
         if (expected.auditorPath && control.auditorArgv[1] !== expected.auditorPath) fail('negativeReceipt.control.auditorArgv');
         if (integer(control.exitCode, 'negativeReceipt.control.exitCode') === 0) fail('negativeReceipt.control.exitCode');
@@ -1253,6 +1254,9 @@ export function validateNegativeReceipt(receipt, expected = {}) {
         if (control.successGateAbsent !== true) fail('negativeReceipt.control.successGateAbsent');
         if (control.observedInvariant !== registry.expectedInvariant) fail('negativeReceipt.control.observedInvariant');
     });
+    for (const [label, values] of [['mutationRootRealpath', mutationRoots], ['targetRealpath', targets], ['derivedConfigPath', derivedConfigPaths]]) {
+        if (new Set(values).size !== NEGATIVE_CONTROL_REGISTRY.length) fail(`negativeReceipt.controls.unique.${label}`);
+    }
 
     if (expected.checkpointAuditReceipts !== undefined) {
         if (!Array.isArray(expected.checkpointAuditReceipts) || expected.checkpointAuditReceipts.length !== 25) fail('negativeReceipt.checkpointAuditReceipts');
