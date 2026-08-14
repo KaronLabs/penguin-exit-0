@@ -376,122 +376,134 @@ test('a byte-identical pre-publication collision is never mistaken for the final
     assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), expectedBytes);
 });
 
-test('publication failures remove only the task-owned final and durably preserve replacements', async (t) => {
-    await t.test('temporary unlink failure removes the linked final', async (t) => {
-        const fixture = await makeFinalizerFixture(t);
-        const originalUnlink = fs.unlinkSync;
-        let injected = false;
-        fs.unlinkSync = function (target) {
-            if (!injected && path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
-                injected = true;
-                const error = new Error('temp-unlink-failure');
-                error.code = 'EIO';
-                throw error;
-            }
-            return originalUnlink.call(this, target);
-        };
-        try {
-            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /temp-unlink-failure/);
-        } finally {
-            fs.unlinkSync = originalUnlink;
-        }
-        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
-    });
-
-    await t.test('same-byte final replacement survives publication parent fsync failure', async (t) => {
+test('publication follows FAILURE_ABSENT, PUBLICATION_INDETERMINATE, and COMPLETE states', async (t) => {
+    await t.test('pre-link failure is FAILURE_ABSENT and permits a later attempt', async (t) => {
         const fixture = await makeFinalizerFixture(t);
         const originalLink = fs.linkSync;
-        const originalFsync = fs.fsyncSync;
-        let replacementBytes;
-        fs.linkSync = function (source, destination) {
-            originalLink.call(this, source, destination);
-            replacementBytes = fs.readFileSync(destination);
-            fs.unlinkSync(destination);
-            fs.writeFileSync(destination, replacementBytes);
+        fs.linkSync = function () {
+            throw new Error('pre-link-failure');
         };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /FAILURE_ABSENT: pre-link-failure/);
+        } finally {
+            fs.linkSync = originalLink;
+        }
+        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
+        const receipt = await finalizer.runFinalizerFromConfig(fixture.configPath);
+        assert.equal(receipt.status, 'COMPLETE');
+    });
+
+    await t.test('post-link parent fsync failure is indeterminate and consumes the release ID', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalFsync = fs.fsyncSync;
         fs.fsyncSync = function (descriptor) {
             const stat = fs.fstatSync(descriptor);
             if (stat.isDirectory()) throw new Error('publication-parent-fsync-failure');
             return originalFsync.call(this, descriptor);
         };
         try {
-            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /releaseReceiptPath\.identity|publication-parent-fsync-failure/);
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /PUBLICATION_INDETERMINATE: publication-parent-fsync-failure/);
         } finally {
-            fs.linkSync = originalLink;
             fs.fsyncSync = originalFsync;
         }
-        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), replacementBytes);
+        const receiptBytes = fs.readFileSync(fixture.config.releaseReceiptPath);
+        await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /RELEASE_ID_CONSUMED/);
+        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), receiptBytes);
     });
 
-    await t.test('post-publication input drift removes and fsyncs the task-owned final', async (t) => {
+    await t.test('temporary unlink failure is indeterminate and preserves the final pathname', async (t) => {
         const fixture = await makeFinalizerFixture(t);
-        const originalLink = fs.linkSync;
-        const originalFsync = fs.fsyncSync;
-        let directoryFsyncs = 0;
-        fs.linkSync = function (source, destination) {
-            originalLink.call(this, source, destination);
-            fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
-        };
-        fs.fsyncSync = function (descriptor) {
-            if (fs.fstatSync(descriptor).isDirectory()) directoryFsyncs += 1;
-            return originalFsync.call(this, descriptor);
-        };
-        try {
-            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /finalizer\.inputDrift/);
-        } finally {
-            fs.linkSync = originalLink;
-            fs.fsyncSync = originalFsync;
-        }
-        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
-        assert.equal(directoryFsyncs, 2);
-    });
-
-    await t.test('same-byte replacement during temporary unlink survives post-publication drift', async (t) => {
-        const fixture = await makeFinalizerFixture(t);
-        const originalLink = fs.linkSync;
         const originalUnlink = fs.unlinkSync;
-        let replacementBytes;
-        fs.linkSync = function (source, destination) {
-            originalLink.call(this, source, destination);
-            fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
-        };
+        let injected = false;
         fs.unlinkSync = function (target) {
-            if (path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
-                replacementBytes = fs.readFileSync(fixture.config.releaseReceiptPath);
-                originalUnlink.call(this, fixture.config.releaseReceiptPath);
-                fs.writeFileSync(fixture.config.releaseReceiptPath, replacementBytes);
+            if (!injected && path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
+                injected = true;
+                throw new Error('temp-unlink-failure');
             }
             return originalUnlink.call(this, target);
         };
         try {
-            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /finalizer\.inputDrift/);
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /PUBLICATION_INDETERMINATE: temp-unlink-failure/);
         } finally {
-            fs.linkSync = originalLink;
             fs.unlinkSync = originalUnlink;
         }
-        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), replacementBytes);
+        assert.equal(readJson(fixture.config.releaseReceiptPath).status, 'COMPLETE');
     });
 
-    await t.test('cleanup parent fsync failure is surfaced after owned final removal', async (t) => {
+    await t.test('post-publication input drift is indeterminate and preserves the final pathname', async (t) => {
         const fixture = await makeFinalizerFixture(t);
         const originalLink = fs.linkSync;
-        const originalFsync = fs.fsyncSync;
-        let directoryFsyncs = 0;
         fs.linkSync = function (source, destination) {
             originalLink.call(this, source, destination);
             fs.appendFileSync(fixture.config.actualChromeEvidencePath, ' ');
         };
-        fs.fsyncSync = function (descriptor) {
-            if (fs.fstatSync(descriptor).isDirectory() && ++directoryFsyncs === 2) throw new Error('cleanup-parent-fsync-failure');
-            return originalFsync.call(this, descriptor);
-        };
         try {
-            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /cleanup-parent-fsync-failure/);
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /PUBLICATION_INDETERMINATE: finalizer\.inputDrift/);
         } finally {
             fs.linkSync = originalLink;
-            fs.fsyncSync = originalFsync;
         }
-        assert.equal(fs.existsSync(fixture.config.releaseReceiptPath), false);
+        assert.equal(readJson(fixture.config.releaseReceiptPath).status, 'COMPLETE');
+    });
+
+    await t.test('post-link final receipt validation uncertainty is indeterminate and preserves the pathname', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalUnlink = fs.unlinkSync;
+        fs.unlinkSync = function (target) {
+            if (path.basename(target).startsWith(`.${path.basename(fixture.config.releaseReceiptPath)}.tmp-`)) {
+                originalUnlink.call(this, target);
+                originalUnlink.call(this, fixture.config.releaseReceiptPath);
+                fs.writeFileSync(fixture.config.releaseReceiptPath, '{}\n');
+                return;
+            }
+            return originalUnlink.call(this, target);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /PUBLICATION_INDETERMINATE: finalReceipt/);
+        } finally {
+            fs.unlinkSync = originalUnlink;
+        }
+        assert.equal(fs.readFileSync(fixture.config.releaseReceiptPath, 'utf8'), '{}\n');
+    });
+
+    await t.test('unlink-boundary same-byte new-inode replacement is never conditionally removed post-link', async (t) => {
+        const fixture = await makeFinalizerFixture(t);
+        const originalLstat = fs.lstatSync;
+        const originalFsync = fs.fsyncSync;
+        const originalUnlink = fs.unlinkSync;
+        let linkedIdentity;
+        let replacementBytes;
+        let finalUnlinkEntered = false;
+        fs.lstatSync = function (target, ...args) {
+            if (linkedIdentity && path.resolve(target) === path.resolve(fixture.config.releaseReceiptPath)) return linkedIdentity;
+            return originalLstat.call(this, target, ...args);
+        };
+        fs.fsyncSync = function (descriptor) {
+            if (fs.fstatSync(descriptor).isDirectory()) {
+                linkedIdentity = originalLstat(fixture.config.releaseReceiptPath);
+                replacementBytes = fs.readFileSync(fixture.config.releaseReceiptPath);
+                originalUnlink(fixture.config.releaseReceiptPath);
+                fs.writeFileSync(fixture.config.releaseReceiptPath, replacementBytes);
+                throw new Error('publication-parent-fsync-failure');
+            }
+            return originalFsync.call(this, descriptor);
+        };
+        fs.unlinkSync = function (target) {
+            if (path.resolve(target) === path.resolve(fixture.config.releaseReceiptPath)) {
+                finalUnlinkEntered = true;
+                originalUnlink.call(this, target);
+                fs.writeFileSync(target, replacementBytes);
+            }
+            return originalUnlink.call(this, target);
+        };
+        try {
+            await assert.rejects(finalizer.runFinalizerFromConfig(fixture.configPath), /PUBLICATION_INDETERMINATE: publication-parent-fsync-failure/);
+        } finally {
+            fs.lstatSync = originalLstat;
+            fs.fsyncSync = originalFsync;
+            fs.unlinkSync = originalUnlink;
+        }
+        assert.equal(finalUnlinkEntered, false);
+        assert.deepEqual(fs.readFileSync(fixture.config.releaseReceiptPath), replacementBytes);
     });
 });
 
@@ -504,4 +516,12 @@ test('argv is exact and the real CLI emits one strict success line with empty st
     assert.deepEqual(result.stdout, Buffer.from('PUBLIC_SMOKE_V2_RELEASE=COMPLETE\n'));
     assert.deepEqual(result.stderr, Buffer.alloc(0));
     assert.equal(readJson(fixture.config.releaseReceiptPath).status, 'COMPLETE');
+
+    const consumed = await makeFinalizerFixture(t);
+    fs.writeFileSync(consumed.config.releaseReceiptPath, 'occupied release identity');
+    const rejected = spawnSync(process.execPath, [fileURLToPath(new URL('../../scripts/finalize-public-smoke-v2.mjs', import.meta.url)), '--config', consumed.configPath], { encoding: null, windowsHide: true });
+    assert.notEqual(rejected.status, 0);
+    assert.deepEqual(rejected.stdout, Buffer.alloc(0));
+    assert.match(rejected.stderr.toString('utf8'), /^RELEASE_ID_CONSUMED:/);
+    assert.equal(fs.readFileSync(consumed.config.releaseReceiptPath, 'utf8'), 'occupied release identity');
 });

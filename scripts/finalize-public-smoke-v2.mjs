@@ -155,21 +155,12 @@ function sameIdentity(left, right) {
     return left.dev === right.dev && left.ino === right.ino;
 }
 
-function cleanupOwnedFinal(file, ownership, bytes) {
-    let current;
-    let actual;
-    try {
-        current = regularIdentity(file);
-        actual = fs.readFileSync(file);
-    } catch {
-        return false;
-    }
-    const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
-    const actualSha = crypto.createHash('sha256').update(actual).digest('hex');
-    if (!sameIdentity(current, ownership) || current.size !== bytes.length || actual.length !== bytes.length || actualSha !== expectedSha || !actual.equals(bytes)) return false;
-    fs.unlinkSync(file);
-    fsyncDirectory(path.dirname(file));
-    return true;
+function publicationError(state, error) {
+    if (error.publicationState) return error;
+    const classified = new Error(`${state}: ${error.message}`);
+    classified.cause = error;
+    classified.publicationState = state;
+    return classified;
 }
 
 function publishExclusive(file, receipt) {
@@ -186,37 +177,35 @@ function publishExclusive(file, receipt) {
         if (descriptor !== undefined) fs.closeSync(descriptor);
     }
     const temporaryIdentity = regularIdentity(temporary);
-    let ownership;
+    let linked = false;
     try {
         fs.linkSync(temporary, file);
+        linked = true;
         const finalIdentity = regularIdentity(file);
         if (!sameIdentity(finalIdentity, temporaryIdentity)) fail('releaseReceiptPath.identity');
-        ownership = finalIdentity;
         fsyncDirectory(parent);
         fs.unlinkSync(temporary);
     } catch (error) {
-        if (ownership) cleanupOwnedFinal(file, ownership, bytes);
-        throw error;
+        throw publicationError(linked ? 'PUBLICATION_INDETERMINATE' : 'FAILURE_ABSENT', error);
     } finally {
         if (pathExists(temporary)) {
             try { fs.unlinkSync(temporary); } catch {}
         }
     }
-    return { ownership, bytes };
 }
 
 function sameExceptCreated(actual, expected, invariant) {
     if (canonicalJson({ ...actual, createdUtc: expected.createdUtc }) !== canonicalJson(expected)) fail(invariant);
 }
 
-export async function runFinalizerFromConfig(configPath, dependencies = {}) {
+async function executeFinalizerFromConfig(configPath, dependencies = {}) {
     const canonicalConfigPath = path.resolve(configPath);
     if (!path.isAbsolute(configPath) || canonicalConfigPath !== configPath) fail('config.path');
     requireRegular(canonicalConfigPath, 'config.path');
     const config = validateOperationConfig(readJson(canonicalConfigPath, 'finalizer.config'));
     if (pathExists(config.releaseReceiptPath)) {
-        if (fs.lstatSync(config.releaseReceiptPath).isSymbolicLink()) fail('releaseReceiptPath.symlink');
-        fail('releaseReceiptPath.exists');
+        if (fs.lstatSync(config.releaseReceiptPath).isSymbolicLink()) fail('RELEASE_ID_CONSUMED: releaseReceiptPath.symlink');
+        fail('RELEASE_ID_CONSUMED: releaseReceiptPath.exists');
     }
     requireNoSymlinkAncestors(config.releaseReceiptPath, 'releaseReceiptPath.symlink');
     const before = snapshotInputs(config);
@@ -285,10 +274,24 @@ export async function runFinalizerFromConfig(configPath, dependencies = {}) {
     validateFinalReceipt(receipt, { releaseId: config.releaseId, deploymentId: authority.deployment.deploymentId, immutableUrl: config.immutableUrl, aliasUrl: config.aliasUrl });
     dependencies.beforePublication?.();
     requireSameSnapshot(before, config);
-    const publication = publishExclusive(config.releaseReceiptPath, receipt);
-    try { requireSameSnapshot(before, config); }
-    catch (error) { cleanupOwnedFinal(config.releaseReceiptPath, publication.ownership, publication.bytes); throw error; }
+    publishExclusive(config.releaseReceiptPath, receipt);
+    try {
+        requireSameSnapshot(before, config);
+        const published = validateFinalReceipt(readJson(config.releaseReceiptPath, 'releaseReceipt.json'), { releaseId: config.releaseId, deploymentId: authority.deployment.deploymentId, immutableUrl: config.immutableUrl, aliasUrl: config.aliasUrl });
+        if (canonicalJson(published) !== canonicalJson(receipt)) fail('releaseReceipt.binding');
+    } catch (error) {
+        throw publicationError('PUBLICATION_INDETERMINATE', error);
+    }
     return receipt;
+}
+
+export async function runFinalizerFromConfig(configPath, dependencies = {}) {
+    try {
+        return await executeFinalizerFromConfig(configPath, dependencies);
+    } catch (error) {
+        if (error.publicationState || error.message.startsWith('RELEASE_ID_CONSUMED:')) throw error;
+        throw publicationError('FAILURE_ABSENT', error);
+    }
 }
 
 export async function runFinalizerFromArgv(argv = process.argv.slice(2), dependencies = {}) {
