@@ -722,6 +722,59 @@ function validFairPingFixture() {
   };
 }
 
+function validTask2SignatureFixture() {
+  return {
+    command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
+    system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
+    roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+    tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true },
+    fairPing: validFairPingFixture(),
+  };
+}
+
+function negativeBeforeRowCountObservations() {
+  const signature = validTask2SignatureFixture();
+  signature.fairPing.provenance.beforeRowCount = -1;
+  return Array.from({ length: 6 }, () => ({ signature: structuredClone(signature) }));
+}
+
+test('Task2 rejects negative fairPing beforeRowCount in direct observation validation', async () => {
+  const lib = await import('../../scripts/public-smoke-v2-lib.mjs');
+  assert.throws(() => lib.validateTask2FairPingObservations(negativeBeforeRowCountObservations()), /fairPing\.provenance\.beforeRowCount/);
+});
+
+test('Task2 rejects negative fairPing beforeRowCount before worker accepted publication', async () => {
+  const runner = await import('../../scripts/run-public-smoke-v2.mjs');
+  const root = await mkdtemp(path.join(tmpdir(), 'r14-task2-negative-before-row-worker-'));
+  const configPath = path.join(root, 'operation.json'); const acceptedDir = path.join(root, 'accepted'); const failureRoot = path.join(root, 'failures'); const stageDir = path.join(root, `.public-smoke-v2.stage-${'8'.repeat(32)}`);
+  try {
+    await writeFile(configPath, JSON.stringify({ schemaVersion: 2, releaseId: '20260814T000000Z-r14-public-smoke-v2', acceptedDir, failureRoot }));
+    await assert.rejects(runner.runWorkerFromArgv(['--config', configPath], {
+      validateConfig: (value) => value,
+      createStageDir: async () => { await mkdir(stageDir, { recursive: true }); return stageDir; },
+      exchangePhase: async (phase) => ({ initialProbe: {}, finalProbe: {}, controlPlane: { phase: phase === 'initial' ? 'pre' : phase } }),
+      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: negativeBeforeRowCountObservations(), events: Array(278).fill({}) }; },
+    }), /fairPing\.provenance\.beforeRowCount/);
+    await assert.rejects(access(acceptedDir));
+    const failures = await (await import('node:fs/promises')).readdir(failureRoot); assert.equal(failures.length, 1);
+    await assert.rejects(access(path.join(failureRoot, failures[0], 'artifact-manifest.json')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Task2 rejects negative fairPing beforeRowCount after full outer reseal and before audit or receipt', async () => {
+  const operation = await import('../../scripts/run-public-smoke-v2-operation.mjs'); const lib = await import('../../scripts/public-smoke-v2-lib.mjs'); const { createHash } = await import('node:crypto');
+  const root = await mkdtemp(path.join(tmpdir(), 'r14-task2-negative-before-row-operation-')); const acceptedDir = path.join(root, 'accepted'); const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  try {
+    await mkdir(acceptedDir); const observationsPath = path.join(acceptedDir, 'observations.json'); const observations = negativeBeforeRowCountObservations();
+    await writeFile(observationsPath, `${lib.canonicalJson(observations)}\n`);
+    const observationBytes = await readFile(observationsPath); const manifestPayload = { schemaVersion: 1, releaseId: '20260814T000000Z-r14-public-smoke-v2', files: [{ path: 'observations.json', bytes: observationBytes.length, sha256: sha(observationBytes) }] };
+    const manifest = { ...manifestPayload, manifestPayloadSha256: sha(lib.canonicalJson(manifestPayload)) }; const manifestPath = path.join(acceptedDir, 'artifact-manifest.json'); await writeFile(manifestPath, `${lib.canonicalJson(manifest)}\n`);
+    const manifestSha256 = sha(await readFile(manifestPath)); const receipt = { accepted: { manifestSha256, treeDigest: sha(lib.canonicalJson({ files: manifest.files, manifestSha256 })) } }; let audits = 0;
+    await assert.rejects(operation.authenticateTask2Accepted({ acceptedDir, operationReceipt: receipt, auditAccepted: () => { audits += 1; } }), /fairPing\.provenance\.beforeRowCount/);
+    assert.equal(audits, 0); await assert.rejects(access(path.join(root, 'operation-receipt.json')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('fair signature exact primitive rejects independent one-character command, system, and roast drift', () => {
   const task2Signature = {
     command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
@@ -754,7 +807,11 @@ test('actual verifier CLI accepts authenticated Task2 profile and publishes one 
     const libraryUrl = new URL('scripts/public-smoke-v2-lib.mjs', new URL(`file:///${projectRoot.replaceAll('\\', '/')}/`)).href;
     source = source.replaceAll("from '../../scripts/public-smoke-v2-lib.mjs'", `from ${JSON.stringify(libraryUrl)}`);
     const verifierPath = path.join(projectRoot, 'scripts', 'verify-public-smoke-v2.mjs');
-    source += `\n test('actual verifier Task2 fixture', (t) => { const fixture=createAcceptedFixture(t); const observations=structuredClone(fixture.cases); const fair={command:'archon@stone-igloo:~$ ping 8.8.8.8',commandKind:'command',system:'64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.',systemKind:'system',roast:'아콘 🐧 // 지식은 레버리지가 아니다 애송아.',roastKind:'archon',provenance:{beforeRowCount:3,rows:[{text:'archon@stone-igloo:~$ ping 8.8.8.8',kind:'command',context:'',index:'',pseudoLabel:'none'},{text:'64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.',kind:'system',context:'',index:'',pseudoLabel:'none'},{text:'아콘 🐧 // 지식은 레버리지가 아니다 애송아.',kind:'archon',context:'puzzle',index:'1',pseudoLabel:'\"ARCHON // ROAST\"'}]}}; observations.forEach((record)=>{record.signature.fairPing=fair;}); const acceptedPath=path.join(fixture.acceptedDir,'accepted-run.json'); const accepted=readJson(acceptedPath); accepted.tooling.runner.version='2'; accepted.tooling.library.version='2'; writeJson(path.join(fixture.sourceSnapshot,'package.json'),{devDependencies:{'@playwright/test':'1.62.1'}}); const inventory=walkInventory(fixture.sourceSnapshot); writeJson(path.join(fixture.campaignDir,'candidate-inventory.json'),inventory); const claims=readJson(path.join(fixture.campaignDir,'claims.json')); claims.candidateInventory={fileCount:inventory.fileCount,pathListSha256:inventory.pathListSha256,contentRecordsSha256:inventory.contentRecordsSha256}; writeJson(path.join(fixture.campaignDir,'claims.json'),claims); const envelope=readJson(path.join(fixture.campaignDir,'submission-envelope.json')); envelope.payloadHashes['candidate-inventory.json']=sha256File(path.join(fixture.campaignDir,'candidate-inventory.json')); envelope.payloadHashes['claims.json']=sha256File(path.join(fixture.campaignDir,'claims.json')); envelope.source={...envelope.source,fileCount:inventory.fileCount,pathListSha256:inventory.pathListSha256,contentRecordsSha256:inventory.contentRecordsSha256}; writeJson(path.join(fixture.campaignDir,'submission-envelope.json'),envelope); const campaignReceipt=readJson(fixture.campaignReceiptPath); campaignReceipt.candidateInventory=claims.candidateInventory; campaignReceipt.campaign.submissionEnvelopeSha256=sha256File(path.join(fixture.campaignDir,'submission-envelope.json')); writeJson(fixture.campaignReceiptPath,campaignReceipt); const playwright=smoke.resolvePlaywrightAuthority(fixture.sourceSnapshot); accepted.tooling.playwright={path:playwright.path,version:playwright.version,sha256:playwright.sha256}; writeJson(acceptedPath,accepted); rewriteAccepted(fixture,{observations}); const operation=readJson(fixture.operationReceiptPath); operation.accepted.manifestSha256=sha256File(path.join(fixture.acceptedDir,'artifact-manifest.json')); operation.accepted.treeDigest=sha256(canonicalJson({files:fixture.manifest.files,manifestSha256:operation.accepted.manifestSha256})); writeJson(fixture.operationReceiptPath,operation); const result=spawnSync(process.execPath,[${JSON.stringify(verifierPath)},'--config',fixture.configPath],{cwd:${JSON.stringify(projectRoot)},encoding:'utf8',windowsHide:true,shell:false}); assert.equal(result.status,0,JSON.stringify({status:result.status,signal:result.signal,stdout:result.stdout,stderr:result.stderr,auditReceiptExists:fs.existsSync(fixture.config.auditReceiptPath)})); assert.equal(result.signal,null); assert.equal(result.stderr,''); assert.match(result.stdout,/^PUBLIC_SMOKE_V2_GATE=6\\/6 manifest_sha256=[0-9a-f]{64} release=20260813T010203Z-r14-public-smoke-v2\\n$/); assert.equal(result.stdout.split('PUBLIC_SMOKE_V2_GATE=').length-1,1); assert.equal(fs.existsSync(fixture.config.auditReceiptPath),true); smoke.validateAuditReceipt(readJson(fixture.config.auditReceiptPath)); });\n`;
+    const hostileBeforeRowCount = process.env.R14_TEST_NEGATIVE_BEFORE_ROW_COUNT === '1';
+    const verifierAssertions = hostileBeforeRowCount
+      ? "assert.equal(result.status,1,JSON.stringify({status:result.status,signal:result.signal,stdout:result.stdout,stderr:result.stderr,auditReceiptExists:fs.existsSync(fixture.config.auditReceiptPath)})); assert.equal(result.signal,null); assert.equal(result.stdout,''); assert.match(result.stderr,/fairPing\\.provenance\\.beforeRowCount/); assert.equal(fs.existsSync(fixture.config.auditReceiptPath),false);"
+      : "assert.equal(result.status,0,JSON.stringify({status:result.status,signal:result.signal,stdout:result.stdout,stderr:result.stderr,auditReceiptExists:fs.existsSync(fixture.config.auditReceiptPath)})); assert.equal(result.signal,null); assert.equal(result.stderr,''); assert.match(result.stdout,/^PUBLIC_SMOKE_V2_GATE=6\\/6 manifest_sha256=[0-9a-f]{64} release=20260813T010203Z-r14-public-smoke-v2\\n$/); assert.equal(result.stdout.split('PUBLIC_SMOKE_V2_GATE=').length-1,1); assert.equal(fs.existsSync(fixture.config.auditReceiptPath),true); smoke.validateAuditReceipt(readJson(fixture.config.auditReceiptPath));";
+    source += `\n test('actual verifier Task2 fixture', (t) => { const fixture=createAcceptedFixture(t); const observations=structuredClone(fixture.cases); const fair={command:'archon@stone-igloo:~$ ping 8.8.8.8',commandKind:'command',system:'64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.',systemKind:'system',roast:'아콘 🐧 // 지식은 레버리지가 아니다 애송아.',roastKind:'archon',provenance:{beforeRowCount:${hostileBeforeRowCount ? -1 : 3},rows:[{text:'archon@stone-igloo:~$ ping 8.8.8.8',kind:'command',context:'',index:'',pseudoLabel:'none'},{text:'64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.',kind:'system',context:'',index:'',pseudoLabel:'none'},{text:'아콘 🐧 // 지식은 레버리지가 아니다 애송아.',kind:'archon',context:'puzzle',index:'1',pseudoLabel:'\"ARCHON // ROAST\"'}]}}; observations.forEach((record)=>{record.signature.fairPing=fair;}); const acceptedPath=path.join(fixture.acceptedDir,'accepted-run.json'); const accepted=readJson(acceptedPath); accepted.tooling.runner.version='2'; accepted.tooling.library.version='2'; writeJson(path.join(fixture.sourceSnapshot,'package.json'),{devDependencies:{'@playwright/test':'1.62.1'}}); const inventory=walkInventory(fixture.sourceSnapshot); writeJson(path.join(fixture.campaignDir,'candidate-inventory.json'),inventory); const claims=readJson(path.join(fixture.campaignDir,'claims.json')); claims.candidateInventory={fileCount:inventory.fileCount,pathListSha256:inventory.pathListSha256,contentRecordsSha256:inventory.contentRecordsSha256}; writeJson(path.join(fixture.campaignDir,'claims.json'),claims); const envelope=readJson(path.join(fixture.campaignDir,'submission-envelope.json')); envelope.payloadHashes['candidate-inventory.json']=sha256File(path.join(fixture.campaignDir,'candidate-inventory.json')); envelope.payloadHashes['claims.json']=sha256File(path.join(fixture.campaignDir,'claims.json')); envelope.source={...envelope.source,fileCount:inventory.fileCount,pathListSha256:inventory.pathListSha256,contentRecordsSha256:inventory.contentRecordsSha256}; writeJson(path.join(fixture.campaignDir,'submission-envelope.json'),envelope); const campaignReceipt=readJson(fixture.campaignReceiptPath); campaignReceipt.candidateInventory=claims.candidateInventory; campaignReceipt.campaign.submissionEnvelopeSha256=sha256File(path.join(fixture.campaignDir,'submission-envelope.json')); writeJson(fixture.campaignReceiptPath,campaignReceipt); const playwright=smoke.resolvePlaywrightAuthority(fixture.sourceSnapshot); accepted.tooling.playwright={path:playwright.path,version:playwright.version,sha256:playwright.sha256}; writeJson(acceptedPath,accepted); rewriteAccepted(fixture,{observations}); const operation=readJson(fixture.operationReceiptPath); operation.accepted.manifestSha256=sha256File(path.join(fixture.acceptedDir,'artifact-manifest.json')); operation.accepted.treeDigest=sha256(canonicalJson({files:fixture.manifest.files,manifestSha256:operation.accepted.manifestSha256})); writeJson(fixture.operationReceiptPath,operation); const result=spawnSync(process.execPath,[${JSON.stringify(verifierPath)},'--config',fixture.configPath],{cwd:${JSON.stringify(projectRoot)},encoding:'utf8',windowsHide:true,shell:false}); ${verifierAssertions} });\n`;
     source += `
 function prepareActualVerifierTask2Fixture(t, mutate) {
   const fixture=createAcceptedFixture(t); const observations=structuredClone(fixture.cases);
@@ -783,6 +840,16 @@ for (const [label,expected,mutate] of [
     assert.match(result.stdout, /# fail 0\n/);
     assert.equal(result.stderr, '');
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Task2 rejects negative fairPing beforeRowCount in the fully resealed actual verifier CLI', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const testPath = fileURLToPath(import.meta.url);
+  const environment = { ...process.env, R14_TEST_NEGATIVE_BEFORE_ROW_COUNT: '1' };
+  delete environment.NODE_TEST_CONTEXT; delete environment.NODE_TEST_WORKER_ID;
+  const result = spawnSync(process.execPath, ['--test', '--test-name-pattern', 'actual verifier CLI accepts authenticated Task2 profile', '--test-reporter', 'tap', testPath], { cwd: projectRoot, encoding: 'utf8', env: environment, windowsHide: true, shell: false });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /# tests 1\n/); assert.match(result.stdout, /# pass 1\n/); assert.match(result.stdout, /# fail 0\n/); assert.equal(result.stderr, '');
 });
 
 test('fair signature is assembled from readDocumentSnapshot rows in the current-product journey', async () => {

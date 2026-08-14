@@ -483,7 +483,7 @@ export function validateFairPing(value) {
     for (const [key, expectedValue] of Object.entries(expected)) if (value[key] !== expectedValue) fail(`fairPing.${key}`);
     if (value.provenance !== undefined) {
         exactKeys(value.provenance, ['beforeRowCount', 'rows'], 'fairPing.provenance');
-        integer(value.provenance.beforeRowCount, 'fairPing.provenance.beforeRowCount', 0);
+        nonNegative(value.provenance.beforeRowCount, 'fairPing.provenance.beforeRowCount');
         if (!Array.isArray(value.provenance.rows) || value.provenance.rows.length !== 3) fail('fairPing.provenance.rows');
         const expectedRows = [
             { text: expected.command, kind: expected.commandKind, context: '', index: '' },
