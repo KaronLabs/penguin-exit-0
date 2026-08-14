@@ -160,8 +160,61 @@ test('campaign-v5 verifier validates the complete source-bound fixture and rejec
     await writeJson(path.join(fixture.campaignDir, 'submission-envelope.json'), envelope);
     const receipt = JSON.parse(await fs.readFile(fixture.campaignReceiptPath, 'utf8'));
     receipt.candidateInventory.pathListSha256 = candidate.pathListSha256;
+    receipt.campaign.submissionEnvelopeSha256 = await hashFile(path.join(fixture.campaignDir, 'submission-envelope.json'));
     await writeJson(fixture.campaignReceiptPath, receipt);
     await writeJson(path.join(fixture.campaignDir, 'campaign-receipt.json'), receipt);
     assert.throws(() => verifier.verifyCampaignV5({ campaignDir: fixture.campaignDir, specPath: fixture.specPath, sourceRoot: fixture.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: fixture.authorityProjectRoot, executionRoot: fixture.executionRoot }), /campaignV5\.candidate\.digest/);
     assert.throws(() => verifier.verifyCampaignV5({ campaignDir: fixture.campaignDir, specPath: fixture.specPath, sourceRoot: fixture.sourceRoot, expectedRunId: '20260815T120001Z-r10-korean-release', authorityProjectRoot: fixture.authorityProjectRoot, executionRoot: fixture.executionRoot }), /campaignV5.runId/);
+});
+
+test('campaign-v5 verifier rejects source files omitted from the authenticated candidate inventory', async (t) => {
+    const fixture = await makeFixture(t);
+    const verifier = await import('../../scripts/verify-r14-campaign-v5.mjs');
+    await fs.writeFile(path.join(fixture.sourceRoot, 'unlisted-extra.mjs'), 'export const drift = true;\n');
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: fixture.campaignDir, specPath: fixture.specPath, sourceRoot: fixture.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: fixture.authorityProjectRoot, executionRoot: fixture.executionRoot }), /campaignV5\.sourceInventory/);
+});
+
+test('campaign-v5 verifier rejects raw evidence whose bytes no longer match the envelope', async (t) => {
+    const fixture = await makeFixture(t);
+    const verifier = await import('../../scripts/verify-r14-campaign-v5.mjs');
+    await fs.writeFile(path.join(fixture.campaignDir, 'performance-summary.json'), '{"summary":"forged"}\n');
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: fixture.campaignDir, specPath: fixture.specPath, sourceRoot: fixture.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: fixture.authorityProjectRoot, executionRoot: fixture.executionRoot }), /campaignV5\.rawEvidence/);
+});
+
+test('campaign-v5 verifier rejects command captures whose bytes no longer match the receipt', async (t) => {
+    const fixture = await makeFixture(t);
+    const verifier = await import('../../scripts/verify-r14-campaign-v5.mjs');
+    await fs.writeFile(path.join(fixture.campaignDir, 'commands', 'unit.stdout.log'), 'forged\n');
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: fixture.campaignDir, specPath: fixture.specPath, sourceRoot: fixture.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: fixture.authorityProjectRoot, executionRoot: fixture.executionRoot }), /campaignV5\.command\.stdout/);
+});
+
+test('campaign-v5 verifier rejects resealed cross-artifact identity drift', async (t) => {
+    const verifier = await import('../../scripts/verify-r14-campaign-v5.mjs');
+
+    const sourceDrift = await makeFixture(t);
+    const sourceEnvelope = JSON.parse(await fs.readFile(path.join(sourceDrift.campaignDir, 'submission-envelope.json'), 'utf8'));
+    sourceEnvelope.source.gitHeadSha = 'd'.repeat(40);
+    await writeJson(path.join(sourceDrift.campaignDir, 'submission-envelope.json'), sourceEnvelope);
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: sourceDrift.campaignDir, specPath: sourceDrift.specPath, sourceRoot: sourceDrift.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: sourceDrift.authorityProjectRoot, executionRoot: sourceDrift.executionRoot }), /campaignV5\.sourceBinding/);
+
+    const campaignDrift = await makeFixture(t);
+    const campaignReceipt = JSON.parse(await fs.readFile(path.join(campaignDrift.campaignDir, 'campaign-receipt.json'), 'utf8'));
+    campaignReceipt.campaign.path = path.join(path.dirname(campaignDrift.campaignDir), 'foreign-campaign');
+    await writeJson(path.join(campaignDrift.campaignDir, 'campaign-receipt.json'), campaignReceipt);
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: campaignDrift.campaignDir, specPath: campaignDrift.specPath, sourceRoot: campaignDrift.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: campaignDrift.authorityProjectRoot, executionRoot: campaignDrift.executionRoot }), /campaignV5\.campaignBinding/);
+
+    const specDrift = await makeFixture(t);
+    const specEnvelope = JSON.parse(await fs.readFile(path.join(specDrift.campaignDir, 'submission-envelope.json'), 'utf8'));
+    specEnvelope.spec.fileName = 'foreign-spec.md';
+    await writeJson(path.join(specDrift.campaignDir, 'submission-envelope.json'), specEnvelope);
+    const specReceipt = JSON.parse(await fs.readFile(path.join(specDrift.campaignDir, 'campaign-receipt.json'), 'utf8'));
+    specReceipt.campaign.submissionEnvelopeSha256 = await hashFile(path.join(specDrift.campaignDir, 'submission-envelope.json'));
+    await writeJson(path.join(specDrift.campaignDir, 'campaign-receipt.json'), specReceipt);
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: specDrift.campaignDir, specPath: specDrift.specPath, sourceRoot: specDrift.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: specDrift.authorityProjectRoot, executionRoot: specDrift.executionRoot }), /campaignV5\.specBinding/);
+
+    const inventoryDrift = await makeFixture(t);
+    const inventoryReceipt = JSON.parse(await fs.readFile(path.join(inventoryDrift.campaignDir, 'campaign-receipt.json'), 'utf8'));
+    inventoryReceipt.candidateInventory.pathListSha256 = 'e'.repeat(64);
+    await writeJson(path.join(inventoryDrift.campaignDir, 'campaign-receipt.json'), inventoryReceipt);
+    assert.throws(() => verifier.verifyCampaignV5({ campaignDir: inventoryDrift.campaignDir, specPath: inventoryDrift.specPath, sourceRoot: inventoryDrift.sourceRoot, expectedRunId: RUN_ID, authorityProjectRoot: inventoryDrift.authorityProjectRoot, executionRoot: inventoryDrift.executionRoot }), /campaignV5\.inventoryBinding/);
 });

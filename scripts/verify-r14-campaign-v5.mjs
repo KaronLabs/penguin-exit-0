@@ -39,6 +39,16 @@ function exactKeys(value, expected, invariant) {
     if (actual.length !== keys.length || actual.some((key, index) => key !== keys[index])) fail(invariant, `keys=${actual.join(',')}`);
 }
 
+function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+    return value;
+}
+
+function sameValue(left, right) {
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
 function noSymlinkAncestors(target, invariant) {
     let cursor = path.resolve(target);
     while (true) {
@@ -56,12 +66,37 @@ function contained(root, candidate, invariant) {
     return target;
 }
 
+function sourceFiles(root, invariant) {
+    const files = [];
+    const visit = (directory, relative = '') => {
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const entryPath = path.join(directory, entry.name);
+            const entryRelative = path.join(relative, entry.name).split(path.sep).join('/');
+            if (entry.isSymbolicLink()) fail(invariant, entryRelative);
+            if (entry.isDirectory()) visit(entryPath, entryRelative);
+            else if (entry.isFile()) files.push(entryRelative);
+            else fail(invariant, entryRelative);
+        }
+    };
+    visit(root);
+    return files.sort((left, right) => left.localeCompare(right, 'en'));
+}
+
 function verifyPayloadHashes(campaignDir, envelope) {
     for (const name of PAYLOADS) {
         const file = contained(campaignDir, path.join(campaignDir, name), `campaignV5.payload.${name}`);
         noSymlinkAncestors(file, `campaignV5.payload.${name}.symlink`);
         if (!fs.existsSync(file) || !fs.statSync(file).isFile() || sha256File(file).toLowerCase() !== envelope.payloadHashes[name].toLowerCase()) fail(`campaignV5.payload.${name}`);
     }
+}
+
+function verifyCampaignFile(campaignDir, relative, expectedSha256, invariant) {
+    const file = contained(campaignDir, path.join(campaignDir, ...relative.split('/')), invariant);
+    noSymlinkAncestors(file, `${invariant}.symlink`);
+    if (!fs.existsSync(file)) fail(invariant, 'missing');
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || sha256File(file).toLowerCase() !== expectedSha256.toLowerCase()) fail(invariant);
+    return file;
 }
 
 function verifySourceInventory(sourceRoot, campaignDir, envelope, claims) {
@@ -79,6 +114,9 @@ function verifySourceInventory(sourceRoot, campaignDir, envelope, claims) {
         noSymlinkAncestors(file, 'campaignV5.sourceFile.symlink');
         if (!fs.existsSync(file) || !fs.statSync(file).isFile() || fs.statSync(file).size !== entry.sizeBytes || sha256File(file).toLowerCase() !== entry.sha256.toLowerCase()) fail('campaignV5.sourceFile');
     }
+    const actualFiles = sourceFiles(sourceRoot, 'campaignV5.sourceInventory');
+    const listedFiles = candidate.files.map((entry) => entry.path);
+    if (actualFiles.length !== listedFiles.length || actualFiles.some((entry, index) => entry !== listedFiles[index])) fail('campaignV5.sourceInventory');
     const pathListSha256 = sha256FileBytes(Buffer.from(candidate.files.map((entry) => `${entry.path}\0`).join(''), 'utf8'));
     const contentRecordsSha256 = sha256FileBytes(Buffer.from(candidate.files.map((entry) => `${entry.path}\0${entry.sizeBytes}\0${entry.sha256}\0`).join(''), 'utf8'));
     if (pathListSha256 !== candidate.pathListSha256 || contentRecordsSha256 !== candidate.contentRecordsSha256) fail('campaignV5.candidate.digest');
@@ -107,9 +145,22 @@ export function verifyCampaignV5({ campaignDir, specPath, sourceRoot, expectedRu
     if (claims.runId !== expectedRunId || envelope.runId !== expectedRunId || receipt.runId !== expectedRunId) fail('campaignV5.runId');
     if (claims.sourceGit.branch !== 'main' || receipt.projectRoot !== path.resolve(authorityProjectRoot) || receipt.cleanRoot !== path.resolve(executionRoot)) fail('campaignV5.authorityRoots');
     if (path.resolve(receipt.spec.path) !== path.resolve(specPath) || receipt.spec.sizeBytes !== fs.statSync(specPath).size || receipt.spec.sha256.toLowerCase() !== sha256File(specPath).toLowerCase()) fail('campaignV5.spec');
+    if (envelope.source.gitBranch !== claims.sourceGit.branch || envelope.source.gitHeadSha !== claims.sourceGit.headSha || !sameValue(receipt.sourceGit, claims.sourceGit)) fail('campaignV5.sourceBinding');
+    const artifactManifestPath = path.join(campaign, 'artifact-manifest.json');
+    const submissionEnvelopePath = path.join(campaign, 'submission-envelope.json');
+    if (path.resolve(receipt.campaign.path) !== campaign || receipt.campaign.artifactManifestSha256.toLowerCase() !== sha256File(artifactManifestPath).toLowerCase() || receipt.campaign.submissionEnvelopeSha256.toLowerCase() !== sha256File(submissionEnvelopePath).toLowerCase()) fail('campaignV5.campaignBinding');
+    if (envelope.spec.fileName !== path.basename(specPath) || envelope.spec.sizeBytes !== fs.statSync(specPath).size || envelope.spec.sha256.toLowerCase() !== sha256File(specPath).toLowerCase() || !sameValue(receipt.spec, { path: specPath, sizeBytes: fs.statSync(specPath).size, sha256: sha256File(specPath) })) fail('campaignV5.specBinding');
     verifyPayloadHashes(campaign, envelope);
+    for (const [key, evidence] of Object.entries(envelope.rawEvidence)) verifyCampaignFile(campaign, evidence.path, evidence.sha256, `campaignV5.rawEvidence.${key}`);
+    for (const command of receipt.commands) {
+        if (path.resolve(command.cwd) !== path.resolve(executionRoot)) fail('campaignV5.command.cwd');
+        verifyCampaignFile(campaign, command.stdoutPath, command.stdoutSha256, 'campaignV5.command.stdout');
+        verifyCampaignFile(campaign, command.stderrPath, command.stderrSha256, 'campaignV5.command.stderr');
+    }
     const candidate = verifySourceInventory(source, campaign, envelope, claims);
+    if (!sameValue(receipt.candidateInventory, claims.candidateInventory) || !sameValue(receipt.candidateInventory, { fileCount: candidate.fileCount, pathListSha256: candidate.pathListSha256, contentRecordsSha256: candidate.contentRecordsSha256 })) fail('campaignV5.inventoryBinding');
     if (sha256File(path.join(source, 'game-core.js')).toLowerCase() !== claims.gameCoreSha256.toLowerCase()) fail('campaignV5.gameCore');
+    if (receipt.gameCoreSha256.toLowerCase() !== claims.gameCoreSha256.toLowerCase() || !sameValue(receipt.r9Frozen, claims.r9Frozen) || !sameValue(receipt.r10Frozen, claims.r10Frozen) || !sameValue(receipt.limitation, claims.actualBrowserZoom)) fail('campaignV5.receiptBinding');
     return { status: 'VERIFIED', runId: expectedRunId, candidateFileCount: candidate.fileCount, sourceGitHead: claims.sourceGit.headSha };
 }
 
