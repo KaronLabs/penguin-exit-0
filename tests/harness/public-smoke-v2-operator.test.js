@@ -1061,3 +1061,14 @@ test('rollback post fence rejects an earlier raw capture changed during the post
     } }), /INDETERMINATE: rollback\.post\.capture/);
     await assert.rejects(fs.access(fixture.config.deploymentReceiptPath));
 });
+
+test('capture authentication is publication-adjacent to synchronous receipt writes', async () => {
+    const source = await fs.readFile(new URL(OPERATOR_MODULE, import.meta.url), 'utf8');
+    const deployRecordCheck = source.indexOf('if (!publishedRecord.equals(recordBytes))');
+    const deployCaptureFence = source.indexOf('for (const commandCapture of [campaignVerifierCapture, pre.capture, deploy.capture, post.capture])');
+    const deployReceiptWrite = source.indexOf('writeJsonExclusiveSync(config.deploymentReceiptPath, receipt)');
+    assert.equal(deployRecordCheck < deployCaptureFence && deployCaptureFence < deployReceiptWrite, true);
+    const rollbackCaptureFence = source.indexOf('for (const commandCapture of [pre.capture, rollback.capture, post.capture])');
+    const rollbackReceiptWrite = source.indexOf('writeJsonExclusiveSync(config.deploymentReceiptPath, receipt)', deployReceiptWrite + 1);
+    assert.equal(rollbackCaptureFence < rollbackReceiptWrite, true);
+});

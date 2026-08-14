@@ -534,6 +534,16 @@ async function writeJsonExclusive(file, value) {
     return file;
 }
 
+function writeJsonExclusiveSync(file, value) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const descriptor = fs.openSync(file, 'wx');
+    try {
+        fs.writeFileSync(descriptor, jsonBytes(value));
+        fs.fsyncSync(descriptor);
+    } finally { fs.closeSync(descriptor); }
+    return file;
+}
+
 export async function stageProductFiles(config, productFiles = validateSourceSnapshot(config)) {
     if (fs.existsSync(config.stagingDir)) fail('operator.preflight.staging');
     await fsp.mkdir(config.stagingDir, { recursive: true });
@@ -763,9 +773,6 @@ async function runDeploy(config, deps) {
         assertRootStable(config.stagingDir, stagingRealpathBefore, 'operator.staging.root.mutable', stagingIdentityBefore);
         validateStagingTree(config.stagingDir, productFiles, 'operator.staging.post');
     } catch (error) { throw new Error(`INDETERMINATE: operator.post.mutable: ${error.message}`); }
-    try {
-        for (const commandCapture of [campaignVerifierCapture, pre.capture, deploy.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'operator.capture.mutable');
-    } catch (error) { throw new Error(`INDETERMINATE: operator.post.capture: ${error.message}`); }
     const record = deploymentRecord(config, current, productFiles);
     const recordBytes = jsonBytes(record);
     const sourceFreezeSha256 = sha256File(config.sourceFreezePath);
@@ -775,10 +782,14 @@ async function runDeploy(config, deps) {
         await writeJsonExclusive(config.deploymentRecordPath, record);
         const publishedRecord = fs.readFileSync(config.deploymentRecordPath);
         if (!publishedRecord.equals(recordBytes)) throw new Error('deploymentRecord bytes changed');
-        await writeJsonExclusive(config.deploymentReceiptPath, receipt);
     } catch (error) {
         throw new Error(`INDETERMINATE: operator.publication: ${error.message}`);
     }
+    try {
+        for (const commandCapture of [campaignVerifierCapture, pre.capture, deploy.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'operator.capture.mutable');
+    } catch (error) { throw new Error(`INDETERMINATE: operator.post.capture: ${error.message}`); }
+    try { writeJsonExclusiveSync(config.deploymentReceiptPath, receipt); }
+    catch (error) { throw new Error(`INDETERMINATE: operator.publication: ${error.message}`); }
     return { status: 'DEPLOYED', record, receipt };
 }
 
@@ -872,13 +883,13 @@ async function runRollback(config, deps) {
     assertIdentityLocksStable(identity, 'INDETERMINATE: rollback.identity.lock.mutable');
     assertConfigSourceStable(configBinding, config);
     if (validateStagingTree(config.baselineRoot, productFiles, 'rollback.staging.post') !== baselineStageTreeDigest) fail('INDETERMINATE: rollback.staging.mutable');
-    try {
-        for (const commandCapture of [pre.capture, rollback.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'rollback.capture.mutable');
-    } catch (error) { throw new Error(`INDETERMINATE: rollback.post.capture: ${error.message}`); }
     const baselineBytes = fs.readFileSync(config.rollbackBaselinePath);
     const receipt = { schemaVersion: 1, operation: 'rollback', releaseId: config.releaseId, campaignRunId: config.campaignRunId, projectName: config.projectName, accountId: config.accountId, environment: config.environment, branch: config.branch, sourceGitHead: baseline.sourceGitHead, sourceGitTree: baseline.sourceGitTree, authorityRootRealpath: authority.rootRealpath, authorityManifestPath: authority.path, authorityManifestRealpath: authority.realpath, authorityManifestBytes: authority.bytes, authorityManifestSha256: authority.sha256, releaseIssuancePath: identity.releaseIssuance.path, releaseIssuanceRealpath: identity.releaseIssuance.realpath, releaseIssuanceBytes: identity.releaseIssuance.bytes, releaseIssuanceSha256: identity.releaseIssuance.sha256, campaignIssuancePath: identity.campaignIssuance.path, campaignIssuanceRealpath: identity.campaignIssuance.realpath, campaignIssuanceBytes: identity.campaignIssuance.bytes, campaignIssuanceSha256: identity.campaignIssuance.sha256, configBinding, operatorPath: fileURLToPath(import.meta.url), operatorRealpath: fs.realpathSync(fileURLToPath(import.meta.url)), operatorSha256: sha256File(fileURLToPath(import.meta.url)), executionScripts: executionScriptHashes(), sourceSnapshotDir: path.resolve(config.sourceSnapshotDir), sourceSnapshotRealpath: fs.realpathSync(config.sourceSnapshotDir), sourceSnapshotTreeDigest: sourceSnapshotTreeDigestAfter, nodeExePath: config.nodeExePath, nodeExeRealpath: fs.realpathSync(config.nodeExePath), nodeExeSha256: config.nodeExeSha256, wranglerJsPath: config.wranglerJsPath, wranglerJsRealpath: fs.realpathSync(config.wranglerJsPath), wranglerJsSha256: config.wranglerJsSha256, rollbackBaselinePath: path.resolve(config.rollbackBaselinePath), baselineRecordBytes: baselineBytes.length, baselineRecordSha256: sha256Bytes(baselineBytes), baselineTreeDigest: baselineTreeDigestBefore, baselineStageTreeDigest, baselineFiles, baselineDeploymentId: baseline.deploymentId, baselineImmutableUrl: baseline.immutableUrl, baselineRoot: path.resolve(config.baselineRoot), baselineRealpath: fs.realpathSync(config.baselineRoot), preOwnership: pre.capture, preDeploymentId: preRow.Id, preDeploymentUrl: preRow.Deployment, capture: rollback.capture, postOwnership: post.capture, postDeploymentId: postRow.Id, postDeploymentUrl: postRow.Deployment, createdUtc: utcNow() };
     Object.assign(receipt, identityLockReceiptFields(identity));
-    try { await writeJsonExclusive(config.deploymentReceiptPath, receipt); }
+    try {
+        for (const commandCapture of [pre.capture, rollback.capture, post.capture]) assertCaptureStable(commandCapture, config.operationalRoot, 'rollback.capture.mutable');
+    } catch (error) { throw new Error(`INDETERMINATE: rollback.post.capture: ${error.message}`); }
+    try { writeJsonExclusiveSync(config.deploymentReceiptPath, receipt); }
     catch (error) { throw new Error(`INDETERMINATE: rollback.publication: ${error.message}`); }
     return { status: 'ROLLED_BACK', baseline, capture: rollback.capture, postOwnership: post.capture, receipt };
 }
