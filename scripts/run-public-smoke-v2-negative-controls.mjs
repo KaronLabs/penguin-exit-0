@@ -208,6 +208,11 @@ function pathEntryExists(file) {
     catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
 }
 
+function pathEntryExistsWith(file, fsImpl) {
+    try { fsImpl.lstatSync(file); return true; }
+    catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
+}
+
 export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, platform = process.platform } = {}) {
     if (fsImpl.existsSync(file)) fail('negativeReceiptPath.exists');
     const directory = path.dirname(file);
@@ -248,6 +253,107 @@ export function publishNegativeReceiptExclusive(file, bytes, { fsImpl = fs, plat
     }
 }
 
+function sameIdentity(stat, identity) {
+    return stat.dev === identity.dev && stat.ino === identity.ino;
+}
+
+function checkpointAuditFileName(checkpoint) {
+    return `${String(checkpoint.sequence).padStart(3, '0')}-${checkpoint.controlId.toLowerCase()}-${checkpoint.phase.toLowerCase()}.json`;
+}
+
+function beginNegativeCheckpointAuditPublication(negativeReceiptPath, { fsImpl = fs, platform = process.platform, randomHex = () => crypto.randomBytes(16).toString('hex') } = {}) {
+    const root = path.join(path.dirname(negativeReceiptPath), 'negative-checkpoint-audits');
+    if (pathEntryExistsWith(root, fsImpl)) fail('negativeCheckpointAudits.exists');
+    const token = randomHex();
+    if (!/^[0-9a-f]{32}$/.test(token)) fail('negativeCheckpointAudits.stageToken');
+    const stage = path.join(path.dirname(root), `.${path.basename(root)}.stage-${token}`);
+    try { fsImpl.mkdirSync(stage); }
+    catch (error) { fail('negativeCheckpointAudits.stage', error.message); }
+    const stageStat = fsImpl.lstatSync(stage);
+    if (!stageStat.isDirectory() || stageStat.isSymbolicLink()) fail('negativeCheckpointAudits.stage');
+    return {
+        fsImpl,
+        platform,
+        root,
+        stage,
+        parent: path.dirname(root),
+        identity: { dev: stageStat.dev, ino: stageStat.ino },
+        files: new Map(),
+        published: false,
+    };
+}
+
+function writeNegativeCheckpointAudit(publication, checkpoint, audit) {
+    const bytes = Buffer.from(`${JSON.stringify(audit)}\n`);
+    if (sha256(bytes) !== checkpoint.auditReceiptSha256) fail('negativeCheckpointAudits.sha256');
+    const name = checkpointAuditFileName(checkpoint);
+    const file = path.join(publication.stage, name);
+    const descriptor = publication.fsImpl.openSync(file, 'wx');
+    const openedStat = publication.fsImpl.fstatSync(descriptor);
+    publication.files.set(name, { dev: openedStat.dev, ino: openedStat.ino });
+    try {
+        publication.fsImpl.writeFileSync(descriptor, bytes);
+        publication.fsImpl.fsyncSync(descriptor);
+    } finally {
+        publication.fsImpl.closeSync(descriptor);
+    }
+    const stat = publication.fsImpl.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) fail('negativeCheckpointAudits.file');
+    if (!sameIdentity(stat, publication.files.get(name))) fail('negativeCheckpointAudits.file');
+}
+
+function finalizeNegativeCheckpointAuditPublication(publication) {
+    if (publication.files.size !== 25) fail('negativeCheckpointAudits.count');
+    fsyncDirectory(publication.stage, publication.fsImpl, publication.platform);
+    const entries = publication.fsImpl.readdirSync(publication.stage, { withFileTypes: true });
+    if (entries.length !== 25 || entries.some((entry) => !entry.isFile() || !publication.files.has(entry.name))) fail('negativeCheckpointAudits.membership');
+    for (const [name, identity] of publication.files) {
+        const stat = publication.fsImpl.lstatSync(path.join(publication.stage, name));
+        if (!stat.isFile() || stat.isSymbolicLink() || !sameIdentity(stat, identity)) fail('negativeCheckpointAudits.file');
+    }
+    if (pathEntryExistsWith(publication.root, publication.fsImpl)) fail('negativeCheckpointAudits.exists');
+    publication.fsImpl.renameSync(publication.stage, publication.root);
+    publication.published = true;
+    const finalStat = publication.fsImpl.lstatSync(publication.root);
+    if (!finalStat.isDirectory() || finalStat.isSymbolicLink() || !sameIdentity(finalStat, publication.identity)) fail('negativeCheckpointAudits.identity');
+    fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
+}
+
+function rollbackNegativeCheckpointAuditPublication(publication) {
+    const directory = publication.published ? publication.root : publication.stage;
+    let directoryStat;
+    try { directoryStat = publication.fsImpl.lstatSync(directory); }
+    catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
+        return;
+    }
+    if (directoryStat.isDirectory() && !directoryStat.isSymbolicLink() && sameIdentity(directoryStat, publication.identity)) {
+        for (const [name, identity] of publication.files) {
+            const file = path.join(directory, name);
+            let stat;
+            try { stat = publication.fsImpl.lstatSync(file); }
+            catch (error) { if (error?.code === 'ENOENT') continue; else throw error; }
+            if (stat.isFile() && !stat.isSymbolicLink() && sameIdentity(stat, identity)) publication.fsImpl.unlinkSync(file);
+        }
+        const current = publication.fsImpl.lstatSync(directory);
+        if (current.isDirectory() && !current.isSymbolicLink() && sameIdentity(current, publication.identity) && publication.fsImpl.readdirSync(directory).length === 0) {
+            publication.fsImpl.rmdirSync(directory);
+        }
+    }
+    fsyncDirectory(publication.parent, publication.fsImpl, publication.platform);
+}
+
+function failAfterCheckpointAuditRollback(error, publication) {
+    try { rollbackNegativeCheckpointAuditPublication(publication); }
+    catch (cleanupError) {
+        throw new Error(`${error instanceof Error ? error.message : String(error)}; cleanup: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`, {
+            cause: new AggregateError([error, cleanupError]),
+        });
+    }
+    throw error;
+}
+
 function ensureAuthorityUnchanged(configPath, configSha256, operationReceiptPath, operationReceiptSha256) {
     if (sha256File(configPath) !== configSha256) fail('negative.config.immutable');
     if (sha256File(operationReceiptPath) !== operationReceiptSha256) fail('negative.operationReceipt.immutable');
@@ -275,6 +381,9 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
     const canonicalConfigPath = path.resolve(configPath);
     const config = validateOperationConfig(readJson(canonicalConfigPath, 'negative.config'));
     if (fs.existsSync(config.negativeReceiptPath)) fail('negativeReceiptPath.exists');
+    const publicationOptions = overrides.publication ?? {};
+    const checkpointAuditPublication = beginNegativeCheckpointAuditPublication(config.negativeReceiptPath, publicationOptions);
+    try {
     const pristineAcceptedRealpath = fs.realpathSync(config.acceptedDir);
     const configSha256 = sha256File(canonicalConfigPath);
     const operationReceiptSha256 = sha256File(config.operationReceiptPath);
@@ -297,8 +406,10 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
             baselineAudit = structuredClone(freshAudit);
         }
         const freshAuditSha256 = sha256(Buffer.from(`${JSON.stringify(freshAudit)}\n`));
-        checkpoints.push({ sequence: checkpoints.length + 1, controlId, phase, treeDigest: pristine.treeDigest, auditReceiptSha256: freshAuditSha256, auditStatus: 'VERIFIED' });
+        const checkpointRow = { sequence: checkpoints.length + 1, controlId, phase, treeDigest: pristine.treeDigest, auditReceiptSha256: freshAuditSha256, auditStatus: 'VERIFIED' };
+        checkpoints.push(checkpointRow);
         checkpointAuditReceipts.push(structuredClone(freshAudit));
+        writeNegativeCheckpointAudit(checkpointAuditPublication, checkpointRow, freshAudit);
     }
 
     checkpoint('BASELINE', 'BASELINE');
@@ -372,9 +483,13 @@ export function runNegativeControlsFromConfig(configPath, overrides = {}) {
         controls,
     };
     validateNegativeReceipt(receipt, { pristineAcceptedRealpath, nodeExePath: config.nodeExePath, auditorPath, checkpointAuditReceipts });
-    publishNegativeReceiptExclusive(config.negativeReceiptPath, Buffer.from(`${JSON.stringify(receipt)}\n`));
+    finalizeNegativeCheckpointAuditPublication(checkpointAuditPublication);
+    publishNegativeReceiptExclusive(config.negativeReceiptPath, Buffer.from(`${JSON.stringify(receipt)}\n`), publicationOptions);
     const lines = [...NEGATIVE_CONTROL_REGISTRY.map(({ id }) => `EXPECTED_REJECTION=${id}`), 'PUBLIC_SMOKE_V2_NEGATIVE_CONTROLS=12/12'];
     return { receipt, lines };
+    } catch (error) {
+        failAfterCheckpointAuditRollback(error, checkpointAuditPublication);
+    }
 }
 
 export function runNegativeControlsFromArgv(argv, overrides = {}) {
