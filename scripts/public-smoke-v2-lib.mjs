@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 export const SMOKE_SCHEMA_VERSION = 2;
 export const ENGINES = Object.freeze(['chromium', 'firefox', 'webkit']);
@@ -134,10 +136,231 @@ export function canonicalJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 }
 
+export function enforceStrictDeadline(elapsedMs, limitMs, invariant) {
+    number(elapsedMs, invariant);
+    number(limitMs, `${invariant}.limit`);
+    if (elapsedMs < 0 || limitMs <= 0 || elapsedMs >= limitMs) fail(invariant, `elapsedMs=${elapsedMs} limitMs=${limitMs}`);
+    return elapsedMs;
+}
+
+export function createRunnerEventLedger() {
+    const events = [];
+    return Object.freeze({
+        append(input) {
+            exactKeys(input, ['utc', 'monotonicMs', 'type', 'case', 'payload'], 'runner.event.input');
+            utc(input.utc, 'runner.event.utc');
+            number(input.monotonicMs, 'runner.event.monotonicMs');
+            string(input.type, 'runner.event.type');
+            if (input.case !== null) string(input.case, 'runner.event.case');
+            object(input.payload, 'runner.event.payload');
+            const event = {
+                seq: events.length + 1,
+                previousEventSha256: events.at(-1)?.eventSha256 ?? ZERO_SHA256,
+                utc: input.utc,
+                monotonicMs: input.monotonicMs,
+                type: input.type,
+                case: input.case,
+                payload: input.payload,
+            };
+            event.eventSha256 = sha256Bytes(canonicalJson(event));
+            events.push(Object.freeze(event));
+            return events.at(-1);
+        },
+        finalizeTrustedInput(caseLabel, actionSeq, postStateSha256, resultingUrl) {
+            const index = events.findIndex((event) => event.type === 'trusted-input' && event.case === caseLabel && event.payload.actionSeq === actionSeq);
+            if (index < 0) fail('runner.event.finalizeTrustedInput');
+            const target = events[index];
+            events[index] = { ...target, payload: { ...target.payload, postStateSha256, resultingUrl } };
+            for (let cursor = index; cursor < events.length; cursor += 1) {
+                const { eventSha256: _discarded, ...payload } = events[cursor];
+                payload.previousEventSha256 = cursor === 0 ? ZERO_SHA256 : events[cursor - 1].eventSha256;
+                events[cursor] = Object.freeze({ ...payload, eventSha256: sha256Bytes(canonicalJson(payload)) });
+            }
+            return events[index];
+        },
+        records() {
+            return [...events];
+        },
+    });
+}
+
+export const PINNED_AST_GREP_PATH = 'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Packages\\ast-grep.ast-grep_Microsoft.Winget.Source_8wekyb3d8bbwe\\ast-grep.exe';
+const PINNED_AST_GREP_SHA256 = '584c59eaf3b50bf436ad43cf36193af1d2fe5e29ddb21b7485c39f131691390f';
+const PINNED_AST_GREP_VERSION = 'ast-grep 0.44.0';
+
+export function resolvePlaywrightAuthority(sourceSnapshotDir, { resolvePackage = (specifier) => createRequire(import.meta.url).resolve(specifier) } = {}) {
+    try {
+        const rawResolvedPath = resolvePackage('playwright/package.json');
+        const resolvedPath = path.resolve(rawResolvedPath);
+        if (!path.isAbsolute(rawResolvedPath) || rawResolvedPath !== resolvedPath) fail('playwrightAuthority.path');
+        const stat = fs.lstatSync(resolvedPath);
+        if (!stat.isFile() || stat.isSymbolicLink() || fs.realpathSync(resolvedPath) !== resolvedPath) fail('playwrightAuthority.path');
+        const installed = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+        const declared = JSON.parse(fs.readFileSync(path.join(sourceSnapshotDir, 'package.json'), 'utf8')).devDependencies?.['@playwright/test'];
+        const declaredVersion = typeof declared === 'string' ? declared.replace(/^[~^]/, '') : '';
+        if (installed.name !== 'playwright' || installed.version !== declaredVersion) fail('playwrightAuthority.version');
+        return { path: 'node_modules/playwright/package.json', version: installed.version, sha256: sha256File(resolvedPath), resolvedPath };
+    } catch (error) {
+        if (error.message?.startsWith('playwrightAuthority.')) throw error;
+        fail('playwrightAuthority.path', error.code ?? error.message);
+    }
+}
+
+export function validatePlaywrightToolingDeclaration(authority, declaration) {
+    exactKeys(declaration, ['path', 'version', 'sha256'], 'playwrightAuthority.declaration');
+    if (declaration.path !== authority.path || declaration.version !== authority.version || declaration.sha256 !== authority.sha256) fail('playwrightAuthority.declaration');
+    return declaration;
+}
+
+export function validatePinnedParserAuthority({ parserPath = PINNED_AST_GREP_PATH, expectedSha256 = PINNED_AST_GREP_SHA256, expectedVersion = PINNED_AST_GREP_VERSION } = {}) {
+    try {
+        const resolved = path.resolve(parserPath);
+        const stat = fs.lstatSync(resolved);
+        if (!stat.isFile() || stat.isSymbolicLink() || fs.realpathSync(resolved) !== resolved || sha256File(resolved) !== expectedSha256) fail('runner.parserAuthority');
+        const result = spawnSync(resolved, ['--version'], { encoding: 'utf8', windowsHide: true, shell: false });
+        if (result.status !== 0 || result.signal !== null || result.stderr !== '' || result.stdout !== `${expectedVersion}\n`) fail('runner.parserAuthority');
+        return resolved;
+    } catch (error) {
+        if (error.message?.startsWith('runner.parserAuthority')) throw error;
+        fail('runner.parserAuthority', error.code ?? error.message);
+    }
+}
+
+function astMatches(parserPath, source, selector, value) {
+    const option = selector === 'pattern' ? '-p' : '--kind';
+    const result = spawnSync(parserPath, ['run', option, value, '-l', 'js', '--json=stream', '--stdin'], { input: source, encoding: 'utf8', windowsHide: true, shell: false, maxBuffer: 8 * 1024 * 1024 });
+    if (![0, 1].includes(result.status) || result.signal !== null || result.stderr !== '') fail('runner.policy.ast', result.stderr || `status=${result.status}`);
+    return result.stdout.trim() ? result.stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line)) : [];
+}
+
+function validateReadOnlyCallback(parserPath, callback) {
+    const declared = new Set();
+    const localFunctions = new Set();
+    for (const keyword of ['const', 'let', 'var']) for (const node of astMatches(parserPath, callback, 'pattern', `${keyword} $NAME = $VALUE`)) {
+        const name = node.metaVariables?.single?.NAME?.text;
+        if (name) declared.add(name);
+    }
+    for (const pattern of ['const $NAME = ($$$PARAMS) => $BODY', 'const $NAME = $PARAM => $BODY']) for (const node of astMatches(parserPath, callback, 'pattern', pattern)) {
+        const name = node.metaVariables?.single?.NAME?.text;
+        if (name) localFunctions.add(name);
+    }
+    for (const node of astMatches(parserPath, callback, 'kind', 'assignment_expression')) {
+        const left = node.text.split(/\s*(?:=|\+=|-=|\*=|\/=|&&=|\|\|=|\?\?=)\s*/, 1)[0];
+        if (!/^[A-Za-z_$][\w$]*$/.test(left) || !declared.has(left)) fail('runner.policy.callback.write', node.text);
+    }
+    for (const node of astMatches(parserPath, callback, 'kind', 'update_expression')) {
+        const identifier = node.text.replace(/\+\+|--/g, '').trim();
+        if (!declared.has(identifier)) fail('runner.policy.callback.write', node.text);
+    }
+    if (astMatches(parserPath, callback, 'kind', 'new_expression').some(({ text }) => !text.startsWith('new Error('))) fail('runner.policy.callback.construct');
+    if (astMatches(parserPath, callback, 'kind', 'unary_expression').some(({ text }) => text.trim().startsWith('delete '))) fail('runner.policy.callback.delete');
+    if (astMatches(parserPath, callback, 'kind', 'member_expression').some(({ text }) => /^(?:application|window|globalThis)\./.test(text))) fail('runner.policy.callback.capability');
+    const directReadCall = /^(?:document\.(?:querySelector|querySelectorAll|elementFromPoint)|localStorage\.getItem|getComputedStyle|Boolean|Number|Math\.(?:min|max))\s*\(/;
+    const readMethodCall = /\??\.(?:getAttribute|getClientRects|contains|match|trim|slice|reverse|find|findIndex|map|flatMap)\s*\(/;
+    for (const node of astMatches(parserPath, callback, 'kind', 'call_expression')) {
+        const bareCallee = /^([A-Za-z_$][\w$]*)\s*\(/.exec(node.text)?.[1];
+        if (!directReadCall.test(node.text) && !readMethodCall.test(node.text) && !localFunctions.has(bareCallee)) fail('runner.policy.callback.call', node.text);
+    }
+    for (const node of astMatches(parserPath, callback, 'kind', 'await_expression')) if (node.text.trim() !== 'await document.fonts.ready') fail('runner.policy.callback.await');
+}
+
+export function validateRunnerSourcePolicy(source) {
+    string(source, 'runner.policy.source');
+    const parserPath = validatePinnedParserAuthority();
+    const capabilityTypes = new Map([['page', 'page'], ['context', 'context'], ['browser', 'browser'], ['browserType', 'browserType'], ['locator', 'locator']]);
+    const capabilityFactories = new Map();
+    const taintedCallables = new Set();
+    const declarations = ['const', 'let', 'var'].flatMap((keyword) => astMatches(parserPath, source, 'pattern', `${keyword} $ALIAS = $VALUE`));
+    for (let changed = true; changed;) {
+        changed = false;
+        for (const declaration of declarations) {
+            const alias = declaration.metaVariables?.single?.ALIAS?.text;
+            const value = declaration.metaVariables?.single?.VALUE?.text ?? '';
+            const directType = capabilityTypes.get(value);
+            const locatorType = [...capabilityTypes].some(([name, type]) => type === 'page' && value.startsWith(`${name}.locator(`)) ? 'locator' : null;
+            const factoryType = /^([A-Za-z_$][\w$]*)\(\)$/.exec(value)?.[1];
+            const resolvedType = directType ?? locatorType ?? capabilityFactories.get(factoryType);
+            if (alias && resolvedType && !capabilityTypes.has(alias)) { capabilityTypes.set(alias, resolvedType); changed = true; }
+            const returned = /^(?:async\s*)?\([^)]*\)\s*=>\s*([A-Za-z_$][\w$]*)$/.exec(value)?.[1];
+            if (alias && returned && capabilityTypes.has(returned) && !capabilityFactories.has(alias)) { capabilityFactories.set(alias, capabilityTypes.get(returned)); changed = true; }
+        }
+    }
+    const destructuring = ['const', 'let', 'var'].flatMap((keyword) => astMatches(parserPath, source, 'pattern', `${keyword} { $$$PROPERTIES } = $VALUE`));
+    for (const declaration of destructuring) {
+        const value = declaration.metaVariables?.single?.VALUE?.text ?? '';
+        const directType = capabilityTypes.get(value);
+        const locatorType = [...capabilityTypes].some(([name, type]) => type === 'page' && value.startsWith(`${name}.locator(`)) ? 'locator' : null;
+        const factoryName = /^([A-Za-z_$][\w$]*)\(\)$/.exec(value)?.[1];
+        if (!(directType ?? locatorType ?? capabilityFactories.get(factoryName))) continue;
+        for (const property of declaration.metaVariables?.multi?.PROPERTIES ?? []) {
+            if (property.text === ',') continue;
+            const rest = /^\.\.\.([A-Za-z_$][\w$]*)$/.exec(property.text)?.[1];
+            if (rest) { capabilityTypes.set(rest, directType ?? locatorType ?? capabilityFactories.get(factoryName)); continue; }
+            const callable = /^(?:[A-Za-z_$][\w$]*\s*:\s*)?([A-Za-z_$][\w$]*)$/.exec(property.text)?.[1];
+            if (callable) taintedCallables.add(callable);
+            else fail('runner.policy.capabilityDestructure', property.text);
+        }
+    }
+    for (const { text } of astMatches(parserPath, source, 'kind', 'subscript_expression')) {
+        const receiver = /^([A-Za-z_$][\w$]*)\s*(?:\?\.)?\[/.exec(text)?.[1];
+        if ((receiver && capabilityTypes.has(receiver)) || [...capabilityTypes].some(([name, type]) => type === 'page' && text.startsWith(`${name}.locator(`))) fail('runner.policy.computedCapability', text);
+    }
+    const calls = astMatches(parserPath, source, 'kind', 'call_expression');
+    const computedMembers = astMatches(parserPath, source, 'kind', 'subscript_expression');
+    for (const member of computedMembers) if (calls.some((call) => call.range.byteOffset.start === member.range.byteOffset.start && call.text.startsWith(`${member.text}(`))) fail('runner.policy.computedCall', member.text);
+    const browserMembers = { page: new Set(['evaluate', 'getByRole', 'goto', 'keyboard', 'locator', 'on', 'reload', 'screenshot', 'setViewportSize', 'url']), context: new Set(['close', 'newPage']), browser: new Set(['close', 'newContext', 'version']), browserType: new Set(['launch']), locator: new Set(['click']) };
+    for (const { text } of astMatches(parserPath, source, 'kind', 'member_expression')) {
+        const match = /^([A-Za-z_$][\w$]*)\?\.([A-Za-z_$][\w$]*)|^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)/.exec(text);
+        const receiver = match?.[1] ?? match?.[3], member = match?.[2] ?? match?.[4], type = capabilityTypes.get(receiver);
+        if (type && !browserMembers[type].has(member)) fail('runner.policy.browserCapability', text);
+    }
+    for (const { text } of calls) {
+        const bareCallee = /^([A-Za-z_$][\w$]*)\s*\(/.exec(text)?.[1];
+        if (bareCallee && taintedCallables.has(bareCallee)) fail('runner.policy.capabilityCall', text);
+        const locatorCall = /^([A-Za-z_$][\w$]*)\??\.click\s*\(/.exec(text)?.[1];
+        if (locatorCall && capabilityTypes.get(locatorCall) === 'locator' && text !== `${locatorCall}.click()`) fail('runner.policy.directClick', text);
+        if (/^(?:page\.(?:locator|getByRole)\([\s\S]*\)|locator)\.click\s*\(/.test(text) && text !== 'locator.click()' && !/^page\.getByRole\([\s\S]*\)\.click\(\)$/.test(text)) fail('runner.policy.directClick', text);
+        const event = /^page\.on\((['"])([^'"]+)\1/.exec(text)?.[2];
+        if (event && !['console', 'pageerror', 'requestfailed', 'response', 'request'].includes(event)) fail('runner.policy.pageEvent', event);
+    }
+    const suspiciousEvaluate = calls.filter((node) => /evaluate|eva['"]?\s*\+\s*['"]?luate/.test(node.text));
+    const evaluations = astMatches(parserPath, source, 'pattern', '$PAGE.evaluate($$$ARGS)');
+    const allowedNames = ['readDocumentSnapshot', 'readVisibilityPrimitives', 'readStatePrimitives', 'readScreenshotOracle'];
+    if (suspiciousEvaluate.length !== evaluations.length || evaluations.some((node) => node.metaVariables?.single?.PAGE?.text !== 'page')) fail('runner.policy.evaluate');
+    if (evaluations.length === 0) {
+        const allowedOuterCall = /^(?:readDocumentSnapshot|readVisibilityPrimitives|readStatePrimitives|readScreenshotOracle|page\.getByRole|page\.keyboard\.press)\s*\(|^page\.getByRole\([\s\S]*\)\.click\s*\(/;
+        if (calls.some((node) => !allowedOuterCall.test(node.text))) fail('runner.policy.outerCall');
+        if (astMatches(parserPath, source, 'kind', 'assignment_expression').length || astMatches(parserPath, source, 'kind', 'update_expression').length || astMatches(parserPath, source, 'kind', 'new_expression').length) fail('runner.policy.outerWrite');
+        return true;
+    }
+    const claimed = new Set();
+    for (const name of allowedNames) {
+        const functions = astMatches(parserPath, source, 'pattern', `async function ${name}($$$PARAMS) { $$$BODY }`);
+        if (functions.length === 0) continue;
+        if (functions.length !== 1) fail('runner.policy.evaluate', name);
+        const start = functions[0].range.byteOffset.start, end = functions[0].range.byteOffset.end;
+        const contained = evaluations.filter((node) => node.range.byteOffset.start >= start && node.range.byteOffset.end <= end);
+        if (contained.length === 0) continue;
+        if (contained.length !== 1) fail('runner.policy.evaluate', name);
+        claimed.add(contained[0].range.byteOffset.start);
+        const args = contained[0].metaVariables.multi.ARGS.filter(({ text }) => text !== ',');
+        if (![1, 2].includes(args.length)) fail('runner.policy.evaluate', name);
+        validateReadOnlyCallback(parserPath, args[0].text);
+    }
+    if (claimed.size !== evaluations.length) fail('runner.policy.evaluate');
+    return true;
+}
+
 export function sha256File(file) {
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) fail('file.regular', file);
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+export function validateExecutedSnapshotBinding(executedPath, snapshotPath) {
+    canonicalPath(executedPath, 'scriptBinding.executed'); canonicalPath(snapshotPath, 'scriptBinding.snapshot');
+    if (sha256File(executedPath) !== sha256File(snapshotPath)) fail('scriptBinding');
+    return true;
 }
 
 function sha256Bytes(value) {
@@ -175,7 +398,6 @@ export function deriveVisibility(raw) {
         && raw.centerX < raw.viewportWidth
         && raw.centerY >= 0
         && raw.centerY < raw.viewportHeight
-        && raw.hitElementId.length > 0
         && raw.hitIsSelfOrDescendant;
 }
 
@@ -241,8 +463,9 @@ function validateAcceptedManifest(manifest) {
     if (canonicalJson(actual) !== canonicalJson([...expected].sort())) fail('manifest.acceptedFileSet');
 }
 
-function validateSignature(value) {
-    exactKeys(value, ['command', 'commandKind', 'system', 'systemKind', 'roast', 'roastKind', 'pseudoLabel', 'tabs'], 'signature');
+export function validateSignature(value) {
+    const keys = ['command', 'commandKind', 'system', 'systemKind', 'roast', 'roastKind', 'pseudoLabel', 'tabs'];
+    exactKeys(value, keys, 'signature');
     const expected = {
         command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
         system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
@@ -251,6 +474,43 @@ function validateSignature(value) {
     for (const [key, expectedValue] of Object.entries(expected)) if (value[key] !== expectedValue) fail(`signature.${key}`);
     exactKeys(value.tabs, ['wifiAriaSelected', 'wifiTabIndex', 'cpuAriaSelected', 'cpuTabIndex', 'panelAriaLabelledby', 'terminalRowsPersisted'], 'signature.tabs');
     if (value.tabs.wifiAriaSelected !== 'false' || value.tabs.wifiTabIndex !== '-1' || value.tabs.cpuAriaSelected !== 'true' || value.tabs.cpuTabIndex !== '0' || value.tabs.panelAriaLabelledby !== 'tab-cpu' || value.tabs.terminalRowsPersisted !== true) fail('signature.tabs');
+}
+
+export function validateFairPing(value) {
+    const keys = ['command', 'commandKind', 'system', 'systemKind', 'roast', 'roastKind'];
+    exactKeys(value, value.provenance === undefined ? keys : [...keys, 'provenance'], 'fairPing');
+    const expected = { command: 'archon@stone-igloo:~$ ping 8.8.8.8', commandKind: 'command', system: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', systemKind: 'system', roast: '아콘 🐧 // 지식은 레버리지가 아니다 애송아.', roastKind: 'archon' };
+    for (const [key, expectedValue] of Object.entries(expected)) if (value[key] !== expectedValue) fail(`fairPing.${key}`);
+    if (value.provenance !== undefined) {
+        exactKeys(value.provenance, ['beforeRowCount', 'rows'], 'fairPing.provenance');
+        integer(value.provenance.beforeRowCount, 'fairPing.provenance.beforeRowCount', 0);
+        if (!Array.isArray(value.provenance.rows) || value.provenance.rows.length !== 3) fail('fairPing.provenance.rows');
+        const expectedRows = [
+            { text: expected.command, kind: expected.commandKind, context: '', index: '' },
+            { text: expected.system, kind: expected.systemKind, context: '', index: '' },
+            { text: expected.roast, kind: expected.roastKind, context: 'puzzle', index: '1' },
+        ];
+        value.provenance.rows.forEach((row, index) => {
+            exactKeys(row, ['text', 'kind', 'context', 'index', 'pseudoLabel'], `fairPing.provenance.rows.${index}`);
+            for (const key of ['text', 'kind', 'context', 'index']) if (row[key] !== expectedRows[index][key]) fail(`fairPing.provenance.rows.${index}.${key}`);
+            if (typeof row.pseudoLabel !== 'string') fail(`fairPing.provenance.rows.${index}.pseudoLabel`);
+        });
+    }
+    return value;
+}
+
+export function validateTask2FairPingObservations(observations) {
+    if (!Array.isArray(observations) || observations.length !== 6) fail('task2.fairPing.provenance');
+    observations.forEach((observation) => validateTask2Signature(observation?.signature));
+    return observations;
+}
+
+export function validateTask2Signature(value) {
+    if (value?.fairPing?.provenance === undefined) fail('task2.fairPing.provenance');
+    const { fairPing, ...legacySignature } = value;
+    try { validateSignature(legacySignature); validateFairPing(fairPing); }
+    catch (error) { fail('task2.fairPing.provenance', error.message); }
+    return value;
 }
 
 function validateErrors(errors) {
@@ -416,6 +676,13 @@ export function validateCase(record, options = {}) {
         return record;
     }
     validateCaseFull(record);
+    return record;
+}
+
+export function validateTask2Case(record) {
+    validateTask2Signature(record?.signature);
+    const { fairPing, ...legacySignature } = record.signature;
+    validateCaseFull({ ...record, signature: legacySignature });
     return record;
 }
 
@@ -612,6 +879,7 @@ export function validateOperationReceipt(receipt) {
     if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED') fail('operationReceipt.status');
     if (!RELEASE_ID.test(string(receipt.releaseId, 'operationReceipt.releaseId'))) fail('operationReceipt.releaseId'); utc(receipt.createdUtc, 'operationReceipt.createdUtc'); canonicalPath(receipt.configPath, 'operationReceipt.configPath'); sha(receipt.configSha256, 'operationReceipt.configSha256'); canonicalPath(receipt.orchestratorPath, 'operationReceipt.orchestratorPath'); sha(receipt.orchestratorSha256, 'operationReceipt.orchestratorSha256');
     validateProcessCapture(receipt.campaignVerifier, 'operationReceipt.campaignVerifier', true); validateProcessCapture(receipt.worker, 'operationReceipt.worker');
+    if (receipt.worker.finishedMonotonicMs - receipt.campaignVerifier.startedMonotonicMs >= 900000) fail('operationReceipt.deadline');
     exactKeys(receipt.accepted, ['realpath', 'manifestPath', 'manifestSha256', 'treeDigest', 'publishedUtc', 'eventsPath', 'eventsSha256', 'eventCount', 'finalEventSha256'], 'operationReceipt.accepted');
     canonicalPath(receipt.accepted.realpath, 'operationReceipt.accepted.realpath'); canonicalPath(receipt.accepted.manifestPath, 'operationReceipt.accepted.manifestPath'); utc(receipt.accepted.publishedUtc, 'operationReceipt.accepted.publishedUtc'); canonicalPath(receipt.accepted.eventsPath, 'operationReceipt.accepted.eventsPath');
     if (receipt.accepted.eventCount !== 278) fail('operationReceipt.accepted.eventCount');
@@ -636,6 +904,25 @@ export function validateOperationReceipt(receipt) {
     if (receipt.fileProbes.initialPath !== 'file-probes/initial-10.json' || receipt.fileProbes.finalAliasPath !== 'file-probes/final-alias-5.json') fail('operationReceipt.fileProbes.path');
     for (const key of ['initialSha256', 'finalAliasSha256']) sha(receipt.fileProbes[key], `operationReceipt.fileProbes.${key}`);
     return receipt;
+}
+
+export function validateOuterAuthority({ row, result, authority }) {
+    exactKeys(row, ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build'], 'authority.wrangler');
+    if (row.Id !== authority.deploymentId || row.Environment !== 'Production' || row.Branch !== 'main' || row.Source !== authority.sourceGitHead.slice(0, 7) || row.Deployment !== authority.immutableUrl) fail('authority.wrangler');
+    if (result.requestedUrl !== result.finalUrl || result.status !== 200 || !Array.isArray(result.redirects) || result.redirects.length !== 0 || result.mime !== authority.product.mime || result.bytes !== authority.product.bytes || result.sha256 !== authority.product.sha256) fail('authority.probe');
+    return true;
+}
+
+export function validateWranglerRows(rows, authority) {
+    if (!Array.isArray(rows) || rows.length < 1) fail('authority.wranglerRows.cardinality');
+    const keys = ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build'];
+    rows.forEach((row, index) => {
+        exactKeys(row, keys, `authority.wranglerRows.${index}`);
+        keys.forEach((key) => string(row[key], `authority.wranglerRows.${index}.${key}`));
+    });
+    const first = rows[0];
+    if (first.Id !== authority.deploymentId || first.Environment !== 'Production' || first.Branch !== 'main' || first.Source !== authority.sourceGitHead.slice(0, 7) || first.Deployment !== authority.immutableUrl) fail('authority.wranglerRows.first');
+    return rows;
 }
 
 function validateDeploymentRecord(record) {
@@ -779,12 +1066,20 @@ function validateExternalCaptureFiles(capture, invariant) {
     return { stdout, stderr };
 }
 
+export function loadOperationAuthority(config) {
+    const campaign = authenticateCampaign(config);
+    const deployment = validateDeploymentRecord(readJson(config.deploymentRecordPath, 'deploymentRecord.json'));
+    if (deployment.projectName !== config.projectName || deployment.immutableUrl !== config.immutableUrl || deployment.aliasUrl !== config.aliasUrl || deployment.sourceGitHead !== campaign.claims.sourceGit.headSha || canonicalJson(deployment.productFiles) !== canonicalJson(campaign.productFiles)) fail('authority.binding');
+    return { deployment, productFiles: campaign.productFiles, sourceGitHead: campaign.claims.sourceGit.headSha };
+}
+
 function authenticateProcessCaptures(config, operation, configPath) {
     if (operation.configPath !== canonicalPath(configPath, 'operationReceipt.configPath')) fail('operationReceipt.configPath');
     const verifierPath = path.join(config.sourceSnapshotDir, 'scripts', 'verify-r10-campaign.mjs');
-    const orchestratorPath = path.join(config.sourceSnapshotDir, 'scripts', 'run-public-smoke-v2-operation.mjs');
+    const orchestratorSnapshotPath = path.join(config.sourceSnapshotDir, 'scripts', 'run-public-smoke-v2-operation.mjs');
     const runnerPath = path.join(config.sourceSnapshotDir, 'scripts', 'run-public-smoke-v2.mjs');
-    if (operation.orchestratorPath !== orchestratorPath || operation.orchestratorSha256 !== sha256File(orchestratorPath) || operation.campaignVerifier.verifierPath !== verifierPath || operation.campaignVerifier.verifierSha256 !== sha256File(verifierPath)) fail('operationReceipt.scriptBinding');
+    validateExecutedSnapshotBinding(operation.orchestratorPath, orchestratorSnapshotPath);
+    if (operation.orchestratorSha256 !== sha256File(operation.orchestratorPath) || operation.campaignVerifier.verifierPath !== verifierPath || operation.campaignVerifier.verifierSha256 !== sha256File(verifierPath)) fail('operationReceipt.scriptBinding');
     const verifierArgv = [config.nodeExePath, verifierPath, '--campaign', config.campaignDir, '--spec', config.campaignSpecPath, '--source', config.sourceSnapshotDir, '--execution-source', config.executionSourceDir, '--run', config.campaignRunId, '--authority-project', config.authorityProjectRoot, '--authority-workspace', config.authorityWorkspaceRoot];
     const workerArgv = [config.nodeExePath, runnerPath, '--config', configPath];
     if (canonicalJson(operation.campaignVerifier.argv) !== canonicalJson(verifierArgv) || operation.campaignVerifier.cwd !== canonicalPath(config.authorityProjectRoot, 'campaignVerifier.cwd')) fail('operationReceipt.campaignVerifier.argv');
@@ -900,8 +1195,9 @@ export function auditAcceptedRun(options) {
     const resolved = resolveConfig(options.configPath ?? options);
     const config = resolved.base;
     const operationReceiptPath = canonicalPath(resolved.operationReceiptPath, 'operationReceipt.path');
-    const operationBytesHash = sha256File(operationReceiptPath);
-    const operation = validateOperationReceipt(readJson(operationReceiptPath, 'operationReceipt.json'));
+    const suppliedOperation = options && typeof options === 'object' ? options.operationReceipt : undefined;
+    const operationBytesHash = suppliedOperation ? sha256Bytes(Buffer.from(`${canonicalJson(suppliedOperation)}\n`)) : sha256File(operationReceiptPath);
+    const operation = validateOperationReceipt(suppliedOperation ?? readJson(operationReceiptPath, 'operationReceipt.json'));
     if (operation.releaseId !== config.releaseId || operation.configSha256 !== sha256File(resolved.baseConfigPath)) fail('operationReceipt.binding');
     authenticateProcessCaptures(config, operation, resolved.baseConfigPath);
     const campaign = authenticateCampaign(config);
@@ -926,7 +1222,13 @@ export function auditAcceptedRun(options) {
     validateAcceptedRunSchema(accepted);
     if (accepted.releaseId !== config.releaseId || accepted.campaignRunId !== config.campaignRunId || accepted.sourceGitHead !== deployment.sourceGitHead || accepted.deploymentId !== deployment.deploymentId || accepted.immutableUrl !== deployment.immutableUrl || accepted.aliasUrl !== deployment.aliasUrl || accepted.attemptsPerCase !== 1 || accepted.retries !== 0 || accepted.skips !== 0 || accepted.screenshotCount !== 18) fail('acceptedRun.summary');
     if (canonicalJson(accepted.productFiles) !== canonicalJson(campaign.productFiles)) fail('acceptedRun.productFiles');
+    if (accepted.tooling.runner.path !== 'scripts/run-public-smoke-v2.mjs' || accepted.tooling.library.path !== 'scripts/public-smoke-v2-lib.mjs') fail('acceptedRun.tooling.profile');
     if (accepted.tooling.runner.sha256 !== sha256File(path.join(config.sourceSnapshotDir, accepted.tooling.runner.path)) || accepted.tooling.library.sha256 !== sha256File(path.join(config.sourceSnapshotDir, accepted.tooling.library.path))) fail('acceptedRun.tooling');
+    let acceptedProfile;
+    if (accepted.tooling.runner.version === '1' && accepted.tooling.library.version === '1') acceptedProfile = 'legacy';
+    else if (accepted.tooling.runner.version === '2' && accepted.tooling.library.version === '2') acceptedProfile = 'task2';
+    else fail('acceptedRun.tooling.profile');
+    if (acceptedProfile === 'task2' || accepted.tooling.playwright.path === 'node_modules/playwright/package.json') validatePlaywrightToolingDeclaration(resolvePlaywrightAuthority(config.sourceSnapshotDir), accepted.tooling.playwright);
     if (accepted.observationsPath !== 'observations.json' || accepted.eventsPath !== 'runner-events.jsonl') fail('acceptedRun.paths');
     const observationsPath = relativeAcceptedPath(root, accepted.observationsPath, 'acceptedRun.observationsPath');
     if (relativeAcceptedPath(root, accepted.eventsPath, 'acceptedRun.eventsPath') !== eventsPath) fail('acceptedRun.eventsPath');
@@ -935,7 +1237,7 @@ export function auditAcceptedRun(options) {
     const labels = cases.map((record) => record.label);
     if (canonicalJson(labels) !== canonicalJson(expectedCaseLabels())) fail('observations.matrix');
     cases.forEach((record, caseIndex) => {
-        validateCaseFull(record);
+        if (acceptedProfile === 'task2') validateTask2Case(record); else validateCaseFull(record);
         const expectedUrl = record.originKind === 'immutable' ? deployment.immutableUrl : deployment.aliasUrl;
         if (record.requestedUrl !== expectedUrl || record.finalUrl !== expectedUrl) fail('case.url');
         const boundary = eventValidation.boundaries.get(record.label);
