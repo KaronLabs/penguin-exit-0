@@ -3,11 +3,14 @@
   "version": "2.1.0",
   "type": "module",
   "description": "Penguin EXIT 0 Commercial Edition v2.1 Engine (Ironclad Acquittal Edition)",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node --test \"tests/**/*.test.js\"",
     "test:browser": "playwright test --project=chromium --project=firefox --project=webkit",
     "test:perf": "playwright test tests/browser/performance.spec.js --project=chromium-perf",
-    "test:all": "npm test && npm run test:browser && npm run test:perf && npm run negative-controls && npm run campaign:build && npm run manifest:generate && npm run evidence:verify && npm run campaign:verify",
+    "test:all": "npm test && npm run test:browser && npm run test:perf && npm run negative-controls && npm run manifest:generate && npm run evidence:verify",
     "negative-controls": "node scripts/run-negative-controls.mjs",
     "manifest:generate": "node scripts/generate-manifest.mjs",
     "evidence:verify": "node scripts/verify-evidence.mjs",

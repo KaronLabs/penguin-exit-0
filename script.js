@@ -187,11 +187,12 @@ function showEncounter(encounter) {
 function queuePuzzleResult(puzzle, choice, repeated) {
     appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`, '', null, 'command');
     scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
+    const scheduledPuzzleId = puzzle.id;
     scheduleTerminal(() => {
         if (repeated) appendDialogue('repeat');
         else {
             appendDialogue('puzzle');
-            if (choice.isFairDiagnostic || choice.key === 'altman') showEncounter(puzzle.encounter);
+            if ((choice.isFairDiagnostic || choice.key === 'altman') && activePuzzleId === scheduledPuzzleId) showEncounter(puzzle.encounter);
         }
     }, 1050);
 }

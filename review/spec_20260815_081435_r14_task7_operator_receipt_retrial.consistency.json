@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "evidence_roots": [
+    "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review",
+    "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\.superpowers\\worktrees\\r14-smoke-v2"
+  ],
+  "sources": [
+    {
+      "id": "actual-operator",
+      "kind": "file_metadata",
+      "artifact_role": "authoritative",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\.superpowers\\worktrees\\r14-smoke-v2\\scripts\\operator-deploy-public-smoke-v2.mjs"
+    },
+    {
+      "id": "claimed-operator-path",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- operator_path_claim: `",
+      "suffix": "`",
+      "value_type": "string"
+    },
+    {
+      "id": "claimed-operator-bytes",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- operator_bytes_claim: `",
+      "suffix": "`",
+      "value_type": "int"
+    },
+    {
+      "id": "claimed-operator-sha",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- operator_sha256_claim: `",
+      "suffix": "`",
+      "value_type": "string"
+    },
+    {
+      "id": "actual-library",
+      "kind": "file_metadata",
+      "artifact_role": "authoritative",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\.superpowers\\worktrees\\r14-smoke-v2\\scripts\\public-smoke-v2-lib.mjs"
+    },
+    {
+      "id": "claimed-library-path",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- library_path_claim: `",
+      "suffix": "`",
+      "value_type": "string"
+    },
+    {
+      "id": "claimed-library-bytes",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- library_bytes_claim: `",
+      "suffix": "`",
+      "value_type": "int"
+    },
+    {
+      "id": "claimed-library-sha",
+      "kind": "line_value",
+      "artifact_role": "derived",
+      "path": "C:\\07_LastMoveProject\\penguin_exit_game_v2_commercial\\review\\spec_20260815_081435_r14_task7_operator_receipt_retrial.md",
+      "prefix": "- library_sha256_claim: `",
+      "suffix": "`",
+      "value_type": "string"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "operator-file-binding",
+      "kind": "file_binding",
+      "actual": "actual-operator",
+      "path_source": "claimed-operator-path",
+      "size_source": "claimed-operator-bytes",
+      "sha256_source": "claimed-operator-sha"
+    },
+    {
+      "id": "library-file-binding",
+      "kind": "file_binding",
+      "actual": "actual-library",
+      "path_source": "claimed-library-path",
+      "size_source": "claimed-library-bytes",
+      "sha256_source": "claimed-library-sha"
+    }
+  ]
+}
