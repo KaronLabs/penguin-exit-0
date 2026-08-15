@@ -517,6 +517,79 @@ body.intrusion-impact--ceo > .main-grid {
     flex: 0 0 auto;
 }
 
+@keyframes dangerous-alliance-warning-light {
+    0%,
+    100% {
+        box-shadow: 0 0 0 rgb(255 101 122 / 0%);
+    }
+
+    50% {
+        box-shadow: 0 0 24px rgb(255 101 122 / 42%);
+    }
+}
+
+.dangerous-alliance-overlay {
+    position: fixed;
+    z-index: 19;
+    inset: 0;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(7 11 18 / 92%);
+}
+
+.dangerous-alliance-overlay[hidden] {
+    display: none;
+}
+
+.dangerous-alliance-dialog {
+    width: min(100%, 640px);
+    max-height: calc(100dvh - 32px);
+    padding: 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--control-navy);
+    border: 2px solid var(--alarm-coral);
+    border-radius: 8px;
+    animation: dangerous-alliance-warning-light 480ms ease-out 1;
+    transition: border-color 160ms ease;
+}
+
+#dangerous-alliance-heading {
+    color: var(--alarm-coral);
+    font-size: 1.15rem;
+    text-align: center;
+}
+
+#dangerous-alliance-image {
+    width: 100%;
+    height: auto;
+    margin-top: 16px;
+    display: block;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    border: 1px solid var(--signal-cyan);
+    border-radius: 4px;
+}
+
+.dangerous-alliance-summary {
+    margin-top: 16px;
+    color: var(--tuna-amber);
+    font-family: var(--font-utility);
+    font-weight: 800;
+    text-align: center;
+}
+
+#dangerous-alliance-description {
+    margin-top: 8px;
+}
+
+#btn-accept-alliance-result {
+    width: 100%;
+    margin-top: 16px;
+}
+
 .ending-overlay {
     position: fixed;
     z-index: 20;
@@ -654,10 +727,12 @@ body.intrusion-impact--ceo > .main-grid {
         flex-basis: calc(50% - 4px);
     }
 
+    .dangerous-alliance-overlay,
     .ending-overlay {
         padding: 8px;
     }
 
+    .dangerous-alliance-dialog,
     .ending-dialog {
         max-height: calc(100dvh - 16px);
         padding: 16px;
@@ -665,6 +740,7 @@ body.intrusion-impact--ceo > .main-grid {
 }
 
 @media (max-height: 400px) {
+    .dangerous-alliance-dialog,
     .ending-dialog {
         padding: 12px;
     }
@@ -689,6 +765,11 @@ body.intrusion-impact--ceo > .main-grid {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+
+    .dangerous-alliance-dialog {
+        animation: none !important;
+        transition: none !important;
     }
 
     body.intrusion-impact--copilot > header,

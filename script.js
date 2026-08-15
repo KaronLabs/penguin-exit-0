@@ -6,6 +6,8 @@ let activePuzzleId = 'wifi';
 let endingRendered = false;
 let geminiTimerId = null;
 let intrusionImpactType = null;
+let latestPuzzleResultId = 0;
+let dangerousAllianceTrigger = null;
 const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
 const quoteStorageKey = 'penguin-exit-0:quote-discovery:v2';
 const dialogueContexts = Object.keys(dialogueDecks);
@@ -21,10 +23,11 @@ window.__resetGameForTest = function() {
     state = createInitialState();
     endingRendered = false;
     resolvedChoices.clear();
+    latestPuzzleResultId += 1;
     clearTerminalTimers();
+    closeDangerousAlliance({ restoreFocus: false });
     terminalOutput.replaceChildren();
     npcCard.hidden = true;
-    setEndingModalActive(false);
     clearGeminiTimer();
     const endingOverlay = document.getElementById('ending-overlay');
     if (endingOverlay) endingOverlay.style.display = 'none';
@@ -62,6 +65,13 @@ const npcIcon = document.getElementById('npc-icon');
 const npcName = document.getElementById('npc-name');
 const npcMessage = document.getElementById('npc-message');
 const quoteCollection = document.getElementById('quote-collection');
+
+const dangerousAllianceOverlay = document.getElementById('dangerous-alliance-overlay');
+const dangerousAllianceHeading = document.getElementById('dangerous-alliance-heading');
+const dangerousAllianceImage = document.getElementById('dangerous-alliance-image');
+const dangerousAllianceSummary = document.getElementById('dangerous-alliance-summary');
+const dangerousAllianceDescription = document.getElementById('dangerous-alliance-description');
+const btnAcceptAllianceResult = document.getElementById('btn-accept-alliance-result');
 
 const endingOverlay = document.getElementById('ending-overlay');
 const endingIncidentCost = document.getElementById('ending-incident-cost');
@@ -180,27 +190,59 @@ function appendDialogue(context) {
 }
 
 function showEncounter(encounter) {
+    closeDangerousAlliance({ restoreFocus: false });
     npcIcon.textContent = encounter.icon;
     npcName.textContent = encounter.name;
     npcMessage.textContent = encounter.message;
     npcCard.hidden = false;
 }
 
-function queuePuzzleResult(puzzle, choice, repeated) {
+function openDangerousAlliance(resultPresentation, triggerButton) {
+    npcCard.hidden = true;
+    dangerousAllianceHeading.textContent = resultPresentation.title;
+    dangerousAllianceImage.setAttribute('src', resultPresentation.imageSrc);
+    dangerousAllianceImage.setAttribute('alt', resultPresentation.imageAlt);
+    dangerousAllianceSummary.textContent = resultPresentation.summary;
+    dangerousAllianceDescription.textContent = resultPresentation.description;
+    btnAcceptAllianceResult.textContent = '대가를 감수한다';
+    dangerousAllianceTrigger = triggerButton;
+    setEndingModalActive(true);
+    dangerousAllianceOverlay.hidden = false;
+    btnAcceptAllianceResult.focus();
+}
+
+function closeDangerousAlliance({ restoreFocus = true } = {}) {
+    const focusTarget = dangerousAllianceTrigger;
+    dangerousAllianceOverlay.hidden = true;
+    setEndingModalActive(false);
+    dangerousAllianceTrigger = null;
+    if (restoreFocus && focusTarget?.isConnected && !focusTarget.disabled) focusTarget.focus();
+}
+
+function queuePuzzleResult(puzzle, choice, repeated, triggerButton) {
     appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`, '', null, 'command');
     scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
     const scheduledPuzzleId = puzzle.id;
+    const scheduledResultId = ++latestPuzzleResultId;
     scheduleTerminal(() => {
         if (repeated) appendDialogue('repeat');
         else {
             appendDialogue('puzzle');
-            if ((choice.isFairDiagnostic || choice.key === 'altman') && activePuzzleId === scheduledPuzzleId) showEncounter(puzzle.encounter);
+            if (activePuzzleId !== scheduledPuzzleId || scheduledResultId !== latestPuzzleResultId) return;
+            if (choice.resultPresentation) openDangerousAlliance(choice.resultPresentation, triggerButton);
+            else if (choice.isFairDiagnostic) showEncounter(puzzle.encounter);
         }
     }, 1050);
 }
 
 // Keydown handler for Escape key (git revert)
 window.addEventListener('keydown', (e) => {
+    if (!dangerousAllianceOverlay.hidden && (e.key === 'Escape' || e.key === 'Tab')) {
+        e.preventDefault();
+        if (e.key === 'Escape') closeDangerousAlliance();
+        else btnAcceptAllianceResult.focus();
+        return;
+    }
     if (endingRendered && endingOverlay.style.display !== 'none' && e.key === 'Tab') {
         e.preventDefault();
         btnPlayAgain.focus();
@@ -218,6 +260,8 @@ window.addEventListener('keydown', (e) => {
         btnProduce.focus();
     }
 });
+
+btnAcceptAllianceResult.addEventListener('click', () => closeDangerousAlliance());
 
 function clearGeminiTimer() {
     if (geminiTimerId !== null) {
@@ -290,6 +334,7 @@ btnProduce.addEventListener('click', () => {
 function selectPuzzleTab(btn, moveFocus = false) {
     const nextPuzzleId = btn.getAttribute('data-puz');
     if (nextPuzzleId !== activePuzzleId) {
+        latestPuzzleResultId += 1;
         npcCard.hidden = true;
         activePuzzleId = nextPuzzleId;
         renderPuzzles();
@@ -345,7 +390,7 @@ function renderPuzzles() {
                     state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: choice.techDebtPercent });
                 }
             }
-            queuePuzzleResult(currentPuzzle, choice, repeated);
+            queuePuzzleResult(currentPuzzle, choice, repeated, btn);
             renderGameState();
         });
 
@@ -479,6 +524,7 @@ function renderGameState() {
     // 6. Ending Check (One-shot modal rendering, no alert spam!)
     if (state.endingTriggered && !endingRendered) {
         clearIntrusionImpact();
+        closeDangerousAlliance({ restoreFocus: false });
         endingRendered = true;
         clearGeminiTimer();
         clearTerminalTimers();

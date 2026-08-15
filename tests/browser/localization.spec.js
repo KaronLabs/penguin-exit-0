@@ -22,7 +22,7 @@ const firstPuzzleChoices = [
     { tabId: 'cpu', optionIndex: 1, command: 'kill -9 1337', output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
     { tabId: 'cpu', optionIndex: 2, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0 / 3', debt: '20%', npc: null },
     { tabId: 'ssh', optionIndex: 0, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
-    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } }
+    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: null }
 ];
 
 async function puzzleRuntimeSnapshot(page) {
@@ -278,6 +278,9 @@ test('반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 
 
         await option.click();
         const firstSnapshot = await puzzleRuntimeSnapshot(page);
+        if (await page.locator('#dangerous-alliance-overlay').isVisible()) {
+            await page.locator('#btn-accept-alliance-result').click();
+        }
         await option.click();
         const repeatSnapshot = await puzzleRuntimeSnapshot(page);
 
@@ -373,6 +376,67 @@ test('탭 전환은 이전 탭의 NPC 조우만 새 탭에서 차단한다', asy
         expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
     ]);
     expect(switchedSnapshot.quoteCount).toBe(2);
+});
+
+test('SSH 결과는 정상 NPC와 위험 동맹 팝업을 한 번만 상호 배타적으로 표시한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+    await page.goto('/');
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.waitForTimeout(1100);
+    await expect(page.locator('#npc-card')).toBeVisible();
+    await expect(page.locator('#npc-name')).toHaveText('Sam Altman');
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+
+    await page.reload();
+    await page.locator('[data-puz="ssh"]').click();
+    const allianceOption = page.locator('.puzzle-option').nth(1);
+    await allianceOption.click();
+    await page.waitForTimeout(1100);
+    const allianceOverlay = page.locator('#dangerous-alliance-overlay');
+    await expect(page.locator('#npc-card')).toBeHidden();
+    await expect(allianceOverlay).toBeVisible();
+    await expect(page.locator('#dangerous-alliance-heading')).toHaveText('⚠ 위험한 동맹이 체결되었습니다');
+    await expect(page.locator('#dangerous-alliance-summary')).toHaveText('참치 +2 · 기술 부채 +25%');
+    await expect(page.locator('#dangerous-alliance-description')).toHaveText('SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.');
+    expect(await page.locator('#dangerous-alliance-image').evaluate((image) => ({
+        src: image.getAttribute('src'),
+        alt: image.getAttribute('alt'),
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight
+    }))).toEqual({
+        src: 'assets/dangerous-alliance-ssh.png',
+        alt: '붉은 SSH 터널 앞에서 수상한 동맹을 맺는 두 인물의 악수',
+        naturalWidth: 1536,
+        naturalHeight: 1024
+    });
+    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('25%');
+    await page.locator('#btn-accept-alliance-result').click();
+    await allianceOption.click();
+    await page.waitForTimeout(1100);
+    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('25%');
+    await expect(allianceOverlay).toBeHidden();
+
+    await page.reload();
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await page.locator('[data-puz="wifi"]').click();
+    await page.waitForTimeout(1100);
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+
+    await page.reload();
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.waitForTimeout(1100);
+    expect(await page.evaluate(() => ({
+        npcVisible: !document.querySelector('#npc-card').hidden,
+        allianceVisible: !document.querySelector('#dangerous-alliance-overlay').hidden
+    }))).toEqual({ npcVisible: true, allianceVisible: false });
+    await expect(page.locator('#npc-name')).toHaveText('Sam Altman');
 });
 
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {

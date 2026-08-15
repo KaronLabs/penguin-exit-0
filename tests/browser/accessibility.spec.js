@@ -37,6 +37,9 @@ async function visitRepresentativeStates(page, inspect) {
     const longestIndex = optionTexts.reduce((winner, text, index) => text.length > optionTexts[winner].length ? index : winner, 0);
     await options.nth(longestIndex).click();
     await inspect('longest puzzle choice');
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeVisible();
+    await inspect('dangerous alliance');
+    await page.locator('#btn-accept-alliance-result').click();
 
     for (let index = 0; index < 2; index += 1) await produce.click();
     await inspect('upgrades available');
@@ -61,6 +64,112 @@ async function visitRepresentativeStates(page, inspect) {
     expect(intrusions.size).toBe(4);
     await inspect('ending');
 }
+
+async function openDangerousAlliance(page) {
+    await page.locator('[data-puz="ssh"]').click();
+    const trigger = page.locator('.puzzle-option').nth(1);
+    await trigger.click();
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeVisible();
+    return trigger;
+}
+
+test('위험 동맹 팝업은 포커스를 가두고 Escape와 확인 버튼 뒤 정확한 선택지로 복원한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    let trigger = await openDangerousAlliance(page);
+    const closeButton = page.locator('#btn-accept-alliance-result');
+    const background = page.locator('body > header, body > .dashboard, body > #intrusion-banner, body > .main-grid');
+
+    await expect(closeButton).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(closeButton).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(closeButton).toBeFocused();
+    expect(await background.evaluateAll((elements) => elements.map((element) => element.inert))).toEqual([true, true, true, true]);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect(await background.evaluateAll((elements) => elements.map((element) => element.inert))).toEqual([false, false, false, false]);
+
+    await page.reload();
+    trigger = await openDangerousAlliance(page);
+    await page.locator('#btn-accept-alliance-result').click();
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+    await expect(trigger).toBeFocused();
+});
+
+test('위험 동맹 Escape는 활성 침입보다 먼저 팝업만 닫는다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    for (let click = 0; click < 5; click += 1) await page.locator('#btn-produce').click();
+    await expect(page.locator('#intrusion-banner')).toBeVisible();
+    const trigger = await openDangerousAlliance(page);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+    await expect(page.locator('#intrusion-banner')).toBeVisible();
+    await expect(trigger).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#intrusion-banner')).toBeHidden();
+});
+
+test('게임 초기화는 열린 위험 동맹과 예약된 결과 타이머를 함께 정리한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await openDangerousAlliance(page);
+    await page.evaluate(() => window.__resetGameForTest());
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+    expect(await page.locator('body > header, body > .dashboard, body > #intrusion-banner, body > .main-grid').evaluateAll((elements) => elements.every((element) => !element.inert))).toBe(true);
+
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.waitForTimeout(1100);
+    await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+    await expect(page.locator('#terminal-output')).toBeEmpty();
+    await expect(page.locator('#val-tuna')).toHaveText('0 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('0%');
+});
+
+test('위험 동맹 팝업은 동작 감소에서 정지하고 세 필수 뷰포트에서 도달 가능하다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const viewport of [
+        { width: 320, height: 640 },
+        { width: 640, height: 360 },
+        { width: 1280, height: 720 }
+    ]) {
+        await page.setViewportSize(viewport);
+        await page.goto('/');
+        await openDangerousAlliance(page);
+        const overlay = page.locator('#dangerous-alliance-overlay');
+        const dialog = page.locator('.dangerous-alliance-dialog');
+        const closeButton = page.locator('#btn-accept-alliance-result');
+        const motion = await dialog.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { animationName: style.animationName, transitionDuration: style.transitionDuration };
+        });
+        expect(motion).toEqual({ animationName: 'none', transitionDuration: '0s' });
+        expect(await overlay.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+        const dialogBox = await dialog.boundingBox();
+        expect(dialogBox.width).toBeGreaterThan(0);
+        expect(dialogBox.height).toBeGreaterThan(0);
+        expect(dialogBox.x).toBeLessThan(viewport.width);
+        expect(dialogBox.x + dialogBox.width).toBeGreaterThan(0);
+        expect(dialogBox.y).toBeLessThan(viewport.height);
+        expect(dialogBox.y + dialogBox.height).toBeGreaterThan(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+        await closeButton.scrollIntoViewIfNeeded();
+        const closeBox = await closeButton.boundingBox();
+        expect(closeBox.x).toBeGreaterThanOrEqual(0);
+        expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(viewport.width);
+        expect(closeBox.y).toBeGreaterThanOrEqual(0);
+        expect(closeBox.y + closeBox.height).toBeLessThanOrEqual(viewport.height);
+        await expect(closeButton).toBeVisible();
+    }
+});
 
 test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃이 48x48 이상이다', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
