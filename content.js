@@ -43,7 +43,7 @@ export const puzzles = [
         id: 'cpu',
         title: '장애 #2: 서버 #4 고CPU 경보',
         description: '바다코끼리 DBA가 프로덕션에서 암호화폐 채굴기를 돌렸습니다. CPU가 100%입니다.',
-        encounter: { name: 'Walrus DBA', icon: '🦭', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' },
+        encounter: { name: 'Walrus DBA', icon: '🐘', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' },
         choices: [
             {
                 key: 'ip_link',

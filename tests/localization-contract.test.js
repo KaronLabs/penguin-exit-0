@@ -50,7 +50,7 @@ test('콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존�
         puzzles.map(({ id, encounter }) => ({ id, encounter })),
         [
             { id: 'wifi', encounter: { name: 'Polar Bear DevOps', icon: '🐻', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
-            { id: 'cpu', encounter: { name: 'Walrus DBA', icon: '🦭', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
+            { id: 'cpu', encounter: { name: 'Walrus DBA', icon: '🐘', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
             { id: 'ssh', encounter: { name: 'Sam Altman', icon: '🤖', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } }
         ]
     );
