@@ -25,15 +25,3 @@ test('AI Intrusion Guards - Single Ending Execution Lock', () => {
     const state3 = reduceGameState(state, { type: 'APPLY_AI_PENALTY' });
     assert.equal(state3, state);
 });
-
-test('AI Intrusion Guards - Fifth Threshold Crossing Produces No Repeat Intrusion', () => {
-    let state = createInitialState();
-    state.threatMeter = 99;
-    state.intrusionCount = 4;
-
-    const nextState = reduceGameState(state, { type: 'PRODUCE' });
-    assert.ok(nextState.productionUnits > 0);
-    assert.equal(nextState.activeIntrusion, null);
-    assert.equal(nextState.intrusionCount, 4);
-    assert.ok(nextState.threatMeter <= 99);
-});

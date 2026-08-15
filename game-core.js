@@ -52,7 +52,7 @@ export function reduceGameState(state, action) {
             const threatGain = 2 * effectiveUnits + Math.floor(nextState.techDebt / 10);
             nextState.threatMeter += threatGain;
 
-            if (nextState.threatMeter >= 100 && nextState.intrusionCount < 4) {
+            if (nextState.threatMeter >= 100 && nextState.intrusionCount < 5) {
                 nextState.threatMeter = Math.min(99, nextState.threatMeter - 100);
                 
                 // Sequence of AI models: copilot -> codex -> gemini -> ceo

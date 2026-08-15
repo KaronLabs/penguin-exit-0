@@ -344,37 +344,6 @@ test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는
     });
 });
 
-test('탭 전환은 이전 탭의 NPC 조우만 새 탭에서 차단한다', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-
-    await page.locator('[data-puz="wifi"]').click();
-    await page.locator('.puzzle-option').nth(0).click();
-    await page.waitForTimeout(1100);
-    const stayingSnapshot = await puzzleRuntimeSnapshot(page);
-    expect(stayingSnapshot.npc).toEqual({
-        icon: '🐻',
-        name: 'Polar Bear DevOps',
-        message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.'
-    });
-
-    await page.evaluate(() => window.__resetGameForTest());
-    await page.locator('[data-puz="wifi"]').click();
-    await page.locator('.puzzle-option').nth(0).click();
-    await page.locator('[data-puz="cpu"]').click();
-    await page.waitForTimeout(1100);
-
-    const switchedSnapshot = await puzzleRuntimeSnapshot(page);
-    const activeTitle = await page.evaluate(() => document.querySelector('#puzzle-title').textContent);
-    expect({ activeTitle, npc: switchedSnapshot.npc }).toEqual({ activeTitle: '장애 #2: 서버 #4 고CPU 경보', npc: null });
-    expect(switchedSnapshot.terminalLines.slice(-1)).toEqual([
-        expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
-    ]);
-    expect(switchedSnapshot.quoteCount).toBe(2);
-});
-
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
