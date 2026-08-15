@@ -9,8 +9,8 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const OPERATOR_MODULE = '../../scripts/operator-deploy-public-smoke-v2.mjs';
-const APPROVED_HEAD = 'c25015dbc5c0aee847e2abc1ca1f9fb389e5b34b';
-const APPROVED_TREE = '5dcc38f22ee66a8a351ef610449a293c1e2aadd4';
+const APPROVED_HEAD = '349573e9a4fc3006db71c823a0571dfe9ec26847';
+const APPROVED_TREE = 'e87817dd9d5a9b84427f70b998336a76031b6e70';
 const APPROVED_SNAPSHOT_SCRIPTS = [
     'scripts/public-smoke-v2-lib.mjs',
     'scripts/run-public-smoke-v2.mjs',

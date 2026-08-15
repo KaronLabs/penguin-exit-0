@@ -31,8 +31,8 @@ const ACCOUNT_ID = /^[a-f0-9]{32}$/;
 const DEPLOYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const IMMUTABLE_URL = /^https:\/\/[0-9a-f]{8}\.penguin-exit-0\.pages\.dev\/$/;
 const ALIAS_URL = /^https:\/\/penguin-exit-0\.pages\.dev\/$/;
-const APPROVED_SOURCE_HEAD = 'c25015dbc5c0aee847e2abc1ca1f9fb389e5b34b';
-const APPROVED_SOURCE_TREE = '5dcc38f22ee66a8a351ef610449a293c1e2aadd4';
+const APPROVED_SOURCE_HEAD = '349573e9a4fc3006db71c823a0571dfe9ec26847';
+const APPROVED_SOURCE_TREE = 'e87817dd9d5a9b84427f70b998336a76031b6e70';
 const APPROVED_PRODUCT_SHA = Object.freeze({
     '/': '09a5f080870d193c339a166e16d787b7753547b04b64431176dc12c750a48ab2',
     '/content.js': 'af63396a4a4c7c96730a1f8bb306b2c2bdf3386abe14a94649cd65bb3ae4067f',
@@ -501,10 +501,13 @@ function parseRows(result, phase) {
     return { rows, normalized };
 }
 
-function validateOwnershipRow(row, config, invariant, sourceGitHead = config.sourceGitHead, bindSource = true) {
+export function validateOwnershipRow(row, config, invariant, sourceGitHead = config.sourceGitHead, bindSource = true) {
     exactKeys(row, ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build'], invariant);
     const source = string(row.Source, `${invariant}.source`);
-    if (!/^[0-9a-f]{7,40}$/.test(source) || !DEPLOYMENT_ID.test(string(row.Id, `${invariant}.id`)) || row.Environment !== 'Production' || row.Branch !== 'main' || (bindSource && source !== sourceGitHead.slice(0, 7)) || row.Status !== 'success' || row.Build !== 'success' || !IMMUTABLE_URL.test(string(row.Deployment, `${invariant}.deployment`)) || row.Deployment !== `https://${row.Id.slice(0, 8)}.penguin-exit-0.pages.dev/`) fail(invariant);
+    const id = string(row.Id, `${invariant}.id`);
+    const currentWranglerSuccess = typeof row.Status === 'string' && row.Status.endsWith(' ago') && row.Build === `https://dash.cloudflare.com/${config.accountId}/pages/view/${config.projectName}/${id}`;
+    const normalizedHarnessSuccess = row.Status === 'success' && row.Build === 'success';
+    if (!/^[0-9a-f]{7,40}$/.test(source) || !DEPLOYMENT_ID.test(id) || row.Environment !== 'Production' || row.Branch !== 'main' || (bindSource && source !== sourceGitHead.slice(0, 7)) || (!currentWranglerSuccess && !normalizedHarnessSuccess) || !IMMUTABLE_URL.test(string(row.Deployment, `${invariant}.deployment`)) || row.Deployment !== `https://${id.slice(0, 8)}.penguin-exit-0.pages.dev/`) fail(invariant);
     return row;
 }
 

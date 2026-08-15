@@ -15,6 +15,9 @@ const ACCOUNT_ID = /^[0-9a-f]{32}$/;
 const GIT_ID = /^[0-9a-f]{40}$/;
 const RELEASE_ID = /^\d{8}T\d{6}Z-r14-public-smoke-v2$/;
 const CAMPAIGN_ID = /^\d{8}T\d{6}Z-r10-korean-release$/;
+const APPROVED_SOURCE_HEAD = '349573e9a4fc3006db71c823a0571dfe9ec26847';
+const APPROVED_SOURCE_TREE = 'e87817dd9d5a9b84427f70b998336a76031b6e70';
+const FRESHNESS_TOLERANCE_MS = 300000;
 
 function fail(invariant) {
     throw new Error(invariant);
@@ -50,6 +53,14 @@ function jsonBytes(value) {
     return Buffer.from(`${JSON.stringify(value)}\n`, 'utf8');
 }
 
+function timestampFromId(id) {
+    const stamp = id.slice(0, 16);
+    const iso = `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(9, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}.000Z`;
+    const instant = new Date(iso);
+    if (Number.isNaN(instant.getTime()) || instant.toISOString() !== iso) fail('authority.config.identity');
+    return instant;
+}
+
 function writeExclusive(file, bytes) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const descriptor = fs.openSync(file, 'wx', 0o600);
@@ -61,23 +72,28 @@ function writeExclusive(file, bytes) {
     }
 }
 
-function validateConfig(config) {
+function validateConfig(config, now) {
     exactKeys(config, CONFIG_KEYS, 'authority.config');
     if (config.schemaVersion !== 1 || config.projectName !== 'penguin-exit-0') fail('authority.config.project');
-    if (!ACCOUNT_ID.test(config.accountId) || !GIT_ID.test(config.sourceGitHead) || !GIT_ID.test(config.sourceGitTree)) fail('authority.config.source');
+    if (!ACCOUNT_ID.test(config.accountId) || !GIT_ID.test(config.sourceGitHead) || !GIT_ID.test(config.sourceGitTree) || config.sourceGitHead !== APPROVED_SOURCE_HEAD || config.sourceGitTree !== APPROVED_SOURCE_TREE) fail('authority.config.source');
     if (!RELEASE_ID.test(config.releaseId) || !CAMPAIGN_ID.test(config.campaignRunId)) fail('authority.config.identity');
     if (!path.isAbsolute(config.authorityRoot)) fail('authority.config.root');
     noSymlinkAncestors(config.authorityRoot, 'authority.config.root');
     if (!fs.statSync(config.authorityRoot).isDirectory() || fs.lstatSync(config.authorityRoot).isSymbolicLink()) fail('authority.config.root');
-    if (Number.isNaN(Date.parse(config.issuedUtc))) fail('authority.config.issuedUtc');
+    const releaseInstant = timestampFromId(config.releaseId);
+    const campaignInstant = timestampFromId(config.campaignRunId);
+    const issuedInstant = new Date(config.issuedUtc);
+    if (releaseInstant.getTime() !== campaignInstant.getTime() || Number.isNaN(issuedInstant.getTime()) || issuedInstant.toISOString() !== releaseInstant.toISOString()) fail('authority.config.identity');
+    const nowInstant = now();
+    if (!(nowInstant instanceof Date) || Number.isNaN(nowInstant.getTime()) || Math.abs(nowInstant.getTime() - releaseInstant.getTime()) > FRESHNESS_TOLERANCE_MS) fail('authority.config.freshness');
     validateFile(config.nodeExePath, config.nodeExeSha256, 'authority.config.node');
     validateFile(config.wranglerJsPath, config.wranglerJsSha256, 'authority.config.wrangler');
     validateFile(config.operatorPath, config.operatorSha256, 'authority.config.operator');
     validateFile(config.campaignVerifierPath, config.campaignVerifierSha256, 'authority.config.campaignVerifier');
 }
 
-export async function prepareAuthority(config) {
-    validateConfig(config);
+export async function prepareAuthority(config, { now = () => new Date() } = {}) {
+    validateConfig(config, now);
     const expectedManifest = {
         schemaVersion: 1,
         projectName: config.projectName,
@@ -137,6 +153,7 @@ export async function prepareAuthority(config) {
 async function main(argv) {
     if (argv.length !== 2 || argv[0] !== '--config' || !path.isAbsolute(argv[1])) fail('usage: prepare-r14-task7-authority.mjs --config <absolute-config.json>');
     const configPath = argv[1];
+    noSymlinkAncestors(configPath, 'authority.config.path');
     if (fs.lstatSync(configPath).isSymbolicLink() || !fs.statSync(configPath).isFile()) fail('authority.config.path');
     let config;
     try {

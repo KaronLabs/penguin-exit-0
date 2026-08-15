@@ -11,6 +11,17 @@ const MODULE = '../../scripts/prepare-r14-task7-authority.mjs';
 
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
+function identityAt(date) {
+    const instant = new Date(date);
+    instant.setMilliseconds(0);
+    const stamp = instant.toISOString().replaceAll('-', '').replaceAll(':', '').replace('.000', '');
+    return {
+        releaseId: `${stamp}-r14-public-smoke-v2`,
+        campaignRunId: `${stamp}-r10-korean-release`,
+        issuedUtc: instant.toISOString(),
+    };
+}
+
 async function fixture(t) {
     const root = await mkdtemp(path.join(tmpdir(), 'r14-task7-authority-'));
     t.after(() => rm(root, { recursive: true, force: true }));
@@ -27,6 +38,7 @@ async function fixture(t) {
         await fs.writeFile(file, bytes);
         files[name] = { path: file, sha256: sha256(Buffer.from(bytes)) };
     }
+    const identity = identityAt(new Date());
     return {
         root,
         authorityRoot,
@@ -36,8 +48,8 @@ async function fixture(t) {
             accountId: '0123456789abcdef0123456789abcdef',
             sourceGitHead: '349573e9a4fc3006db71c823a0571dfe9ec26847',
             sourceGitTree: 'e87817dd9d5a9b84427f70b998336a76031b6e70',
-            releaseId: '20260815T235959Z-r14-public-smoke-v2',
-            campaignRunId: '20260815T235959Z-r10-korean-release',
+            releaseId: identity.releaseId,
+            campaignRunId: identity.campaignRunId,
             authorityRoot,
             nodeExePath: files.node.path,
             nodeExeSha256: files.node.sha256,
@@ -47,7 +59,7 @@ async function fixture(t) {
             operatorSha256: files.operator.sha256,
             campaignVerifierPath: files.campaignVerifier.path,
             campaignVerifierSha256: files.campaignVerifier.sha256,
-            issuedUtc: '2026-08-15T23:59:59.000Z',
+            issuedUtc: identity.issuedUtc,
         },
     };
 }
@@ -105,12 +117,7 @@ test('authority preparer preserves one shared manifest while issuing the next fr
     await prepareAuthority(config);
     const manifestPath = path.join(authorityRoot, 'authority-manifest.json');
     const originalManifest = await fs.readFile(manifestPath);
-    const next = {
-        ...config,
-        releaseId: '20260816T000001Z-r14-public-smoke-v2',
-        campaignRunId: '20260816T000001Z-r10-korean-release',
-        issuedUtc: '2026-08-16T00:00:01.000Z',
-    };
+    const next = { ...config, ...identityAt(new Date(Date.parse(config.issuedUtc) + 1000)) };
 
     const result = await prepareAuthority(next);
 
@@ -179,12 +186,7 @@ test('authority preparer rejects a drifted shared manifest before issuing anothe
     const manifest = JSON.parse(await fs.readFile(manifestPath));
     manifest.sourceGitTree = '0'.repeat(40);
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
-    const next = {
-        ...config,
-        releaseId: '20260816T000002Z-r14-public-smoke-v2',
-        campaignRunId: '20260816T000002Z-r10-korean-release',
-        issuedUtc: '2026-08-16T00:00:02.000Z',
-    };
+    const next = { ...config, ...identityAt(new Date(Date.parse(config.issuedUtc) + 2000)) };
 
     await assert.rejects(prepareAuthority(next), /authority\.manifest\.binding/);
 
@@ -203,4 +205,51 @@ test('concurrent same-identity preparation permits one authority result and cons
     assert.match(rejected.reason.message, /RELEASE_ID_CONSUMED/);
     await fs.stat(path.join(authorityRoot, 'issuance', 'release', `${config.releaseId}.json`));
     await fs.stat(path.join(authorityRoot, 'issuance', 'campaign', `${config.campaignRunId}.json`));
+});
+
+test('authority preparer rejects a source identity the production operator does not approve', async (t) => {
+    const { prepareAuthority } = await import(MODULE);
+    const { authorityRoot, config } = await fixture(t);
+    config.sourceGitHead = '0'.repeat(40);
+
+    await assert.rejects(prepareAuthority(config), /authority\.config\.source/);
+
+    await assert.rejects(fs.stat(path.join(authorityRoot, 'authority-manifest.json')), { code: 'ENOENT' });
+});
+
+test('authority preparer requires matching fresh release campaign and issued UTC timestamps', async (t) => {
+    const { prepareAuthority } = await import(MODULE);
+    const now = new Date('2026-08-15T00:40:00.000Z');
+    const cases = [
+        (config) => { config.campaignRunId = identityAt(new Date(now.getTime() + 1000)).campaignRunId; },
+        (config) => { config.issuedUtc = new Date(now.getTime() - 1000).toISOString(); },
+        (config) => { Object.assign(config, identityAt(new Date(now.getTime() - 301000))); },
+        (config) => { Object.assign(config, identityAt(new Date(now.getTime() + 301000))); },
+    ];
+    for (const mutate of cases) {
+        const current = await fixture(t);
+        Object.assign(current.config, identityAt(now));
+        mutate(current.config);
+        await assert.rejects(prepareAuthority(current.config, { now: () => now }), /authority\.config\.(identity|freshness)/);
+        await assert.rejects(fs.stat(path.join(current.authorityRoot, 'authority-manifest.json')), { code: 'ENOENT' });
+    }
+});
+
+test('authority preparer CLI rejects a config below a junction ancestor before writing authority', async (t) => {
+    const { root, authorityRoot, config } = await fixture(t);
+    const actual = path.join(root, 'actual-config');
+    const linked = path.join(root, 'linked-config');
+    await fs.mkdir(actual);
+    await fs.symlink(actual, linked, 'junction');
+    const configPath = path.join(actual, 'config.json');
+    await fs.writeFile(configPath, `${JSON.stringify(config)}\n`);
+
+    const child = spawnSync(process.execPath, [path.resolve('scripts/prepare-r14-task7-authority.mjs'), '--config', path.join(linked, 'config.json')], {
+        cwd: process.cwd(), encoding: 'utf8', shell: false,
+    });
+
+    assert.notEqual(child.status, 0);
+    assert.equal(child.stdout, '');
+    assert.match(child.stderr, /authority\.config\.path/);
+    await assert.rejects(fs.stat(path.join(authorityRoot, 'authority-manifest.json')), { code: 'ENOENT' });
 });
