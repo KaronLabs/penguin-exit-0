@@ -24,7 +24,7 @@ const APPROVED_SNAPSHOT_SCRIPTS = [
 
 async function loadOperator() {
     const operator = await import(OPERATOR_MODULE);
-    return { ...operator, runOperator: operator.runOperatorForHarness };
+    return { ...operator, runOperatorProduction: operator.runOperator, runOperator: operator.runOperatorForHarness };
 }
 
 async function makeFixture(t) {
@@ -421,6 +421,18 @@ test('valid fake deploy writes exact schema-1 record and one-shot receipt', asyn
         assert.equal(receipt[`${prefix}BindingBytes`], binding.length);
         assert.equal(receipt[`${prefix}BindingSha256`], crypto.createHash('sha256').update(binding).digest('hex'));
     }
+});
+
+test('public production operator cannot enable normalized harness ownership rows through deps', async (t) => {
+    const fixture = await makeFixture(t);
+    await completeCampaign(fixture);
+    const operator = await loadOperator();
+    const normalized = { Id: '11111111-1111-4111-8111-111111111111', Environment: 'Production', Branch: 'main', Source: fixture.config.sourceGitHead.slice(0, 7), Deployment: fixture.config.immutableUrl, Status: 'success', Build: 'success' };
+    await assert.rejects(() => operator.runOperatorProduction(fixture.config, {
+        allowNormalizedOwnershipRows: true,
+        runCampaignVerifier: async () => {},
+        spawnProcess: async () => ({ exitCode: 0, signal: null, stdout: Buffer.from(JSON.stringify([normalized])), stderr: Buffer.alloc(0) }),
+    }), /operator\.pre\.ownership/);
 });
 
 test('valid deploy runs the real campaign-v5 verifier path and binds its capture', async (t) => {

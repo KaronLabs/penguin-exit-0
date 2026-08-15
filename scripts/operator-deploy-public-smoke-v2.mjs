@@ -910,14 +910,19 @@ async function runRollback(config, deps) {
     return { status: 'ROLLED_BACK', baseline, capture: rollback.capture, postOwnership: post.capture, receipt };
 }
 
-export async function runOperator(config, deps = {}) {
+async function runOperatorInternal(config, deps, allowNormalizedOwnershipRows) {
     validateOperatorConfig(config);
-    if (config.mode === 'rollback') return runRollback(config, deps);
-    return runDeploy(config, deps);
+    const internalDeps = { ...deps, allowNormalizedOwnershipRows };
+    if (config.mode === 'rollback') return runRollback(config, internalDeps);
+    return runDeploy(config, internalDeps);
+}
+
+export async function runOperator(config, deps = {}) {
+    return runOperatorInternal(config, deps, false);
 }
 
 export async function runOperatorForHarness(config, deps = {}) {
-    return runOperator(config, { ...deps, allowNormalizedOwnershipRows: true });
+    return runOperatorInternal(config, deps, true);
 }
 
 async function main() {
