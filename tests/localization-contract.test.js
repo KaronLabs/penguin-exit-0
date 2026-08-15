@@ -31,6 +31,22 @@ test('콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존�
         })),
         expectedPuzzles
     );
+    const sshPuzzle = puzzles.find(({ id }) => id === 'ssh');
+    const authLogChoice = sshPuzzle.choices.find(({ key }) => key === 'auth_log');
+    const altmanChoice = sshPuzzle.choices.find(({ key }) => key === 'altman');
+    assert.equal(authLogChoice.resultPresentation, undefined);
+    assert.equal(authLogChoice.rewardTuna, 1);
+    assert.equal(authLogChoice.techDebtPercent, 0);
+    assert.equal(altmanChoice.rewardTuna, 2);
+    assert.equal(altmanChoice.techDebtPercent, 25);
+    assert.deepEqual(altmanChoice.resultPresentation, {
+        type: 'dangerousAlliance',
+        title: '⚠ 위험한 동맹이 체결되었습니다',
+        summary: '참치 +2 · 기술 부채 +25%',
+        description: 'SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.',
+        imageSrc: 'assets/dangerous-alliance-ssh.png',
+        imageAlt: '붉은 SSH 터널 앞에서 수상한 동맹을 맺는 두 인물의 악수'
+    });
     const dataPrefix = 'src: url("data:font/ttf;base64,';
     const dataStart = styles.indexOf(dataPrefix);
     const dataEnd = styles.indexOf('") format("truetype");', dataStart);

@@ -96,7 +96,15 @@ export const puzzles = [
                 isFairDiagnostic: false,
                 rewardTuna: 2,
                 techDebtPercent: 25,
-                output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.'
+                output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.',
+                resultPresentation: {
+                    type: 'dangerousAlliance',
+                    title: '⚠ 위험한 동맹이 체결되었습니다',
+                    summary: '참치 +2 · 기술 부채 +25%',
+                    description: 'SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.',
+                    imageSrc: 'assets/dangerous-alliance-ssh.png',
+                    imageAlt: '붉은 SSH 터널 앞에서 수상한 동맹을 맺는 두 인물의 악수'
+                }
             }
         ]
     }
