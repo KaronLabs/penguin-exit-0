@@ -53,10 +53,10 @@ test('Full Game Run - Penalty Route (Accept AI Penalty -500★, RECOVER to 9000 
     let state = createInitialState();
     let clicks = 0;
 
-    while (!state.endingTriggered && clicks < 100) {
+    while (!state.endingTriggered && clicks < 250) {
         clicks++;
         if (state.activeIntrusion !== null) {
-            // Accept penalty once
+            // Accept every penalty to exercise the longest recovery route.
             state = reduceGameState(state, { type: 'APPLY_AI_PENALTY' });
         } else if (state.productionUnits >= 200 && state.githubStars < STAR_TARGET) {
             // Trigger RECOVER action to fill missing stars

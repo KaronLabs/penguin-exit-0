@@ -12,6 +12,7 @@ test('Core State Engine - Initial State Defaults', () => {
     assert.equal(state.incidentCost, 0);
     assert.equal(state.endingTriggered, false);
     assert.equal(state.activeIntrusion, null);
+    assert.equal(state.recoveryCount, 0);
 });
 
 test('Core State Engine - Produce Action 15:1 Ratio Contract', () => {
@@ -100,6 +101,74 @@ test('Core State Engine - Active Intrusion Defers 9,000 Star Ending', () => {
     state.activeIntrusion = 'copilot';
 
     state = reduceGameState(state, { type: 'PRODUCE' });
+    assert.equal(state.endingTriggered, false);
+
+    state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+    assert.equal(state.endingTriggered, true);
+});
+
+test('Recovery cycle opens Copilot only after five valid recoveries', () => {
+    let state = { ...createInitialState(), productionUnits: 200, githubStars: 3000 };
+
+    for (let recovery = 1; recovery <= 4; recovery += 1) {
+        state = reduceGameState(state, { type: 'RECOVER' });
+        assert.equal(state.recoveryCount, recovery);
+        assert.equal(state.activeIntrusion, null);
+    }
+
+    state = reduceGameState(state, { type: 'RECOVER' });
+    assert.equal(state.githubStars, 3750);
+    assert.equal(state.recoveryCount, 5);
+    assert.equal(state.activeIntrusion, 'copilot');
+});
+
+test('Recovery cycle repeats existing intrusions in Copilot, Codex, Gemini, CEO order', () => {
+    let state = { ...createInitialState(), productionUnits: 200, githubStars: 3000 };
+    const expectedIntrusions = ['copilot', 'codex', 'gemini', 'ceo'];
+
+    for (const expectedIntrusion of expectedIntrusions) {
+        for (let recovery = 0; recovery < 5; recovery += 1) {
+            state = reduceGameState(state, { type: 'RECOVER' });
+        }
+        assert.equal(state.activeIntrusion, expectedIntrusion);
+        if (expectedIntrusion !== 'ceo') {
+            state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+        }
+    }
+
+    const shipped = reduceGameState(state, { type: 'RESOLVE_CEO_SHIP' });
+    assert.equal(shipped.githubStars, 7000);
+    assert.equal(shipped.techDebt, 30);
+
+    const rejected = reduceGameState(state, { type: 'REJECT_CEO_ORDER' });
+    assert.equal(rejected.githubStars, 5500);
+    assert.equal(rejected.incidentCost, 500);
+});
+
+test('Recovery is blocked during an intrusion without advancing its cadence', () => {
+    const state = {
+        ...createInitialState(),
+        productionUnits: 200,
+        githubStars: 3750,
+        recoveryCount: 5,
+        activeIntrusion: 'copilot'
+    };
+
+    const blocked = reduceGameState(state, { type: 'RECOVER' });
+    assert.deepEqual(blocked, state);
+});
+
+test('A fifth recovery reaching 9,000 stars defers ending until its intrusion is resolved', () => {
+    let state = {
+        ...createInitialState(),
+        productionUnits: 200,
+        githubStars: 8999,
+        recoveryCount: 4
+    };
+
+    state = reduceGameState(state, { type: 'RECOVER' });
+    assert.equal(state.githubStars, 9000);
+    assert.equal(state.activeIntrusion, 'copilot');
     assert.equal(state.endingTriggered, false);
 
     state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });

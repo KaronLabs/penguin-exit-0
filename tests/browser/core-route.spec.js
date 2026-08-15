@@ -109,11 +109,18 @@ test('Core Route - Penalty Route & RECOVER Button Mechanics', async ({ page }) =
     const starsAfterFirstRecover = parseInt((await valStars.innerText()).replace(/[^0-9]/g, ''), 10);
     expect(starsAfterFirstRecover - starsBeforeRecover).toBe(150);
 
+    for (let recovery = 0; recovery < 4; recovery += 1) await btnProduce.click();
+    await expect(banner).toBeVisible();
+    await expect(page.locator('#intrusion-title')).toHaveText('🤖 Copilot 코드 침입!');
+    await expect(btnProduce).toBeDisabled();
+    await page.keyboard.press('Escape');
+
     // Continue recovery while numeric state still has a star deficit.
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 100; i++) {
         const state = await gameState(valUnits, valStars);
         if (state.stars === 9000 || await endingOverlay.isVisible()) break;
-        await btnProduce.click();
+        if (await banner.isVisible()) await page.keyboard.press('Escape');
+        else await btnProduce.click();
     }
 
     await expect(valStars).toHaveText('9000 ★');

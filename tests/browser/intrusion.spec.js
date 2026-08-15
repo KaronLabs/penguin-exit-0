@@ -177,8 +177,14 @@ async function expectActiveImpact(page, type) {
 
 async function recoverToEnding(page) {
     const ending = page.locator('#ending-overlay');
-    for (let step = 0; step < 50 && !await ending.isVisible(); step += 1) {
-        await page.locator('#btn-produce').click();
+    const banner = page.locator('#intrusion-banner');
+    for (let step = 0; step < 100 && !await ending.isVisible(); step += 1) {
+        if (await banner.isVisible()) {
+            if (await page.locator('#btn-ceo-ship').isVisible()) await page.locator('#btn-ceo-ship').click();
+            else await page.keyboard.press('Escape');
+        } else {
+            await page.locator('#btn-produce').click();
+        }
     }
     await expect(page.locator('#val-stars')).toHaveText('9000 ★');
     await expect(ending).toBeVisible();
@@ -229,8 +235,9 @@ test('AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer', async ({ page, bro
     await expectNaturalCleanup(page, impactTypes[3]);
     await page.locator('#btn-ceo-ship').click();
     await recoverToEnding(page);
-    expect(await impactClassTransitions(page)).toEqual(impactTypes.map((spec) => spec.type));
-    expect(await animationStarts(page)).toEqual(impactTypes.map((spec) => `intrusion-impact-${spec.type}`));
+    const expectedTypes = [...impactTypes.map((spec) => spec.type), 'copilot', 'codex', 'gemini', 'ceo', 'copilot'];
+    expect(await impactClassTransitions(page)).toEqual(expectedTypes);
+    expect((await animationStarts(page)).slice(0, 4)).toEqual(impactTypes.map((spec) => `intrusion-impact-${spec.type}`));
 });
 
 test('AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)', async ({ page }) => {

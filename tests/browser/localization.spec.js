@@ -72,19 +72,19 @@ async function reachRecoverAndEnding(page, beforeRecovery = null) {
             continue;
         }
         if ([0, 40, 80, 120, 160, 200].includes(state.units)) stages.set(state.units, await page.locator('#stage-badge').innerText());
+        const aiCursorBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v2')).cursors.ai);
         let recoveryHandled = false;
         if (state.units === 200 && state.stars < 9000) {
             recoverName = await produce.getAttribute('aria-label');
             if (beforeRecovery) recoveryHandled = await beforeRecovery();
         }
-        const aiQuotesBefore = await page.locator('#terminal-output [data-dialogue-context="ai"]').count();
         if (!recoveryHandled) await produce.click();
         if (await banner.isVisible()) {
             intrusions.push({
                 title: await page.locator('#intrusion-title').innerText(),
                 body: await page.locator('#intrusion-msg').innerText(),
                 produceName: await produce.getAttribute('aria-label'),
-                aiQuoteDelta: (await page.locator('#terminal-output [data-dialogue-context="ai"]').count()) - aiQuotesBefore
+                aiQuoteAdvanced: await page.evaluate((before) => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v2')).cursors.ai !== before, aiCursorBefore)
             });
             if (await page.locator('#btn-ceo-ship').isVisible()) await page.locator('#btn-revert').click();
             else await page.keyboard.press('Escape');
@@ -571,7 +571,7 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     const terminalAtEnding = await page.locator('#terminal-output').textContent();
     const terminalChildCountAtEnding = await page.locator('#terminal-output > *').count();
     const terminalLastLineAtEnding = await page.locator('#terminal-output > :last-child').textContent();
-    expect(terminalLastLineAtEnding).toBe('archon@stone-igloo:~$ systemctl restart nginx');
+    expect(terminalLastLineAtEnding).toMatch(/^아콘 🐧 \/\/ /);
     expect(terminalChildCountAtEnding).toBeGreaterThan(0);
     await page.clock.runFor(1200);
     expect.soft(await page.locator('#terminal-output').textContent()).toBe(terminalAtEnding);
@@ -585,11 +585,10 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
 
     expect(initialName).toBe('코드 작성: 생산량 10과 GitHub 스타 150 획득');
     expect(observed.stages).toEqual(expectedStages);
-    expect(observed.intrusions.map(({ title, body }) => ({ title, body }))).toEqual(expectedIntrusions);
-    expect(observed.intrusions.map(({ produceName }) => produceName)).toEqual([
-        'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김', 'AI 침입 대응 중: 생산 작업 잠김'
-    ]);
-    expect(observed.intrusions.map(({ aiQuoteDelta }) => aiQuoteDelta)).toEqual([1, 1, 1, 1]);
+    const expectedRecoveryIntrusions = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1].map((index) => expectedIntrusions[index]);
+    expect(observed.intrusions.map(({ title, body }) => ({ title, body }))).toEqual([...expectedIntrusions, ...expectedRecoveryIntrusions]);
+    expect(observed.intrusions.map(({ produceName }) => produceName)).toEqual(Array(14).fill('AI 침입 대응 중: 생산 작업 잠김'));
+    expect(observed.intrusions.map(({ aiQuoteAdvanced }) => aiQuoteAdvanced)).toEqual(Array(14).fill(true));
     expect(observed.recoverName).toBe('RECOVER: 생산량 변화 없이 GitHub 스타 150 복구');
     expect(observed.endingName).toBe('EXIT 0 달성');
     expect(endingText).toContain('PROCESS EXIT CODE: 0');
@@ -599,5 +598,7 @@ test('동적 상태는 한국어 접근 이름과 엔딩 계약을 유지한다'
     expect(endingText).toContain('-$1');
     expect(endingText).toContain('샘 알트먼의 인수 제안: “우리 최신 AGI가 기름진 참치 뱃살을 원합니다.”');
     expect(endingText).toContain('신규 직함: Chief Tuna Prompt Engineer (최고 참치 프롬프트 엔지니어)');
-    await expect(page.locator('#terminal-output [data-dialogue-context="ai"]')).toHaveCount(observed.intrusions.length);
+    const retainedAiQuotes = await page.locator('#terminal-output [data-dialogue-context="ai"]').count();
+    expect(retainedAiQuotes).toBeGreaterThan(0);
+    expect(retainedAiQuotes).toBeLessThanOrEqual(observed.intrusions.length);
 });

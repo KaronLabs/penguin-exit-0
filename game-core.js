@@ -19,6 +19,7 @@ export function createInitialState(seed = 'default-seed') {
         activeIntrusion: null, // null | 'copilot' | 'codex' | 'gemini' | 'ceo'
         endingTriggered: false,
         intrusionCount: 0,
+        recoveryCount: 0,
         seed: seed
     };
 }
@@ -152,7 +153,15 @@ export function reduceGameState(state, action) {
             if (nextState.productionUnits >= 200 && nextState.githubStars < STAR_TARGET && nextState.activeIntrusion === null) {
                 const recoveryGain = Math.min(150, STAR_TARGET - nextState.githubStars);
                 nextState.githubStars += recoveryGain;
-                if (nextState.githubStars >= STAR_TARGET) {
+                nextState.recoveryCount = (nextState.recoveryCount || 0) + 1;
+
+                if (nextState.recoveryCount % 5 === 0) {
+                    const intrusionTypes = ['copilot', 'codex', 'gemini', 'ceo'];
+                    const cycleIndex = (nextState.recoveryCount / 5 - 1) % intrusionTypes.length;
+                    nextState.activeIntrusion = intrusionTypes[cycleIndex];
+                }
+
+                if (nextState.githubStars >= STAR_TARGET && nextState.activeIntrusion === null) {
                     nextState.endingTriggered = true;
                 }
             }
