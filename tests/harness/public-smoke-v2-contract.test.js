@@ -168,7 +168,7 @@ test('a case rejects exact signature drift and every forbidden error channel', (
             commandKind: 'command',
             system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.',
             systemKind: 'system',
-            roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.',
+            roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?',
             roastKind: 'archon',
             pseudoLabel: '"ARCHON // ROAST"',
             tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true },
@@ -348,8 +348,8 @@ function buildActions(label, url, caseIndex) {
 
 function quoteSnapshot(count) {
     const discovered = count === 1 ? ['puzzle:0'] : ['puzzle:0', 'puzzle:1'];
-    const parsed = { version: 1, cursors: { puzzle: count, repeat: 0, ai: 0, codeReview: 0 }, discovered };
-    return { counterText: `아콘 독설 수집 ${count}/62`, counter: count, serialized: JSON.stringify(parsed), parsed };
+    const parsed = { version: 2, cursors: { puzzle: count, repeat: 0, ai: 0, codeReview: 0 }, discovered };
+    return { counterText: `아콘 독설 수집 ${count}/100`, counter: count, serialized: JSON.stringify(parsed), parsed };
 }
 
 function buildCase(fixture, engine, originKind, caseIndex) {
@@ -396,7 +396,7 @@ function buildCase(fixture, engine, originKind, caseIndex) {
         startedMonotonicMs: 10_000 + caseIndex * 20_000, finishedMonotonicMs: 15_000 + caseIndex * 20_000,
         actions,
         initial: { endingVisibility: hiddenEnding(), endingRole: 'dialog', endingAriaModal: 'true', endingAriaLabelledby: 'ending-process-heading', endingAccessibleName: '프로세스는 살아남았습니다', backgroundInert: { header: false, dashboard: false, intrusionBanner: false, mainGrid: false }, activeElementId: '', produceDisabled: false, produceAccessibleName: '코드 작성: 생산량 10과 GitHub 스타 150 획득' },
-        signature: { command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command', system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system', roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"', tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true } },
+        signature: { command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command', system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system', roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"', tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true } },
         quotePersistence: { afterBad: quoteSnapshot(1), beforeReload: quoteSnapshot(1), afterReload: quoteSnapshot(1), afterFair: quoteSnapshot(2) },
         npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.', visibility: visibleElement('static', 'npc-card') },
         intrusions,

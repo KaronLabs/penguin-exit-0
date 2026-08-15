@@ -484,7 +484,7 @@ export function validateSignature(value) {
     const expected = {
         command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
         system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-        roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+        roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
     };
     for (const [key, expectedValue] of Object.entries(expected)) if (value[key] !== expectedValue) fail(`signature.${key}`);
     exactKeys(value.tabs, ['wifiAriaSelected', 'wifiTabIndex', 'cpuAriaSelected', 'cpuTabIndex', 'panelAriaLabelledby', 'terminalRowsPersisted'], 'signature.tabs');
@@ -553,20 +553,20 @@ function validateErrors(errors) {
 }
 
 function expectedSnapshot(counter, serialized) {
-    return { counterText: `아콘 독설 수집 ${counter}/62`, counter, serialized };
+    return { counterText: `아콘 독설 수집 ${counter}/100`, counter, serialized };
 }
 
 function validatePersistence(value) {
     exactKeys(value, ['afterBad', 'beforeReload', 'afterReload', 'afterFair'], 'quotePersistence');
-    const serializedOne = '{"version":1,"cursors":{"puzzle":1,"repeat":0,"ai":0,"codeReview":0},"discovered":["puzzle:0"]}';
-    const serializedTwo = '{"version":1,"cursors":{"puzzle":2,"repeat":0,"ai":0,"codeReview":0},"discovered":["puzzle:0","puzzle:1"]}';
+    const serializedOne = '{"version":2,"cursors":{"puzzle":1,"repeat":0,"ai":0,"codeReview":0},"discovered":["puzzle:0"]}';
+    const serializedTwo = '{"version":2,"cursors":{"puzzle":2,"repeat":0,"ai":0,"codeReview":0},"discovered":["puzzle:0","puzzle:1"]}';
     for (const [key, count, serialized] of [['afterBad', 1, serializedOne], ['beforeReload', 1, serializedOne], ['afterReload', 1, serializedOne], ['afterFair', 2, serializedTwo]]) {
         const snapshot = value[key];
         exactKeys(snapshot, ['counterText', 'counter', 'serialized', 'parsed'], `quotePersistence.${key}`);
         if (canonicalJson(expectedSnapshot(count, serialized)) !== canonicalJson({ counterText: snapshot.counterText, counter: snapshot.counter, serialized: snapshot.serialized })) fail('quote.reloadPersistence');
         exactKeys(snapshot.parsed, ['version', 'cursors', 'discovered'], `quotePersistence.${key}.parsed`);
         exactKeys(snapshot.parsed.cursors, ['puzzle', 'repeat', 'ai', 'codeReview'], `quotePersistence.${key}.cursors`);
-        if (snapshot.parsed.version !== 1 || snapshot.parsed.cursors.puzzle !== count || snapshot.parsed.cursors.repeat !== 0 || snapshot.parsed.cursors.ai !== 0 || snapshot.parsed.cursors.codeReview !== 0 || canonicalJson(snapshot.parsed.discovered) !== canonicalJson(count === 1 ? ['puzzle:0'] : ['puzzle:0', 'puzzle:1'])) fail('quote.reloadPersistence');
+        if (snapshot.parsed.version !== 2 || snapshot.parsed.cursors.puzzle !== count || snapshot.parsed.cursors.repeat !== 0 || snapshot.parsed.cursors.ai !== 0 || snapshot.parsed.cursors.codeReview !== 0 || canonicalJson(snapshot.parsed.discovered) !== canonicalJson(count === 1 ? ['puzzle:0'] : ['puzzle:0', 'puzzle:1'])) fail('quote.reloadPersistence');
     }
 }
 

@@ -730,7 +730,7 @@ function validTask2SignatureFixture() {
   return {
     command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
     system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-    roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+    roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
     tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true },
     fairPing: validFairPingFixture(),
   };
@@ -783,7 +783,7 @@ test('fair signature exact primitive rejects independent one-character command, 
   const task2Signature = {
     command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
     system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-    roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+    roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
     tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true }, fairPing: validFairPingFixture(),
   };
   const { fairPing, ...legacySignature } = task2Signature;
@@ -797,7 +797,7 @@ test('Task2 contextual signature accepts exact fairPing provenance without widen
   const signature = {
     command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
     system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-    roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+    roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
     tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true }, fairPing: validFairPingFixture(),
   };
   assert.doesNotThrow(() => lib.validateTask2FairPingObservations(Array.from({ length: 6 }, () => ({ signature }))));
@@ -872,13 +872,13 @@ test('readDocumentSnapshot emits an explicit exact fair signature primitive', as
     await page.setContent(`<div id="terminal-output">
       <div class="terminal-line" data-terminal-kind="command">archon@stone-igloo:~$ systemctl restart nginx</div>
       <div class="terminal-line" data-terminal-kind="system">Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.</div>
-      <div class="terminal-line" data-terminal-kind="archon" data-dialogue-context="puzzle" data-dialogue-index="0">아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.</div>
+      <div class="terminal-line" data-terminal-kind="archon" data-dialogue-context="puzzle" data-dialogue-index="0">아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?</div>
     </div>`);
     const snapshot = await runner.readDocumentSnapshot(page);
     assert.deepEqual(snapshot.fairSignature, {
       command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
       system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-      roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.', roastKind: 'archon', pseudoLabel: 'none',
+      roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?', roastKind: 'archon', pseudoLabel: 'none',
     });
   } finally { await browser.close(); }
 });

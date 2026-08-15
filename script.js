@@ -7,8 +7,10 @@ let endingRendered = false;
 let geminiTimerId = null;
 let intrusionImpactType = null;
 const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
-const quoteStorageKey = 'penguin-exit-0:quote-discovery:v1';
+const quoteStorageKey = 'penguin-exit-0:quote-discovery:v2';
 const dialogueContexts = Object.keys(dialogueDecks);
+const totalDialogueCount = Object.values(dialogueDecks)
+    .reduce((total, deck) => total + deck.length, 0);
 const resolvedChoices = new Set();
 const pendingTerminalTimers = new Set();
 let quoteDiscovery = loadQuoteDiscovery();
@@ -72,10 +74,10 @@ const endingBackground = [
 ];
 
 function loadQuoteDiscovery() {
-    const empty = { version: 1, cursors: Object.fromEntries(dialogueContexts.map((context) => [context, 0])), discovered: new Set() };
+    const empty = { version: 2, cursors: Object.fromEntries(dialogueContexts.map((context) => [context, 0])), discovered: new Set() };
     try {
         const saved = JSON.parse(localStorage.getItem(quoteStorageKey));
-        if (!saved || saved.version !== 1 || !saved.cursors || !Array.isArray(saved.discovered)) return empty;
+        if (!saved || saved.version !== 2 || !saved.cursors || !Array.isArray(saved.discovered)) return empty;
         for (const context of dialogueContexts) {
             const cursor = saved.cursors[context];
             if (!Number.isInteger(cursor) || cursor < 0 || cursor >= dialogueDecks[context].length) return empty;
@@ -97,7 +99,7 @@ function loadQuoteDiscovery() {
 function saveQuoteDiscovery() {
     try {
         localStorage.setItem(quoteStorageKey, JSON.stringify({
-            version: 1,
+            version: 2,
             cursors: quoteDiscovery.cursors,
             discovered: [...quoteDiscovery.discovered].sort()
         }));
@@ -164,7 +166,7 @@ function scheduleTerminal(callback, delay) {
 }
 
 function renderQuoteCollection() {
-    quoteCollection.textContent = `아콘 독설 수집 ${quoteDiscovery.discovered.size}/62`;
+    quoteCollection.textContent = `아콘 독설 수집 ${quoteDiscovery.discovered.size}/${totalDialogueCount}`;
 }
 
 function appendDialogue(context) {

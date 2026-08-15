@@ -96,7 +96,7 @@ function makeMutationFixture(root) {
         penalty: { before: { stars: 750 }, after: { stars: 250 }, starDelta: -500 },
         recoveries: [{ before: { units: 200 }, after: { units: 200 } }],
         ending: { accessibleName: '프로세스는 살아남았습니다', visibility: { display: 'flex' } },
-        signature: { roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.' },
+        signature: { roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?' },
         quotePersistence: { afterReload: { counter: 1 } },
         errors: { requestFailed: [] },
         screenshots: [chromiumInitial, chromiumProgress],
@@ -573,7 +573,7 @@ test('Task2 signature keeps the NC09 roast invariant without weakening fairPing 
     const signature = {
         command: 'archon@stone-igloo:~$ systemctl restart nginx', commandKind: 'command',
         system: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', systemKind: 'system',
-        roast: '아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.!', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
+        roast: '아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?!', roastKind: 'archon', pseudoLabel: '"ARCHON // ROAST"',
         tabs: { wifiAriaSelected: 'false', wifiTabIndex: '-1', cpuAriaSelected: 'true', cpuTabIndex: '0', panelAriaLabelledby: 'tab-cpu', terminalRowsPersisted: true },
         fairPing: {
             command: fairCommand, commandKind: 'command', system: fairSystem, systemKind: 'system', roast: fairRoast, roastKind: 'archon',

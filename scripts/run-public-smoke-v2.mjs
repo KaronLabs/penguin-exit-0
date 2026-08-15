@@ -158,7 +158,7 @@ export async function readStatePrimitives(page) {
         const numberFrom = (selector) => Number.parseInt(text(selector).match(/-?[0-9]+/)?.[0] ?? '0', 10);
         let quoteStorage = null;
         try {
-            quoteStorage = localStorage.getItem('penguin-exit-0:quote-discovery:v1');
+            quoteStorage = localStorage.getItem('penguin-exit-0:quote-discovery:v2');
         } catch {
             quoteStorage = null;
         }

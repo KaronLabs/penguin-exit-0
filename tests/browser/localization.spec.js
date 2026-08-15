@@ -38,7 +38,7 @@ async function puzzleRuntimeSnapshot(page) {
             tuna: document.querySelector('#val-tuna').textContent,
             debt: document.querySelector('#val-debt').textContent,
             quoteText,
-            quoteCount: Number.parseInt(quoteText.match(/\d+(?=\/62$)/)[0], 10),
+            quoteCount: Number.parseInt(quoteText.match(/\d+(?=\/100$)/)[0], 10),
             npc: npcCard.hidden ? null : {
                 icon: document.querySelector('#npc-icon').textContent,
                 name: document.querySelector('#npc-name').textContent,
@@ -164,7 +164,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect(firstFamily(fontProof.utility)).toBe('JetBrainsMono Nerd Embedded');
     await expect(page.locator('#terminal-output')).toHaveAttribute('role', 'log');
     await expect(page.locator('#terminal-output')).toHaveAttribute('aria-live', 'polite');
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/62');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/100');
     await page.locator('[data-puz="wifi"]').click();
     await page.locator('.puzzle-option').nth(2).click();
     await expect(page.locator('#terminal-output')).toContainText('archon@stone-igloo:~$ systemctl restart nginx');
@@ -172,18 +172,18 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     await page.waitForTimeout(500);
     await expect(page.locator('#terminal-output')).toContainText('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
     await page.waitForTimeout(600);
-    await expect(page.locator('#terminal-output')).toContainText('내 할머니도 너보단 코딩을 잘하겠다.');
+    await expect(page.locator('#terminal-output')).toContainText('tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?');
     const commandLine = page.locator('#terminal-output > *').filter({ hasText: 'archon@stone-igloo:~$ systemctl restart nginx' });
     const systemLine = page.locator('#terminal-output > *').filter({ hasText: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.' });
-    const archonLine = page.locator('#terminal-output > *').filter({ hasText: '내 할머니도 너보단 코딩을 잘하겠다.' });
+    const archonLine = page.locator('#terminal-output > *').filter({ hasText: 'tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?' });
     await expect(commandLine).toHaveCount(1);
     await expect(systemLine).toHaveCount(1);
     await expect(archonLine).toHaveCount(1);
-    await expect(archonLine).toHaveText('아콘 🐧 // 내 할머니도 너보단 코딩을 잘하겠다.');
+    await expect(archonLine).toHaveText('아콘 🐧 // tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?');
     const terminalKinds = await page.locator('#terminal-output').evaluate((terminal) => {
         const command = [...terminal.children].find((line) => line.textContent.startsWith('archon@stone-igloo:~$'));
         const system = [...terminal.children].find((line) => line.textContent.includes('Nginx를 재시작했지만'));
-        const archon = [...terminal.children].find((line) => line.textContent.includes('내 할머니도 너보단'));
+        const archon = [...terminal.children].find((line) => line.textContent.includes('tcpdump는'));
         const inspect = (line, pseudo = false) => {
             const style = getComputedStyle(line, pseudo ? '::before' : null);
             return {
@@ -259,7 +259,7 @@ test('최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 �
             ],
             tuna: fixture.tuna,
             debt: fixture.debt,
-            quoteText: '아콘 독설 수집 1/62',
+            quoteText: '아콘 독설 수집 1/100',
             quoteCount: 1,
             npc: fixture.npc
         });
@@ -337,7 +337,7 @@ test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는
             ],
             tuna: '0 / 3',
             debt: '15%',
-            quoteText: '아콘 독설 수집 1/62',
+            quoteText: '아콘 독설 수집 1/100',
             quoteCount: 1,
             npc: null
         }
@@ -407,14 +407,14 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await option.click();
     await expect(page.locator('#terminal-output')).toContainText('에러 로그 안 읽냐? 네 눈은 장식이냐, 아니면 CSS냐?');
     await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/62');
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v1')))).toMatchObject({
-        version: 1,
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/100');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v2')))).toMatchObject({
+        version: 2,
         cursors: { puzzle: 1, repeat: 1 },
         discovered: ['puzzle:0', 'repeat:0']
     });
     await page.reload();
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/62');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/100');
     await page.locator('[data-puz="wifi"]').click();
     await page.locator('.puzzle-option').first().click();
     await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
@@ -434,23 +434,24 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveText(/^아콘 🐧 \/\/ /);
     for (const [caseName, invalidStorage] of [
         ['malformed JSON', '{'],
-        ['wrong cursor type', JSON.stringify({ version: 1, cursors: 'wrong-type', discovered: [] })],
-        ['out-of-range cursor', JSON.stringify({ version: 1, cursors: { puzzle: 18, repeat: 12, ai: 14, codeReview: 999 }, discovered: [] })],
-        ['duplicate and unknown discovery', JSON.stringify({ version: 1, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: ['repeat:0', 'repeat:0', 'unknown:0'] })],
-        ['wrong version', JSON.stringify({ version: 2, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: [] })]
+        ['wrong cursor type', JSON.stringify({ version: 2, cursors: 'wrong-type', discovered: [] })],
+        ['out-of-range cursor', JSON.stringify({ version: 2, cursors: { puzzle: 28, repeat: 12, ai: 24, codeReview: 999 }, discovered: [] })],
+        ['duplicate and unknown discovery', JSON.stringify({ version: 2, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: ['repeat:0', 'repeat:0', 'unknown:0'] })],
+        ['wrong version', JSON.stringify({ version: 3, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: [] })],
+        ['v1 payload in v2 key', JSON.stringify({ version: 1, cursors: { puzzle: 0, repeat: 0, ai: 0, codeReview: 0 }, discovered: ['puzzle:0'] })]
     ]) {
-        await page.evaluate((value) => localStorage.setItem('penguin-exit-0:quote-discovery:v1', value), invalidStorage);
+        await page.evaluate((value) => localStorage.setItem('penguin-exit-0:quote-discovery:v2', value), invalidStorage);
         await page.reload();
-        expect(await page.locator('#quote-collection').innerText(), caseName).toBe('아콘 독설 수집 0/62');
+        expect(await page.locator('#quote-collection').innerText(), caseName).toBe('아콘 독설 수집 0/100');
     }
     const reducedMotionTerminal = await page.evaluate(() => {
         document.querySelector('.puzzle-option:nth-child(3)').click();
         return document.getElementById('terminal-output').textContent;
     });
     expect(reducedMotionTerminal).toContain('Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.');
-    expect(reducedMotionTerminal).toContain('내 할머니도 너보단 코딩을 잘하겠다.');
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v1')))).toMatchObject({
-        version: 1,
+    expect(reducedMotionTerminal).toContain('tcpdump는 패킷을 잡는데 넌 멱살을 잡고 싶게 만드는구나. SYN만 보내고 ACK는 언제 줄래?');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v2')))).toMatchObject({
+        version: 2,
         cursors: { puzzle: 1 },
         discovered: ['puzzle:0']
     });
