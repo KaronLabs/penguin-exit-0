@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -1230,13 +1231,17 @@ test('Playwright authority follows actual Node resolution outside the worktree a
   const root = await mkdtemp(path.join(tmpdir(), 'r14-task2-playwright-authority-'));
   try {
     await writeFile(path.join(root, 'package.json'), JSON.stringify({ devDependencies: { '@playwright/test': '1.62.1' } }));
-    const authority = lib.resolvePlaywrightAuthority(root);
+    const playwrightDir = path.join(root, 'node_modules', 'playwright');
+    await mkdir(playwrightDir, { recursive: true });
+    await writeFile(path.join(playwrightDir, 'package.json'), JSON.stringify({ name: 'playwright', version: '1.62.1' }));
+    const requireFromRoot = createRequire(path.join(root, 'package.json'));
+    const authority = lib.resolvePlaywrightAuthority(root, { resolvePackage: requireFromRoot.resolve });
     assert.equal(authority.path, 'node_modules/playwright/package.json');
     assert.equal(authority.version, '1.62.1');
     assert.match(authority.sha256, /^[a-f0-9]{64}$/);
     assert.match(authority.resolvedPath, /node_modules[\\/]playwright[\\/]package\.json$/);
     assert.equal(authority.resolvedPath.startsWith(projectRoot), false);
-    assert.equal(authority.resolvedPath.startsWith(path.resolve(projectRoot, '..', '..', '..')), true);
+    assert.equal(authority.resolvedPath.startsWith(root), true);
     assert.doesNotThrow(() => lib.validatePlaywrightToolingDeclaration(authority, { path: authority.path, version: authority.version, sha256: authority.sha256 }));
     assert.throws(() => lib.validatePlaywrightToolingDeclaration(authority, { path: authority.path, version: authority.version, sha256: '0'.repeat(64) }), /playwrightAuthority/);
   } finally { await rm(root, { recursive: true, force: true }); }
