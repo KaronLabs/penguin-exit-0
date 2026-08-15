@@ -439,6 +439,28 @@ test('SSH 결과는 정상 NPC와 위험 동맹 팝업을 한 번만 상호 배�
     await expect(page.locator('#npc-name')).toHaveText('Sam Altman');
 });
 
+test('SSH 위험 동맹을 빠르게 반복 선택해도 최초 결과를 정확히 한 번 전달한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    await page.locator('[data-puz="ssh"]').click();
+
+    const allianceOption = page.locator('.puzzle-option').nth(1);
+    await allianceOption.dblclick();
+
+    const allianceOverlay = page.locator('#dangerous-alliance-overlay');
+    await expect(allianceOverlay).toBeVisible();
+    await expect(page.locator('#npc-card')).toBeHidden();
+    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('25%');
+
+    await page.locator('#btn-accept-alliance-result').click();
+    await allianceOption.click();
+    await page.waitForTimeout(1100);
+    await expect(allianceOverlay).toBeHidden();
+    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('25%');
+});
+
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');

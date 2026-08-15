@@ -7,6 +7,7 @@ let endingRendered = false;
 let geminiTimerId = null;
 let intrusionImpactType = null;
 let latestPuzzleResultId = 0;
+let pendingPuzzleResultSlot = null;
 let dangerousAllianceTrigger = null;
 const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
 const quoteStorageKey = 'penguin-exit-0:quote-discovery:v2';
@@ -24,6 +25,7 @@ window.__resetGameForTest = function() {
     endingRendered = false;
     resolvedChoices.clear();
     latestPuzzleResultId += 1;
+    pendingPuzzleResultSlot = null;
     clearTerminalTimers();
     closeDangerousAlliance({ restoreFocus: false });
     terminalOutput.replaceChildren();
@@ -223,12 +225,19 @@ function queuePuzzleResult(puzzle, choice, repeated, triggerButton) {
     appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`, '', null, 'command');
     scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
     const scheduledPuzzleId = puzzle.id;
-    const scheduledResultId = ++latestPuzzleResultId;
+    const resultSlot = `${puzzle.id}:${choice.key}`;
+    const preservesPendingResult = repeated && pendingPuzzleResultSlot === resultSlot;
+    const scheduledResultId = preservesPendingResult
+        ? latestPuzzleResultId
+        : ++latestPuzzleResultId;
+    if (!repeated) pendingPuzzleResultSlot = resultSlot;
+    else if (!preservesPendingResult) pendingPuzzleResultSlot = null;
     scheduleTerminal(() => {
         if (repeated) appendDialogue('repeat');
         else {
             appendDialogue('puzzle');
             if (activePuzzleId !== scheduledPuzzleId || scheduledResultId !== latestPuzzleResultId) return;
+            pendingPuzzleResultSlot = null;
             if (choice.resultPresentation) openDangerousAlliance(choice.resultPresentation, triggerButton);
             else if (choice.isFairDiagnostic) showEncounter(puzzle.encounter);
         }
@@ -335,6 +344,7 @@ function selectPuzzleTab(btn, moveFocus = false) {
     const nextPuzzleId = btn.getAttribute('data-puz');
     if (nextPuzzleId !== activePuzzleId) {
         latestPuzzleResultId += 1;
+        pendingPuzzleResultSlot = null;
         npcCard.hidden = true;
         activePuzzleId = nextPuzzleId;
         renderPuzzles();
