@@ -26,3 +26,10 @@ test('operator rejects failed status and a dashboard URL for another account', (
     assert.throws(() => validateOwnershipRow({ ...row, Status: 'Failure' }, config, 'operator.live'), /operator\.live/);
     assert.throws(() => validateOwnershipRow({ ...row, Build: row.Build.replace(config.accountId, 'f'.repeat(32)) }, config, 'operator.live'), /operator\.live/);
 });
+
+test('production ownership rejects normalized harness rows and forged relative statuses', () => {
+    assert.throws(() => validateOwnershipRow({ ...row, Status: 'success', Build: 'success' }, config, 'operator.live'), /operator\.live/);
+    for (const Status of ['', ' ago', 'failure ago', 'deployment failed 2 days ago', '2 days ago extra']) {
+        assert.throws(() => validateOwnershipRow({ ...row, Status }, config, 'operator.live'), /operator\.live/);
+    }
+});

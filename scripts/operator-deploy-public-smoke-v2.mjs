@@ -501,12 +501,12 @@ function parseRows(result, phase) {
     return { rows, normalized };
 }
 
-export function validateOwnershipRow(row, config, invariant, sourceGitHead = config.sourceGitHead, bindSource = true) {
+export function validateOwnershipRow(row, config, invariant, sourceGitHead = config.sourceGitHead, bindSource = true, allowNormalizedHarness = false) {
     exactKeys(row, ['Id', 'Environment', 'Branch', 'Source', 'Deployment', 'Status', 'Build'], invariant);
     const source = string(row.Source, `${invariant}.source`);
     const id = string(row.Id, `${invariant}.id`);
-    const currentWranglerSuccess = typeof row.Status === 'string' && row.Status.endsWith(' ago') && row.Build === `https://dash.cloudflare.com/${config.accountId}/pages/view/${config.projectName}/${id}`;
-    const normalizedHarnessSuccess = row.Status === 'success' && row.Build === 'success';
+    const currentWranglerSuccess = typeof row.Status === 'string' && /^(?:less than a minute|(?:(?:about|over|almost) )?[1-9]\d* (?:second|minute|hour|day|week|month|year)s?) ago$/.test(row.Status) && row.Build === `https://dash.cloudflare.com/${config.accountId}/pages/view/${config.projectName}/${id}`;
+    const normalizedHarnessSuccess = allowNormalizedHarness && row.Status === 'success' && row.Build === 'success';
     if (!/^[0-9a-f]{7,40}$/.test(source) || !DEPLOYMENT_ID.test(id) || row.Environment !== 'Production' || row.Branch !== 'main' || (bindSource && source !== sourceGitHead.slice(0, 7)) || (!currentWranglerSuccess && !normalizedHarnessSuccess) || !IMMUTABLE_URL.test(string(row.Deployment, `${invariant}.deployment`)) || row.Deployment !== `https://${id.slice(0, 8)}.penguin-exit-0.pages.dev/`) fail(invariant);
     return row;
 }
@@ -594,8 +594,8 @@ function assertPreExternalStable(config, state) {
     }
 }
 
-function deploymentRecord(config, row, productFiles) {
-    validateOwnershipRow(row, config, 'operator.deploymentRecord');
+function deploymentRecord(config, row, productFiles, allowNormalizedHarness = false) {
+    validateOwnershipRow(row, config, 'operator.deploymentRecord', config.sourceGitHead, true, allowNormalizedHarness);
     return {
         schemaVersion: 1,
         projectName: config.projectName,
@@ -668,6 +668,7 @@ async function runCampaignVerifier(config, deps, run) {
 }
 
 async function runDeploy(config, deps) {
+    const allowNormalizedHarness = deps.allowNormalizedOwnershipRows === true;
     const authority = validateAuthorityManifest(config);
     const configBinding = validateConfigSource(deps.configSource, config, authority);
     const identity = await acquireIdentityLocks(config, authority, configBinding);
@@ -745,7 +746,7 @@ async function runDeploy(config, deps) {
     };
     const pre = await runOwnership('pre');
     const preRows = parseRows(pre.result, 'pre').rows;
-    const previous = validateOwnershipRow(preRows[0], config, 'operator.pre.ownership', config.sourceGitHead, false);
+    const previous = validateOwnershipRow(preRows[0], config, 'operator.pre.ownership', config.sourceGitHead, false, allowNormalizedHarness);
     validateStagingTree(config.stagingDir, productFiles, 'operator.staging.beforeDeploy');
     assertPreExternalStable(config, { authority, identity, configBinding, productFiles, sourceSnapshotRealpath: sourceSnapshotRealpathBefore, sourceSnapshotIdentity: sourceSnapshotIdentityBefore, sourceSnapshotTreeDigest: sourceSnapshotTreeDigestAfter, executionScripts: executionScriptsAfter, campaignDir: campaignInput.campaign, campaignRealpath: campaignRealpathBefore, campaignIdentity: campaignIdentityBefore, campaignTreeDigest: campaignTreeDigestAfter, stagingRealpath: stagingRealpathBefore, stagingIdentity: stagingIdentityBefore, stagingTreeDigest });
     const deploy = await run(buildDeployArgv(config), 'deploy', true);
@@ -756,7 +757,7 @@ async function runDeploy(config, deps) {
     try {
         post = await runOwnership('post', true);
         const postRows = parseRows(post.result, 'post').rows;
-        current = validateOwnershipRow(postRows[0], config, 'operator.post.ownership');
+        current = validateOwnershipRow(postRows[0], config, 'operator.post.ownership', config.sourceGitHead, true, allowNormalizedHarness);
     }
     catch (error) {
         if (String(error.message).startsWith('INDETERMINATE:')) throw error;
@@ -776,7 +777,7 @@ async function runDeploy(config, deps) {
         assertRootStable(config.stagingDir, stagingRealpathBefore, 'operator.staging.root.mutable', stagingIdentityBefore);
         validateStagingTree(config.stagingDir, productFiles, 'operator.staging.post');
     } catch (error) { throw new Error(`INDETERMINATE: operator.post.mutable: ${error.message}`); }
-    const record = deploymentRecord(config, current, productFiles);
+    const record = deploymentRecord(config, current, productFiles, allowNormalizedHarness);
     const recordBytes = jsonBytes(record);
     const sourceFreezeSha256 = sha256File(config.sourceFreezePath);
     const receipt = { schemaVersion: 1, operation: 'deploy', releaseId: config.releaseId, campaignRunId: config.campaignRunId, projectName: config.projectName, accountId: config.accountId, environment: config.environment, branch: config.branch, sourceGitHead: config.sourceGitHead, sourceGitTree: config.sourceGitTree, authorityRootRealpath: authority.rootRealpath, authorityManifestPath: authority.path, authorityManifestRealpath: authority.realpath, authorityManifestBytes: authority.bytes, authorityManifestSha256: authority.sha256, releaseIssuancePath: identity.releaseIssuance.path, releaseIssuanceRealpath: identity.releaseIssuance.realpath, releaseIssuanceBytes: identity.releaseIssuance.bytes, releaseIssuanceSha256: identity.releaseIssuance.sha256, campaignIssuancePath: identity.campaignIssuance.path, campaignIssuanceRealpath: identity.campaignIssuance.realpath, campaignIssuanceBytes: identity.campaignIssuance.bytes, campaignIssuanceSha256: identity.campaignIssuance.sha256, configBinding, operatorPath: fileURLToPath(import.meta.url), operatorRealpath: fs.realpathSync(fileURLToPath(import.meta.url)), operatorSha256: sha256File(fileURLToPath(import.meta.url)), executionScripts: executionScriptHashes(), sourceFreezePath: path.resolve(config.sourceFreezePath), sourceFreezeSha256, sourceSnapshotDir: path.resolve(config.sourceSnapshotDir), sourceSnapshotRealpath: fs.realpathSync(config.sourceSnapshotDir), sourceSnapshotTreeDigest: sourceSnapshotTreeDigestAfter, campaignTreeDigest: campaignTreeDigestAfter, campaignDir: path.resolve(campaignInput.campaign), campaignRealpath: fs.realpathSync(campaignInput.campaign), campaignSpecPath: campaignInput.campaignSpecPath, campaignSpecBytes: campaignInput.campaignSpecBytes, campaignSpecSha256: campaignInput.campaignSpecSha256, campaignReceiptPath: path.resolve(config.campaignReceiptPath), campaignReceiptSha256: campaignInput.campaignReceiptSha256, campaignClaimsSha256: sha256File(path.join(campaignInput.campaign, 'claims.json')), campaignEnvelopeSha256: sha256File(path.join(campaignInput.campaign, 'submission-envelope.json')), campaignCandidateInventorySha256: sha256File(path.join(campaignInput.campaign, 'candidate-inventory.json')), campaignVerifierPath: path.join(config.sourceSnapshotDir, 'scripts', 'verify-r10-campaign.mjs'), campaignVerifierSha256: sha256File(path.join(config.sourceSnapshotDir, 'scripts', 'verify-r10-campaign.mjs')), nodeExePath: config.nodeExePath, nodeExeRealpath: fs.realpathSync(config.nodeExePath), nodeExeSha256: config.nodeExeSha256, wranglerJsPath: config.wranglerJsPath, wranglerJsRealpath: fs.realpathSync(config.wranglerJsPath), wranglerJsSha256: config.wranglerJsSha256, stagingDir: path.resolve(config.stagingDir), stagingRealpath: fs.realpathSync(config.stagingDir), stagingTreeDigest, deploymentRecordPath: path.resolve(config.deploymentRecordPath), deploymentRecordBytes: recordBytes.length, deploymentRecordSha256: sha256Bytes(recordBytes), deploymentId: current.Id, immutableUrl: current.Deployment, aliasUrl: config.aliasUrl, campaignVerifierCapture, preOwnership: pre.capture, deployCapture: deploy.capture, postOwnership: post.capture, createdUtc: utcNow() };
@@ -808,6 +809,7 @@ async function runDeploy(config, deps) {
 }
 
 async function runRollback(config, deps) {
+    const allowNormalizedHarness = deps.allowNormalizedOwnershipRows === true;
     const authority = validateAuthorityManifest(config);
     const configBinding = validateConfigSource(deps.configSource, config, authority);
     const identity = await acquireIdentityLocks(config, authority, configBinding);
@@ -869,7 +871,7 @@ async function runRollback(config, deps) {
     const rollbackFence = { authority, identity, configBinding, productFiles, sourceSnapshotRealpath: sourceSnapshotRealpathBefore, sourceSnapshotIdentity: sourceSnapshotIdentityBefore, sourceSnapshotTreeDigest: sourceSnapshotTreeDigestBefore, executionScripts: executionScriptsBefore, stagingDir: config.baselineRoot, stagingRealpath: baselineStageRealpathBefore, stagingIdentity: baselineStageIdentityBefore, stagingTreeDigest: baselineStageTreeDigest };
     assertPreExternalStable(config, rollbackFence);
     const pre = await run(buildOwnershipArgv(config), 'rollback-pre');
-    const preRow = validateOwnershipRow(parseRows(pre.result, 'rollback-pre').rows[0], config, 'rollback.pre.ownership', config.sourceGitHead, false);
+    const preRow = validateOwnershipRow(parseRows(pre.result, 'rollback-pre').rows[0], config, 'rollback.pre.ownership', config.sourceGitHead, false, allowNormalizedHarness);
     if (preRow.Id === baseline.deploymentId || preRow.Deployment === baseline.immutableUrl) fail('rollback.pre.alreadyBaseline');
     assertPreExternalStable(config, rollbackFence);
     const rollback = await run(buildRollbackArgv(config, config.baselineRoot, baseline.sourceGitHead), 'rollback');
@@ -877,7 +879,7 @@ async function runRollback(config, deps) {
     let postRow;
     try {
         post = await run(buildOwnershipArgv(config), 'rollback-post');
-        postRow = validateOwnershipRow(parseRows(post.result, 'rollback-post').rows[0], config, 'rollback.post.ownership', baseline.sourceGitHead);
+        postRow = validateOwnershipRow(parseRows(post.result, 'rollback-post').rows[0], config, 'rollback.post.ownership', baseline.sourceGitHead, true, allowNormalizedHarness);
         if (postRow.Id !== baseline.deploymentId || postRow.Deployment !== baseline.immutableUrl) fail('rollback.post.identity');
     }
     catch (error) {
@@ -912,6 +914,10 @@ export async function runOperator(config, deps = {}) {
     validateOperatorConfig(config);
     if (config.mode === 'rollback') return runRollback(config, deps);
     return runDeploy(config, deps);
+}
+
+export async function runOperatorForHarness(config, deps = {}) {
+    return runOperator(config, { ...deps, allowNormalizedOwnershipRows: true });
 }
 
 async function main() {

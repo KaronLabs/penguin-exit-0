@@ -23,7 +23,8 @@ const APPROVED_SNAPSHOT_SCRIPTS = [
 ];
 
 async function loadOperator() {
-    return import(OPERATOR_MODULE);
+    const operator = await import(OPERATOR_MODULE);
+    return { ...operator, runOperator: operator.runOperatorForHarness };
 }
 
 async function makeFixture(t) {
