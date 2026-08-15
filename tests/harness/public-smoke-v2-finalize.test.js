@@ -117,7 +117,7 @@ function createChromeEvidence(fixture) {
         releaseId: fixture.config.releaseId,
         createdUtc: new Date(Date.parse(closureReceipt.createdUtc) + 3_000).toISOString(),
         captureAuthority: { kind: 'computer-use', sessionId: 'fixture-chrome-session', recordPath, recordSha256: smoke.sha256File(recordPath) },
-        browser: { name: 'Google Chrome', version: '140.0.7339.80', executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' },
+        browser: { name: 'Google Chrome', version: '140.0.7339.80', executablePath: path.join(chromeRoot, 'chrome.exe') },
         deployment: { deploymentId: fixture.operationReceipt.cloudflareReads.pre.deploymentId, immutableUrl: fixture.config.immutableUrl, aliasUrl: fixture.config.aliasUrl },
         zoom200: { observedUtc: afterClosure, zoomPercent: 200, url: fixture.config.aliasUrl, screenshotPath: zoomPath, screenshotSha256: smoke.sha256File(zoomPath), visibleChecks: structuredClone(visibleChecks) },
         restore100: { observedUtc: restored, zoomPercent: 100, url: fixture.config.aliasUrl, screenshotPath: restorePath, screenshotSha256: smoke.sha256File(restorePath), visibleChecks: structuredClone(visibleChecks) },
