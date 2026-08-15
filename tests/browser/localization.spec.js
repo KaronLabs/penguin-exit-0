@@ -112,7 +112,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     }
     const fontProof = await page.evaluate(async () => {
         const family = 'JetBrainsMono Nerd Embedded';
-        const sample = 'iiiiiiiiWWWWWW0011';
+        const sample = 'iiiiiiiiWWWWWW0011\uE0B0\u2500';
         const loadedFaces = await document.fonts.load(`500 32px "${family}"`, sample);
         await document.fonts.ready;
         const face = [...document.fonts].find((entry) => entry.family.replace(/^['"]|['"]$/g, '') === family);
