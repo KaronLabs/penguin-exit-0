@@ -175,6 +175,15 @@ async function expectActiveImpact(page, type) {
     await expect(page.locator('body')).toHaveClass(new RegExp(`intrusion-impact--${type}`));
 }
 
+async function recoverToEnding(page) {
+    const ending = page.locator('#ending-overlay');
+    for (let step = 0; step < 50 && !await ending.isVisible(); step += 1) {
+        await page.locator('#btn-produce').click();
+    }
+    await expect(page.locator('#val-stars')).toHaveText('9000 ★');
+    await expect(ending).toBeVisible();
+}
+
 test('AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer', async ({ page, browserName }) => {
     await page.goto('/');
     await observeImpact(page);
@@ -219,7 +228,7 @@ test('AI Intrusion Mechanics - Gemini 3s Auto-resolve Timer', async ({ page, bro
     await expectImpact(page, impactTypes[3], browserName);
     await expectNaturalCleanup(page, impactTypes[3]);
     await page.locator('#btn-ceo-ship').click();
-    await expect(page.locator('#ending-overlay')).toBeVisible();
+    await recoverToEnding(page);
     expect(await impactClassTransitions(page)).toEqual(impactTypes.map((spec) => spec.type));
     expect(await animationStarts(page)).toEqual(impactTypes.map((spec) => `intrusion-impact-${spec.type}`));
 });
@@ -346,7 +355,8 @@ test('AI Intrusion Mechanics - CEO Order Reject (-500★ & +$500 cost)', async (
     });
     await restoreImpactRemoval(page, 'ceo-ship');
     await ceoShipPause.evaluate((element) => element.remove());
-    expect(ceoShipCleanup).toEqual({ active: false, ending: 'flex' });
+    expect(ceoShipCleanup).toEqual({ active: false, ending: 'none' });
+    await recoverToEnding(page);
 
     await page.evaluate(() => window.__resetGameForTest());
     const penaltyPause = await pauseImpactAnimations(page);

@@ -23,7 +23,7 @@ export async function orchestrateOperation({ operationStartedMonotonicMs, monoto
     const worker = await runWorker(remaining());
     requireProcessSuccess(worker, 'operation.worker');
     const accepted = await revalidateAccepted(remaining());
-    if (accepted.eventCount !== 278 || !Array.isArray(accepted.screenshotBindings) || accepted.screenshotBindings.length !== 18) throw new Error('operation.accepted');
+    if (accepted.eventCount !== 518 || !Array.isArray(accepted.screenshotBindings) || accepted.screenshotBindings.length !== 18) throw new Error('operation.accepted');
     await authenticateAccepted(accepted, remaining());
     const receipt = await publishReceipt(accepted, remaining());
     remaining();
@@ -242,7 +242,7 @@ export function revalidateAcceptedTree({ acceptedDir }) {
     if (!eventText.endsWith('\n')) throw new Error('operation.events.termination');
     const events = eventText.slice(0, -1).split('\n').map(JSON.parse);
     let previous = '0'.repeat(64);
-    if (events.length !== 278 || events.some((event, index) => {
+    if (events.length !== 518 || events.some((event, index) => {
         const { eventSha256, ...payload } = event;
         const invalid = event.seq !== index + 1 || event.previousEventSha256 !== previous || eventSha256 !== sha256Bytes(canonicalJson(payload));
         previous = eventSha256;
@@ -333,7 +333,7 @@ export async function runOperationFromArgv(argv, overrides = {}) {
     return await runPostWorkerGates({
         revalidateAccepted: async () => {
             const validated = await deps.revalidateAccepted({ acceptedDir: config.acceptedDir, config, configPath, timeoutMs: remainingOperationBudget(operationStartedMonotonicMs, deps.monotonicNow()) });
-            if (validated.eventCount !== 278 || validated.screenshotBindings.length !== 18) throw new Error('operation.accepted');
+            if (validated.eventCount !== 518 || validated.screenshotBindings.length !== 18) throw new Error('operation.accepted');
             return validated;
         },
         createReceipt: (validated) => ({

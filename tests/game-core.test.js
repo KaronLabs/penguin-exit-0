@@ -69,10 +69,39 @@ test('Core State Engine - Upgrade Cap +8 & Slot Max 2', () => {
 test('Core State Engine - Recovery Mode Entry & Exit', () => {
     let state = createInitialState();
     state.productionUnits = 200;
-    state.githubStars = 2500; // max 3000
-
-    assert.equal(state.productionUnits == 200 && state.githubStars < 3000, true);
+    state.githubStars = 3000;
 
     state = reduceGameState(state, { type: 'RECOVER' });
-    assert.equal(state.githubStars, 2650); // +150
+    assert.equal(state.githubStars, 3150);
+    assert.equal(state.endingTriggered, false);
+
+    state.githubStars = 8999;
+    state = reduceGameState(state, { type: 'RECOVER' });
+    assert.equal(state.githubStars, 9000);
+    assert.equal(state.endingTriggered, true);
+});
+
+test('Core State Engine - 3,000 Stars Defers Ending After Intrusion', () => {
+    let state = createInitialState();
+    state.productionUnits = 200;
+    state.githubStars = 3000;
+    state.activeIntrusion = 'copilot';
+
+    state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+
+    assert.equal(state.githubStars, 3000);
+    assert.equal(state.endingTriggered, false);
+});
+
+test('Core State Engine - Active Intrusion Defers 9,000 Star Ending', () => {
+    let state = createInitialState();
+    state.productionUnits = 200;
+    state.githubStars = 9000;
+    state.activeIntrusion = 'copilot';
+
+    state = reduceGameState(state, { type: 'PRODUCE' });
+    assert.equal(state.endingTriggered, false);
+
+    state = reduceGameState(state, { type: 'RESOLVE_INTRUSION' });
+    assert.equal(state.endingTriggered, true);
 });

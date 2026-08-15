@@ -193,9 +193,9 @@ const DEPLOYMENT_ID = 'deadbeef-1234-5678-9abc-def012345678';
 const IMMUTABLE_URL = 'https://deadbeef.penguin-exit-0.pages.dev/';
 const ALIAS_URL = 'https://penguin-exit-0.pages.dev/';
 const BASE_TIME = Date.parse('2026-08-13T01:02:03.000Z');
-const PRODUCT_PATHS = ['/', '/content.js', '/game-core.js', '/script.js', '/style.css'];
-const MIME = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css' };
-const TOKEN = { '/': 'root', '/content.js': 'content-js', '/game-core.js': 'game-core-js', '/script.js': 'script-js', '/style.css': 'style-css' };
+const PRODUCT_PATHS = ['/', '/content.js', '/game-core.js', '/script.js', '/style.css', '/assets/dangerous-alliance-ssh.png', '/assets/ending-tuna-acquisition.png'];
+const MIME = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css', '/assets/dangerous-alliance-ssh.png': 'image/png', '/assets/ending-tuna-acquisition.png': 'image/png' };
+const TOKEN = { '/': 'root', '/content.js': 'content-js', '/game-core.js': 'game-core-js', '/script.js': 'script-js', '/style.css': 'style-css', '/assets/dangerous-alliance-ssh.png': 'assets-dangerous-alliance-ssh-png', '/assets/ending-tuna-acquisition.png': 'assets-ending-tuna-acquisition-png' };
 
 function utcAt(offsetMs) {
     return new Date(BASE_TIME + offsetMs).toISOString();
@@ -326,9 +326,9 @@ function actionContract() {
         for (let click = 0; click < 5; click += 1) result.push(['locator.click', '#btn-produce']);
         result.push(['locator.click', block === 0 ? '#btn-accept-penalty' : '#btn-revert']);
     }
-    for (let click = 0; click < 7; click += 1) result.push(['locator.click', '#btn-produce']);
+    for (let click = 0; click < 47; click += 1) result.push(['locator.click', '#btn-produce']);
     result.push(['keyboard.press', 'Tab'], ['keyboard.press', 'Shift+Tab']);
-    assert.equal(result.length, 38);
+    assert.equal(result.length, 78);
     return result;
 }
 
@@ -336,8 +336,8 @@ function buildActions(label, url, caseIndex) {
     const startOffset = 10_000 + caseIndex * 20_000;
     return actionContract().map(([api, target], index) => ({
         seq: index + 1,
-        utc: utcAt(startOffset + 100 + index * 100),
-        monotonicMs: startOffset + 100 + index * 100,
+        utc: utcAt(startOffset + (index < 3 ? 100 + index * 100 : 400 + (index - 3) * 50)),
+        monotonicMs: startOffset + (index < 3 ? 100 + index * 100 : 400 + (index - 3) * 50),
         api,
         target,
         preStateSha256: sha256(`${label}-state-${index}`),
@@ -367,8 +367,8 @@ function buildCase(fixture, engine, originKind, caseIndex) {
         resolutionControlName, before, after,
     }));
     let stars = 2000;
-    const recoveries = Array.from({ length: 7 }, (_, index) => {
-        const delta = Math.min(150, 3000 - stars);
+    const recoveries = Array.from({ length: 47 }, (_, index) => {
+        const delta = Math.min(150, 9000 - stars);
         const before = state(200, stars, 1000, null);
         stars += delta;
         return { actionSeq: 30 + index, controlAccessibleName: 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구', before, after: state(200, stars, 1000, null), starDelta: delta };
@@ -435,10 +435,10 @@ function buildEvents(cases) {
             eventRecord(events, 'screenshot-oracle', record.label, { stage: screenshot.stage, oracleSha256: screenshot.oracleSnapshotSha256 }, screenshot.captureStartedUtc, Date.parse(screenshot.captureStartedUtc) - BASE_TIME);
             eventRecord(events, 'screenshot-written', record.label, { stage: screenshot.stage, path: screenshot.relativePath, pngSha256: screenshot.sha256, oracleSha256: screenshot.oracleSnapshotSha256 }, screenshot.captureFinishedUtc, Date.parse(screenshot.captureFinishedUtc) - BASE_TIME);
         }
-        eventRecord(events, 'case-finish', record.label, { actionCount: 38, finalUrl: record.finalUrl }, record.finishedUtc, record.finishedMonotonicMs);
+        eventRecord(events, 'case-finish', record.label, { actionCount: 78, finalUrl: record.finalUrl }, record.finishedUtc, record.finishedMonotonicMs);
     }
     eventRecord(events, 'operation-finish', null, { caseCount: 6, screenshotCount: 18 }, utcAt(115_100), 115_100);
-    assert.equal(events.length, 278);
+    assert.equal(events.length, 518);
     return events;
 }
 
@@ -545,6 +545,8 @@ function createCampaign(fixture) {
         'game-core.js': 'export const fixtureCore = true;\n',
         'script.js': 'export const fixtureScript = true;\n',
         'style.css': 'body { display: block; }\n',
+        'assets/dangerous-alliance-ssh.png': Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        'assets/ending-tuna-acquisition.png': Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
         'scripts/verify-r10-campaign.mjs': 'export const verifier = true;\n',
         'scripts/run-public-smoke-v2-operation.mjs': 'export const orchestrator = true;\n',
         'scripts/run-public-smoke-v2.mjs': 'export const runner = true;\n',
@@ -689,14 +691,14 @@ function createAcceptedFixture(t) {
         orchestratorPath, orchestratorSha256: sha256File(orchestratorPath),
         campaignVerifier: commandCapture({ argv: verifierArgv, cwd: project, startedOffset: 5_000, finishedOffset: 6_000, stdoutPath: verifierStdoutPath, stderrPath: verifierStderrPath, stdout: verifierStdout, stderr: empty, extra: { gateLine: 'R10_CAMPAIGN_GATE=VERIFIED', verifierPath, verifierSha256: sha256File(verifierPath) } }),
         worker: commandCapture({ argv: workerArgv, cwd: project, startedOffset: 6_500, finishedOffset: 115_900, stdoutPath: config.workerStdoutPath, stderrPath: config.workerStderrPath, stdout: empty, stderr: empty }),
-        accepted: { realpath: fs.realpathSync(acceptedDir), manifestPath: path.join(acceptedDir, 'artifact-manifest.json'), manifestSha256, treeDigest: sha256(canonicalJson({ files: manifest.files, manifestSha256 })), publishedUtc: utcAt(115_800), eventsPath: path.join(acceptedDir, 'runner-events.jsonl'), eventsSha256, eventCount: 278, finalEventSha256: events.at(-1).eventSha256 },
+        accepted: { realpath: fs.realpathSync(acceptedDir), manifestPath: path.join(acceptedDir, 'artifact-manifest.json'), manifestSha256, treeDigest: sha256(canonicalJson({ files: manifest.files, manifestSha256 })), publishedUtc: utcAt(115_800), eventsPath: path.join(acceptedDir, 'runner-events.jsonl'), eventsSha256, eventCount: 518, finalEventSha256: events.at(-1).eventSha256 },
         screenshotBindings,
         cloudflareReads: {
             pre: { capturePath: pre.commandPath, captureSha256: sha256File(path.join(acceptedDir, pre.commandPath)), deploymentId: DEPLOYMENT_ID },
             mid: { capturePath: mid.commandPath, captureSha256: sha256File(path.join(acceptedDir, mid.commandPath)), deploymentId: DEPLOYMENT_ID },
             post: { capturePath: post.commandPath, captureSha256: sha256File(path.join(acceptedDir, post.commandPath)), deploymentId: DEPLOYMENT_ID },
         },
-        fileProbes: { initialPath: initialProbe.relativePath, initialSha256: sha256File(path.join(acceptedDir, initialProbe.relativePath)), initialPassed: 10, initialTotal: 10, finalAliasPath: finalProbe.relativePath, finalAliasSha256: sha256File(path.join(acceptedDir, finalProbe.relativePath)), finalAliasPassed: 5, finalAliasTotal: 5 },
+        fileProbes: { initialPath: initialProbe.relativePath, initialSha256: sha256File(path.join(acceptedDir, initialProbe.relativePath)), initialPassed: 14, initialTotal: 14, finalAliasPath: finalProbe.relativePath, finalAliasSha256: sha256File(path.join(acceptedDir, finalProbe.relativePath)), finalAliasPassed: 7, finalAliasTotal: 7 },
     };
     writeJson(operationReceiptPath, operationReceipt);
     Object.assign(fixture, { cases, events, acceptedRun, manifest, operationReceipt, productFiles, initialProbe, finalProbe, pre, mid, post });
@@ -827,7 +829,7 @@ function expectedAuditReceipt(fixture) {
         acceptedManifestSha256: sha256File(path.join(fixture.acceptedDir, 'artifact-manifest.json')),
         eventsSha256: sha256File(path.join(fixture.acceptedDir, 'runner-events.jsonl')), finalEventSha256: fixture.events.at(-1).eventSha256,
         deploymentId: DEPLOYMENT_ID, passedCases: 6, totalCases: 6, controlPlaneReads: 3,
-        initialFileGate: { passed: 10, total: 10 }, finalAliasGate: { passed: 5, total: 5 }, screenshotBindings: fixture.operationReceipt.screenshotBindings,
+        initialFileGate: { passed: 14, total: 14 }, finalAliasGate: { passed: 7, total: 7 }, screenshotBindings: fixture.operationReceipt.screenshotBindings,
     };
 }
 
@@ -874,15 +876,15 @@ test('INDETERMINATE residue cannot become deployment authority', (t) => {
     assert.throws(() => smoke.auditAcceptedRun({ configPath: fixture.configPath }), /deploymentOperatorReceipt/);
 });
 
-test('a complete accepted fixture authenticates every external authority and all 278 events end to end', (t) => {
+test('a complete accepted fixture authenticates every external authority and all 518 events end to end', (t) => {
     const fixture = createAcceptedFixture(t);
     const receipt = smoke.auditAcceptedRun({ configPath: fixture.configPath });
     assert.equal(receipt.status, 'VERIFIED');
     assert.equal(receipt.passedCases, 6);
     assert.equal(receipt.screenshotBindings.length, 18);
     assert.equal(receipt.finalEventSha256, fixture.events.at(-1).eventSha256);
-    assert.equal(fixture.events.length, 278);
-    assert.equal(fixture.cases.every((record) => record.actions.length === 38), true);
+    assert.equal(fixture.events.length, 518);
+    assert.equal(fixture.cases.every((record) => record.actions.length === 78), true);
     const duplicateA = fixture.cases[1].screenshots[1];
     const duplicateB = fixture.cases[2].screenshots[1];
     assert.equal(duplicateA.sha256, duplicateB.sha256, 'equal PNG hashes are valid for distinct tuples');
@@ -1120,7 +1122,7 @@ test('full-rehash semantic mutations fail at their stable invariant before froze
         }],
         ['RECOVER final delta', /recover\.starDelta/, (fixture) => {
             const observations = structuredClone(fixture.cases);
-            observations[0].recoveries[6].starDelta = 150;
+            observations[0].recoveries[46].starDelta = 150;
             rewriteAccepted(fixture, { observations });
         }],
         ['intrusion sequence', /intrusion\.sequence/, (fixture) => {

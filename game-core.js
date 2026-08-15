@@ -5,6 +5,8 @@
 
 import { upgrades } from './content.js';
 
+export const STAR_TARGET = 9000;
+
 export function createInitialState(seed = 'default-seed') {
     return {
         productionUnits: 0,
@@ -46,7 +48,7 @@ export function reduceGameState(state, action) {
             }
 
             nextState.productionUnits += effectiveUnits;
-            nextState.githubStars = Math.min(3000, nextState.githubStars + effectiveUnits * 15);
+            nextState.githubStars = Math.min(STAR_TARGET, nextState.githubStars + effectiveUnits * 15);
 
             // Threat formula: 2 * effectiveUnits + floor(techDebt / 10)
             const threatGain = 2 * effectiveUnits + Math.floor(nextState.techDebt / 10);
@@ -64,7 +66,7 @@ export function reduceGameState(state, action) {
             }
 
             // Defer ending if intrusion is currently active
-            if (nextState.productionUnits >= 200 && nextState.githubStars >= 3000 && nextState.activeIntrusion === null) {
+            if (nextState.productionUnits >= 200 && nextState.githubStars >= STAR_TARGET && nextState.activeIntrusion === null) {
                 nextState.endingTriggered = true;
             }
             break;
@@ -77,7 +79,7 @@ export function reduceGameState(state, action) {
             nextState.activeIntrusion = null;
 
             // Check deferred ending after intrusion resolution
-            if (nextState.productionUnits >= 200 && nextState.githubStars >= 3000) {
+            if (nextState.productionUnits >= 200 && nextState.githubStars >= STAR_TARGET) {
                 nextState.endingTriggered = true;
             }
             break;
@@ -92,7 +94,7 @@ export function reduceGameState(state, action) {
             nextState.incidentCost += actualLoss;
             nextState.activeIntrusion = null;
 
-            if (nextState.productionUnits >= 200 && nextState.githubStars >= 3000) {
+            if (nextState.productionUnits >= 200 && nextState.githubStars >= STAR_TARGET) {
                 nextState.endingTriggered = true;
             }
             break;
@@ -103,10 +105,10 @@ export function reduceGameState(state, action) {
                 return state;
             }
             nextState.activeIntrusion = null;
-            nextState.githubStars = Math.min(3000, nextState.githubStars + 1000);
+            nextState.githubStars = Math.min(STAR_TARGET, nextState.githubStars + 1000);
             nextState.techDebt = Math.min(100, nextState.techDebt + 30);
 
-            if (nextState.productionUnits >= 200 && nextState.githubStars >= 3000) {
+            if (nextState.productionUnits >= 200 && nextState.githubStars >= STAR_TARGET) {
                 nextState.endingTriggered = true;
             }
             break;
@@ -121,7 +123,7 @@ export function reduceGameState(state, action) {
             nextState.incidentCost += actualLoss;
             nextState.activeIntrusion = null;
 
-            if (nextState.productionUnits >= 200 && nextState.githubStars >= 3000) {
+            if (nextState.productionUnits >= 200 && nextState.githubStars >= STAR_TARGET) {
                 nextState.endingTriggered = true;
             }
             break;
@@ -147,10 +149,10 @@ export function reduceGameState(state, action) {
         }
 
         case 'RECOVER': {
-            if (nextState.productionUnits >= 200 && nextState.githubStars < 3000 && nextState.activeIntrusion === null) {
-                const recoveryGain = Math.min(150, 3000 - nextState.githubStars);
+            if (nextState.productionUnits >= 200 && nextState.githubStars < STAR_TARGET && nextState.activeIntrusion === null) {
+                const recoveryGain = Math.min(150, STAR_TARGET - nextState.githubStars);
                 nextState.githubStars += recoveryGain;
-                if (nextState.githubStars >= 3000) {
+                if (nextState.githubStars >= STAR_TARGET) {
                     nextState.endingTriggered = true;
                 }
             }

@@ -6,7 +6,7 @@ const expectedStages = [
     '2.5단계 · 하이테크 이글루 스타트업',
     '3단계 · 남극 펭귄 연구소',
     '4단계 · 초거대 AI 데이터센터 CEO',
-    '5단계 · 마이애미 해변의 AGI 재벌 · EXIT 0'
+    '5단계 · 복구 중'
 ];
 const expectedIntrusions = [
     { title: '🤖 Copilot 코드 침입!', body: 'Copilot이 반복되는 나쁜 코드를 생성했습니다! Esc 또는 git revert로 되돌리세요.' },
@@ -73,7 +73,7 @@ async function reachRecoverAndEnding(page, beforeRecovery = null) {
         }
         if ([0, 40, 80, 120, 160, 200].includes(state.units)) stages.set(state.units, await page.locator('#stage-badge').innerText());
         let recoveryHandled = false;
-        if (state.units === 200 && state.stars < 3000) {
+        if (state.units === 200 && state.stars < 9000) {
             recoverName = await produce.getAttribute('aria-label');
             if (beforeRecovery) recoveryHandled = await beforeRecovery();
         }

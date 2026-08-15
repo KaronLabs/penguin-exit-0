@@ -47,7 +47,7 @@ async function visitRepresentativeStates(page, inspect) {
     await inspect('upgrade owned');
 
     const intrusions = new Set();
-    for (let step = 0; step < 60; step += 1) {
+    for (let step = 0; step < 100; step += 1) {
         if (await banner.isVisible()) {
             const title = await page.locator('#intrusion-title').innerText();
             intrusions.add(title);
@@ -58,7 +58,7 @@ async function visitRepresentativeStates(page, inspect) {
         }
         const state = await metrics(page);
         if (await page.locator('#ending-overlay').isVisible()) break;
-        if (state.units === 200 && state.stars < 3000) await inspect('RECOVER');
+        if (state.units === 200 && state.stars < 9000) await inspect('RECOVER');
         await produce.click();
     }
     expect(intrusions.size).toBe(4);

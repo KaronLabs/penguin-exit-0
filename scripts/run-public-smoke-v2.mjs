@@ -469,7 +469,7 @@ export async function runCase({ browserType, engine, originKind, originUrl, scre
         }
 
         const recoveries = [];
-        for (let index = 0; index < 7; index += 1) {
+        for (let index = 0; index < 47; index += 1) {
             const beforeRaw = await state();
             await click(page.locator('#btn-produce'), '#btn-produce');
             const afterRaw = await state();
@@ -565,20 +565,20 @@ export async function runAcceptedSmoke(options) {
             screenshotDir: options.screenshotDir,
             eventLedger: ledger,
         });
-        if (result?.observation?.label !== label || result.observation.attempt !== 1 || result.observation.actions?.length !== 38 || result.observation.screenshots?.length !== 3) throw new Error(`runner.case.contract: ${label}`);
+        if (result?.observation?.label !== label || result.observation.attempt !== 1 || result.observation.actions?.length !== 78 || result.observation.screenshots?.length !== 3) throw new Error(`runner.case.contract: ${label}`);
         observations.push(result.observation);
         await options.onCaseFinished?.(observations.length);
     }
     eventRecord(ledger, { utc: utcNow(), monotonicMs: now(), type: 'operation-finish', case: null, payload: { caseCount: 6, screenshotCount: 18 } });
     enforceStrictDeadline(now() - startedMonotonicMs, 900000, 'operation.deadline');
     const events = ledger.records();
-    if (events.length !== 278) throw new Error(`events.cardinality: ${events.length}`);
+    if (events.length !== 518) throw new Error(`events.cardinality: ${events.length}`);
     return { observations, events };
 }
 
 export function validateWorkerOwnedArtifacts({ observations, events }) {
     try {
-        if (!Array.isArray(observations) || observations.length !== 6 || !Array.isArray(events) || events.length !== 278) throw new Error('cardinality');
+        if (!Array.isArray(observations) || observations.length !== 6 || !Array.isArray(events) || events.length !== 518) throw new Error('cardinality');
         observations.forEach((observation) => {
             if (!observation?.signature?.fairPing?.provenance) throw new Error('fairPing.provenance');
             validateTask2Case(observation);
@@ -599,7 +599,7 @@ async function defaultCreateStageDir(config) {
     return stage;
 }
 
-const PRODUCT_PATHS = ['/', '/content.js', '/game-core.js', '/script.js', `/${'style'}.css`];
+const PRODUCT_PATHS = ['/', '/content.js', '/game-core.js', '/script.js', `/${'style'}.css`, '/assets/dangerous-alliance-ssh.png', '/assets/ending-tuna-acquisition.png'];
 
 export async function fetchWithinBudget(url, timeoutMs, fetchImpl = fetch) {
     if (!(timeoutMs > 0)) throw new Error('operation.deadline');
@@ -630,7 +630,7 @@ async function collectProbe(phase, origins, { config, stageDir, authority = load
         const requestedUrl = new URL(publicPath === '/' ? '/' : publicPath.slice(1), base).href;
         const requestStarted = utcNow();
         const { response, body } = await fetchProbeBytesWithinDeadline(requestedUrl, { deadlineMonotonicMs, monotonicNow, fetchImpl });
-        const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('.', '-');
+        const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('/', '-').replaceAll('.', '-');
         const prefix = phase === 'initial' ? `initial-${originKind}` : 'final-alias';
         const bodyPath = `file-probes/bodies/${prefix}-${token}.bin`;
         fs.writeFileSync(path.join(stageDir, ...bodyPath.split('/')), body, { flag: 'wx' });

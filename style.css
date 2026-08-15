@@ -652,6 +652,26 @@ body.intrusion-impact--ceo > .main-grid {
     font-variant-numeric: tabular-nums;
 }
 
+.ending-divider {
+    margin: 16px 0;
+    border: 0;
+    border-top: 1px solid rgba(81, 210, 246, 0.45);
+}
+
+.ending-acquisition-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1672 / 941;
+    border: 1px solid rgba(81, 210, 246, 0.45);
+    border-radius: 6px;
+}
+
+.ending-offer,
+.ending-title {
+    margin-top: 12px;
+}
+
 .btn-play-again {
     width: 100%;
     margin-top: 16px;

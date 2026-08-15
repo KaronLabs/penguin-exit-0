@@ -26,12 +26,13 @@ async function startCurrentProductServer() {
     ['.html', 'text/html; charset=utf-8'],
     ['.js', 'application/javascript; charset=utf-8'],
     ['.css', 'text/css; charset=utf-8'],
+    ['.png', 'image/png'],
   ]);
   const server = createServer(async (request, response) => {
     try {
       const pathname = new URL(request.url, 'http://fixture.invalid').pathname;
       const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-      if (!['index.html', 'content.js', 'game-core.js', 'script.js', 'style.css'].includes(relative)) {
+      if (!['index.html', 'content.js', 'game-core.js', 'script.js', 'style.css', 'assets/dangerous-alliance-ssh.png', 'assets/ending-tuna-acquisition.png'].includes(relative)) {
         response.writeHead(404).end();
         return;
       }
@@ -180,7 +181,7 @@ test('deadlines admit values below the boundary and reject equality', () => {
   assert.throws(() => enforceStrictDeadline(900000, 900000, 'operation.deadline'), /operation\.deadline/);
 });
 
-test('runCase drives the current product through the exact 38-input real UI journey', { timeout: 120000 }, async () => {
+test('runCase drives the current product through the exact 78-input real UI journey', { timeout: 120000 }, async () => {
   const runner = await import('../../scripts/run-public-smoke-v2.mjs');
   const fixture = await startCurrentProductServer();
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'r14-task2-run-case-'));
@@ -196,13 +197,13 @@ test('runCase drives the current product through the exact 38-input real UI jour
     });
 
     assert.doesNotThrow(() => validateTask2Case(result.observation));
-    assert.equal(result.observation.actions.length, 38);
+    assert.equal(result.observation.actions.length, 78);
     assert.deepEqual(result.observation.intrusions.map(({ type }) => type), ['copilot', 'codex', 'gemini', 'ceo']);
-    assert.deepEqual(result.observation.recoveries.map(({ after }) => after.stars), [2150, 2300, 2450, 2600, 2750, 2900, 3000]);
+    assert.deepEqual(result.observation.recoveries.map(({ after }) => after.stars), Array.from({ length: 47 }, (_, index) => Math.min(9000, 2000 + (index + 1) * 150)));
     assert.equal(result.observation.ending.initialFocusId, 'btn-play-again');
     assert.equal(result.observation.ending.tabFocusId, 'btn-play-again');
     assert.equal(result.observation.ending.shiftTabFocusId, 'btn-play-again');
-    assert.equal(ledger.records().filter(({ type }) => type === 'trusted-input').length, 38);
+    assert.equal(ledger.records().filter(({ type }) => type === 'trusted-input').length, 78);
     assert.equal(ledger.records().filter(({ type }) => type === 'screenshot-written').length, 3);
     result.observation.actions.slice(1).forEach((action, index) => assert.equal(action.preStateSha256, result.observation.actions[index].postStateSha256, `adjacent action ${index + 1}->${index + 2}`));
     const trustedEvents = ledger.records().filter(({ type }) => type === 'trusted-input');
@@ -263,13 +264,13 @@ test('operation orders verifier, worker, accepted revalidation, then exclusive r
     monotonicNow: () => 899_999,
     runVerifier: async () => { trace.push('verifier'); return { exitCode: 0, signal: null, stdout: 'R10_CAMPAIGN_GATE=VERIFIED\n', stderr: '' }; },
     runWorker: async () => { trace.push('worker'); return { exitCode: 0, signal: null, stdout: '', stderr: '' }; },
-    revalidateAccepted: async () => { trace.push('revalidate'); return { eventCount: 278, screenshotBindings: Array.from({ length: 18 }, (_, index) => ({ index })) }; },
+    revalidateAccepted: async () => { trace.push('revalidate'); return { eventCount: 518, screenshotBindings: Array.from({ length: 18 }, (_, index) => ({ index })) }; },
     publishReceipt: async (accepted) => { trace.push('receipt'); return { status: 'VERIFIED', accepted }; },
   });
 
   assert.deepEqual(trace, ['verifier', 'worker', 'revalidate', 'receipt']);
   assert.equal(result.status, 'VERIFIED');
-  assert.equal(result.accepted.eventCount, 278);
+  assert.equal(result.accepted.eventCount, 518);
 });
 
 test('operation never publishes a receipt after verifier, worker, or accepted validation failure', async () => {
@@ -281,14 +282,14 @@ test('operation never publishes a receipt after verifier, worker, or accepted va
       monotonicNow: () => 1,
       runVerifier: async () => ({ exitCode: failure === 'verifier' ? 1 : 0, signal: null, stdout: failure === 'verifier' ? '' : 'R10_CAMPAIGN_GATE=VERIFIED\n', stderr: '' }),
       runWorker: async () => ({ exitCode: failure === 'worker' ? 1 : 0, signal: null, stdout: '', stderr: '' }),
-      revalidateAccepted: async () => { if (failure === 'accepted') throw new Error('accepted.invalid'); return { eventCount: 278, screenshotBindings: Array(18).fill({}) }; },
+      revalidateAccepted: async () => { if (failure === 'accepted') throw new Error('accepted.invalid'); return { eventCount: 518, screenshotBindings: Array(18).fill({}) }; },
       publishReceipt: async () => { receiptCalls += 1; },
     }));
     assert.equal(receiptCalls, 0, `${failure} must not publish receipt`);
   }
 });
 
-test('runAcceptedSmoke produces exactly six ordered cases, 18 PNG bindings, and 278 chained events', async () => {
+test('runAcceptedSmoke produces exactly six ordered cases, 18 PNG bindings, and 518 chained events', async () => {
   const runner = await import('../../scripts/run-public-smoke-v2.mjs');
   const ledger = createRunnerEventLedger();
   const calls = [];
@@ -305,7 +306,7 @@ test('runAcceptedSmoke produces exactly six ordered cases, 18 PNG bindings, and 
       const label = `${engine}-${originKind}`;
       calls.push({ label, browserType, originUrl, freshContextIdentity: Symbol(label) });
       eventLedger.append({ utc: '2026-08-14T00:00:00.000Z', monotonicMs: ++clock, type: 'case-start', case: label, payload: { engine, originKind, requestedUrl: originUrl } });
-      for (let actionSeq = 1; actionSeq <= 38; actionSeq += 1) {
+      for (let actionSeq = 1; actionSeq <= 78; actionSeq += 1) {
         eventLedger.append({ utc: '2026-08-14T00:00:00.000Z', monotonicMs: ++clock, type: 'trusted-input', case: label, payload: { actionSeq, api: 'locator.click', target: '#fixture', preStateSha256: '1'.repeat(64), postStateSha256: '2'.repeat(64), resultingUrl: originUrl } });
       }
       const screenshots = [];
@@ -317,8 +318,8 @@ test('runAcceptedSmoke produces exactly six ordered cases, 18 PNG bindings, and 
         eventLedger.append({ utc: '2026-08-14T00:00:00.000Z', monotonicMs: ++clock, type: 'screenshot-written', case: label, payload: { stage, path: relativePath, pngSha256, oracleSha256 } });
         screenshots.push({ stage, relativePath });
       }
-      eventLedger.append({ utc: '2026-08-14T00:00:00.000Z', monotonicMs: ++clock, type: 'case-finish', case: label, payload: { actionCount: 38, finalUrl: originUrl } });
-      return { observation: { label, engine, originKind, attempt: 1, actions: Array(38).fill({}), screenshots } };
+      eventLedger.append({ utc: '2026-08-14T00:00:00.000Z', monotonicMs: ++clock, type: 'case-finish', case: label, payload: { actionCount: 78, finalUrl: originUrl } });
+      return { observation: { label, engine, originKind, attempt: 1, actions: Array(78).fill({}), screenshots } };
     },
   });
 
@@ -327,8 +328,8 @@ test('runAcceptedSmoke produces exactly six ordered cases, 18 PNG bindings, and 
   assert.deepEqual(calls.map(({ browserType }) => browserType), ['chromium-fixture', 'chromium-fixture', 'firefox-fixture', 'firefox-fixture', 'webkit-fixture', 'webkit-fixture']);
   assert.deepEqual(result.observations.map(({ attempt }) => attempt), [1, 1, 1, 1, 1, 1]);
   assert.equal(result.observations.flatMap(({ screenshots }) => screenshots).length, 18);
-  assert.equal(result.events.length, 278);
-  assert.deepEqual(result.events.map(({ seq }) => seq), Array.from({ length: 278 }, (_, index) => index + 1));
+  assert.equal(result.events.length, 518);
+  assert.deepEqual(result.events.map(({ seq }) => seq), Array.from({ length: 518 }, (_, index) => index + 1));
 });
 
 test('whole-operation deadline spans verifier start through worker finish and rejects equality', async () => {
@@ -338,7 +339,7 @@ test('whole-operation deadline spans verifier start through worker finish and re
     monotonicNow: () => finished,
     runVerifier: async () => ({ exitCode: 0, signal: null, stdout: 'R10_CAMPAIGN_GATE=VERIFIED\n', stderr: '' }),
     runWorker: async () => ({ exitCode: 0, signal: null, stdout: '', stderr: '' }),
-    revalidateAccepted: async () => ({ eventCount: 278, screenshotBindings: Array(18).fill({}) }),
+    revalidateAccepted: async () => ({ eventCount: 518, screenshotBindings: Array(18).fill({}) }),
     publishReceipt: async () => ({ status: 'VERIFIED' }),
   });
 
@@ -407,11 +408,11 @@ test('concrete operation CLI authenticates schema 2 config, exact verifier argv,
     const calls = [];
     let semanticAuthentications = 0;
     const accepted = {
-      eventCount: 278,
+      eventCount: 518,
       screenshotBindings: ['chromium-immutable', 'chromium-alias', 'firefox-immutable', 'firefox-alias', 'webkit-immutable', 'webkit-alias'].flatMap((caseLabel) => ['initial', 'progress', 'ending'].map((stage) => ({ case: caseLabel, stage, path: `screenshots/${caseLabel}-${stage === 'ending' ? 'ending-640' : `${stage}-320`}.png`, pngSha256: '6'.repeat(64), oracleSha256: '7'.repeat(64), captureStartUtc: '2026-08-14T00:00:00.000Z', captureEndUtc: '2026-08-14T00:00:00.001Z' }))),
       accepted: { realpath: config.acceptedDir, manifestPath: path.join(config.acceptedDir, 'artifact-manifest.json'), manifestSha256: '3'.repeat(64), treeDigest: '3'.repeat(64), publishedUtc: '2026-08-14T00:00:00.000Z', eventsPath: path.join(config.acceptedDir, 'runner-events.jsonl'), eventsSha256: '3'.repeat(64), finalEventSha256: '3'.repeat(64) },
       cloudflareReads: Object.fromEntries(['pre', 'mid', 'post'].map((phase) => [phase, { capturePath: `control-plane/${phase}.command.json`, captureSha256: '4'.repeat(64), deploymentId: 'deployment-fixture' }])),
-      fileProbes: { initialPath: 'file-probes/initial-10.json', initialSha256: '4'.repeat(64), initialPassed: 10, initialTotal: 10, finalAliasPath: 'file-probes/final-alias-5.json', finalAliasSha256: '5'.repeat(64), finalAliasPassed: 5, finalAliasTotal: 5 },
+      fileProbes: { initialPath: 'file-probes/initial-10.json', initialSha256: '4'.repeat(64), initialPassed: 14, initialTotal: 14, finalAliasPath: 'file-probes/final-alias-5.json', finalAliasSha256: '5'.repeat(64), finalAliasPassed: 7, finalAliasTotal: 7 },
     };
     const result = await operation.runOperationFromArgv(['--config', configPath], {
       monotonicNow: (() => { let now = 100; return () => ++now; })(),
@@ -466,7 +467,7 @@ test('worker CLI publishes accepted core artifacts from injected offline authori
   const configPath = path.join(root, 'operation.json');
   const acceptedDir = path.join(root, 'accepted');
   const stageDir = path.join(root, '.stage');
-  const events = Array.from({ length: 278 }, (_, index) => ({ seq: index + 1, eventSha256: String((index % 9) + 1).repeat(64) }));
+  const events = Array.from({ length: 518 }, (_, index) => ({ seq: index + 1, eventSha256: String((index % 9) + 1).repeat(64) }));
   const observations = Array.from({ length: 6 }, (_, index) => ({
     label: ['chromium-immutable', 'chromium-alias', 'firefox-immutable', 'firefox-alias', 'webkit-immutable', 'webkit-alias'][index],
     screenshots: ['initial', 'progress', 'ending'].map((stage) => ({ stage, relativePath: `screenshots/case-${index}-${stage}.png` })),
@@ -485,13 +486,13 @@ test('worker CLI publishes accepted core artifacts from injected offline authori
           for (const controlPhase of ['pre', 'mid', 'post']) for (const suffix of ['command.json', 'stdout.bin', 'stderr.bin']) await writeFile(path.join(stageDir, 'control-plane', `${controlPhase}.${suffix}`), controlPhase);
           await writeFile(path.join(stageDir, 'file-probes', 'initial-10.json'), '{}');
           await writeFile(path.join(stageDir, 'file-probes', 'final-alias-5.json'), '{}');
-          for (let index = 0; index < 15; index += 1) await writeFile(path.join(stageDir, 'file-probes', 'bodies', `${index}.bin`), String(index));
+          for (let index = 0; index < 21; index += 1) await writeFile(path.join(stageDir, 'file-probes', 'bodies', `${index}.bin`), String(index));
         }
         return phase === 'initial'
-          ? { initialProbe: { passed: 10, total: 10, relativePath: 'file-probes/initial-10.json' }, controlPlane: { phase: 'pre', deploymentId: 'deployment-fixture' }, artifacts: [] }
+          ? { initialProbe: { passed: 14, total: 14, relativePath: 'file-probes/initial-10.json' }, controlPlane: { phase: 'pre', deploymentId: 'deployment-fixture' }, artifacts: [] }
           : phase === 'mid'
             ? { controlPlane: { phase: 'mid', deploymentId: 'deployment-fixture' }, artifacts: [] }
-            : { controlPlane: { phase: 'post', deploymentId: 'deployment-fixture' }, finalProbe: { passed: 5, total: 5, relativePath: 'file-probes/final-alias-5.json' }, artifacts: [] };
+            : { controlPlane: { phase: 'post', deploymentId: 'deployment-fixture' }, finalProbe: { passed: 7, total: 7, relativePath: 'file-probes/final-alias-5.json' }, artifacts: [] };
       },
       runSmoke: async ({ onCaseFinished }) => {
         await onCaseFinished(3);
@@ -501,11 +502,11 @@ test('worker CLI publishes accepted core artifacts from injected offline authori
       },
       validateWorkerArtifacts: () => true,
     });
-    assert.equal(result.eventCount, 278);
+    assert.equal(result.eventCount, 518);
     assert.equal(JSON.parse(await readFile(path.join(acceptedDir, 'observations.json'), 'utf8')).length, 6);
-    assert.equal((await readFile(path.join(acceptedDir, 'runner-events.jsonl'), 'utf8')).trim().split('\n').length, 278);
+    assert.equal((await readFile(path.join(acceptedDir, 'runner-events.jsonl'), 'utf8')).trim().split('\n').length, 518);
     assert.equal(JSON.parse(await readFile(path.join(acceptedDir, 'artifact-manifest.json'), 'utf8')).files.some(({ path: relative }) => relative === 'artifact-manifest.json'), false);
-    assert.equal(JSON.parse(await readFile(path.join(acceptedDir, 'artifact-manifest.json'), 'utf8')).files.length, 47);
+    assert.equal(JSON.parse(await readFile(path.join(acceptedDir, 'artifact-manifest.json'), 'utf8')).files.length, 53);
     assert.deepEqual(result.controlPlane.map(({ phase }) => phase), ['pre', 'mid', 'post']);
     assert.deepEqual(protocol, ['initial', 'mid', 'post']);
     assert.equal(result.initialProbe.relativePath, 'file-probes/initial-10.json');
@@ -548,7 +549,7 @@ test('worker pauses the case matrix for outer initial/pre, mid, and post/final a
   const trace = [];
   try {
     await writeFile(configPath, JSON.stringify({ schemaVersion: 2, releaseId: '20260814T000000Z-r14-public-smoke-v2', acceptedDir: path.join(root, 'accepted'), failureRoot: root }));
-    const events = Array.from({ length: 278 }, (_, index) => ({ seq: index + 1 }));
+    const events = Array.from({ length: 518 }, (_, index) => ({ seq: index + 1 }));
     const observations = Array.from({ length: 6 }, (_, index) => ({ label: String(index), screenshots: [{}, {}, {}] }));
     await runner.runWorkerFromArgv(['--config', configPath], {
       validateConfig: (value) => value,
@@ -650,22 +651,22 @@ test('probe collectors publish the exact schema filenames and cardinality identi
   assert.match(runnerSource, /file-probes\/final-alias-5\.json/);
 });
 
-test('initial collector writes and returns the real 10-result probe artifact', async () => {
+test('initial collector writes and returns the real 14-result probe artifact', async () => {
   const runner = await import('../../scripts/run-public-smoke-v2.mjs');
   const server = createServer((request, response) => {
     const pathname = new URL(request.url, 'http://fixture').pathname;
-    const mime = pathname === '/' ? 'text/html' : pathname.endsWith('.css') ? 'text/css' : 'application/javascript';
+    const mime = pathname === '/' ? 'text/html' : pathname.endsWith('.css') ? 'text/css' : pathname.endsWith('.png') ? 'image/png' : 'application/javascript';
     response.writeHead(200, { 'content-type': mime, 'content-length': 3 }); response.end('abc');
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const root = await mkdtemp(path.join(tmpdir(), 'r14-task2-probe-real-'));
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const productFiles = Object.fromEntries(['/', '/content.js', '/game-core.js', '/script.js', '/style.css'].map((publicPath) => [publicPath, { bytes: 3, mime: publicPath === '/' ? 'text/html' : publicPath.endsWith('.css') ? 'text/css' : 'application/javascript', sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' }]));
+  const productFiles = Object.fromEntries(['/', '/content.js', '/game-core.js', '/script.js', '/style.css', '/assets/dangerous-alliance-ssh.png', '/assets/ending-tuna-acquisition.png'].map((publicPath) => [publicPath, { bytes: 3, mime: publicPath === '/' ? 'text/html' : publicPath.endsWith('.css') ? 'text/css' : publicPath.endsWith('.png') ? 'image/png' : 'application/javascript', sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' }]));
   try {
     const probe = await runner.collectInitialProbe({ config: { immutableUrl: url, aliasUrl: url }, stageDir: root, authority: { deployment: { deploymentId: 'dep', immutableUrl: url }, sourceGitHead: 'a'.repeat(40), productFiles } });
     assert.equal(probe.relativePath, 'file-probes/initial-10.json');
-    assert.equal(probe.passed, 10); assert.equal(probe.total, 10); assert.equal(probe.results.length, 10);
-    assert.equal(JSON.parse(await readFile(path.join(root, 'file-probes', 'initial-10.json'), 'utf8')).results.length, 10);
+    assert.equal(probe.passed, 14); assert.equal(probe.total, 14); assert.equal(probe.results.length, 14);
+    assert.equal(JSON.parse(await readFile(path.join(root, 'file-probes', 'initial-10.json'), 'utf8')).results.length, 14);
   } finally { await new Promise((resolve) => server.close(resolve)); await rm(root, { recursive: true, force: true }); }
 });
 
@@ -757,7 +758,7 @@ test('Task2 rejects negative fairPing beforeRowCount before worker accepted publ
       validateConfig: (value) => value,
       createStageDir: async () => { await mkdir(stageDir, { recursive: true }); return stageDir; },
       exchangePhase: async (phase) => ({ initialProbe: {}, finalProbe: {}, controlPlane: { phase: phase === 'initial' ? 'pre' : phase } }),
-      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: negativeBeforeRowCountObservations(), events: Array(278).fill({}) }; },
+      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: negativeBeforeRowCountObservations(), events: Array(518).fill({}) }; },
     }), /fairPing\.provenance\.beforeRowCount/);
     await assert.rejects(access(acceptedDir));
     const failures = await (await import('node:fs/promises')).readdir(failureRoot); assert.equal(failures.length, 1);
@@ -975,7 +976,7 @@ test('Task2 worker semantic gate requires fair ping provenance even when legacy 
 test('Task2 worker semantic gate rejects fairPing deletion before full-case validation', async () => {
   const runner = await import('../../scripts/run-public-smoke-v2.mjs');
   const observations = Array.from({ length: 6 }, () => ({ signature: {} }));
-  assert.throws(() => runner.validateWorkerOwnedArtifacts({ observations, events: Array(278).fill({}) }), /worker\.semantic: fairPing\.provenance/);
+  assert.throws(() => runner.validateWorkerOwnedArtifacts({ observations, events: Array(518).fill({}) }), /worker\.semantic: fairPing\.provenance/);
 });
 
 test('Task2 worker publication rejects fairPing deletion without accepted manifest', async () => {
@@ -988,7 +989,7 @@ test('Task2 worker publication rejects fairPing deletion without accepted manife
       validateConfig: (value) => value,
       createStageDir: async () => { await mkdir(stageDir, { recursive: true }); return stageDir; },
       exchangePhase: async (phase) => ({ initialProbe: {}, finalProbe: {}, controlPlane: { phase: phase === 'initial' ? 'pre' : phase } }),
-      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: Array.from({ length: 6 }, () => ({ signature: {} })), events: Array(278).fill({}) }; },
+      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: Array.from({ length: 6 }, () => ({ signature: {} })), events: Array(518).fill({}) }; },
     }), /worker\.semantic: fairPing\.provenance/);
     await assert.rejects(access(acceptedDir));
     const failures = await (await import('node:fs/promises')).readdir(failureRoot); assert.equal(failures.length, 1);
@@ -1023,7 +1024,7 @@ test('single operation deadline supplies verifier and worker only the remaining 
 test('terminal operation budget includes revalidation, authentication, receipt wx, and the post-write check', async () => {
   const operation = await import('../../scripts/run-public-smoke-v2-operation.mjs');
   const calls = [];
-  const accepted = { eventCount: 278, screenshotBindings: Array(18).fill({}) };
+  const accepted = { eventCount: 518, screenshotBindings: Array(18).fill({}) };
   const exercise = async (ticks) => operation.orchestrateOperation({
     operationStartedMonotonicMs: 100,
     monotonicNow: () => ticks.shift(),
@@ -1108,7 +1109,7 @@ test('worker semantic rejection atomically publishes one diagnostic tree and no 
       validateConfig: (value) => value,
       createStageDir: async () => { await mkdir(stageDir); return stageDir; },
       exchangePhase: async (phase) => ({ initialProbe: {}, finalProbe: {}, controlPlane: { phase: phase === 'initial' ? 'pre' : phase } }),
-      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: [{ errors: { console: [{ type: 'error', text: 'boom' }], page: [], requestFailed: [], http: [], external: [] } }], events: Array(278).fill({}) }; },
+      runSmoke: async ({ onCaseFinished }) => { await onCaseFinished(3); return { observations: [{ errors: { console: [{ type: 'error', text: 'boom' }], page: [], requestFailed: [], http: [], external: [] } }], events: Array(518).fill({}) }; },
     }), /worker\.semantic/);
     await assert.rejects(access(acceptedDir));
     const failures = await (await import('node:fs/promises')).readdir(failureRoot);
@@ -1504,7 +1505,7 @@ for (const failurePoint of ['revalidate', 'validateReceipt', 'authenticate', 'pu
     const stat = await (await import('node:fs/promises')).lstat(acceptedDir); const pinnedIdentity = { dev: stat.dev, ino: stat.ino };
     const fail = (name) => { if (failurePoint === name) throw new Error(`fixture.${name}`); };
     await assert.rejects(operation.runPostWorkerGates({
-      revalidateAccepted: async () => { fail('revalidate'); return { eventCount: 278 }; },
+      revalidateAccepted: async () => { fail('revalidate'); return { eventCount: 518 }; },
       createReceipt: () => ({ status: 'VERIFIED' }), validateReceipt: () => fail('validateReceipt'), authenticateAccepted: async () => fail('authenticate'),
       publishReceipt: async () => { fail('publish'); await writeFile(receiptPath, 'unexpected'); },
       recoverAccepted: () => operation.recoverAcceptedPublication({ acceptedDir, failureRoot, releaseId, pinnedIdentity }),

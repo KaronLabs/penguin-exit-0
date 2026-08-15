@@ -121,7 +121,7 @@ test('@performance - Real 600s Frame Latency, Long Task and CDP Heap Measurement
                 units: Number.parseInt(document.querySelector('#val-units').textContent, 10),
                 stars: Number.parseInt(document.querySelector('#val-stars').textContent, 10)
             }));
-            if (state.units === 200 && state.stars === 3000) {
+            if (state.units === 200 && state.stars === 9000) {
                 await resetGameAndAssert(page);
             } else {
                 await btnProduce.click();

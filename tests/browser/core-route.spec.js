@@ -16,19 +16,26 @@ test('Core Route - Happy Path (No upgrade, no penalty)', async ({ page }) => {
     const banner = page.locator('#intrusion-banner');
     const endingOverlay = page.locator('#ending-overlay');
 
-    for (let i = 0; i < 80; i++) {
+    let observedRecoveryBeforeTarget = false;
+    for (let i = 0; i < 100; i++) {
         if (await endingOverlay.isVisible()) break;
         if (await banner.isVisible()) {
             await page.keyboard.press('Escape');
         } else {
             const state = await gameState(valUnits, valStars);
-            if (state.units === 200 && state.stars === 3000) break;
+            if (state.units === 200 && state.stars < 9000) {
+                observedRecoveryBeforeTarget = true;
+                await expect(page.locator('#stage-badge')).toHaveText('5단계 · 복구 중');
+                await expect(endingOverlay).toBeHidden();
+            }
             await btnProduce.click();
         }
     }
 
+    expect(observedRecoveryBeforeTarget).toBe(true);
     await expect(valUnits).toHaveText('200 / 200');
-    await expect(valStars).toHaveText('3000 ★');
+    await expect(valStars).toHaveText('9000 ★');
+    await expect(page.locator('#stage-badge')).toHaveText('5단계 · 마이애미 해변의 AGI 재벌 · EXIT 0');
     await expect(endingOverlay).toBeVisible();
 });
 
@@ -41,7 +48,7 @@ test('Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)', async ({ page 
     const banner = page.locator('#intrusion-banner');
     const endingOverlay = page.locator('#ending-overlay');
 
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 100; i++) {
         if (await endingOverlay.isVisible()) break;
         if (await banner.isVisible()) {
             await page.keyboard.press('Escape');
@@ -53,13 +60,12 @@ test('Core Route - Upgrade Route (Buy Coffee upgrade & RECOVER)', async ({ page 
             }
 
             const state = await gameState(valUnits, valStars);
-            if (state.units === 200 && state.stars === 3000) break;
             await btnProduce.click();
         }
     }
 
     await expect(valUnits).toHaveText('200 / 200');
-    await expect(valStars).toHaveText('3000 ★');
+    await expect(valStars).toHaveText('9000 ★');
     await expect(endingOverlay).toBeVisible();
 });
 
@@ -78,7 +84,7 @@ test('Core Route - Penalty Route & RECOVER Button Mechanics', async ({ page }) =
         if (state.units === 200 && !await banner.isVisible()) break;
         if (await banner.isVisible()) {
             if (!penaltyAccepted) {
-                // Accept penalty once to drop stars below 3000
+                // Accept penalty once to extend the recovery route
                 await page.locator('#btn-accept-penalty').click();
                 penaltyAccepted = true;
             } else {
@@ -91,12 +97,12 @@ test('Core Route - Penalty Route & RECOVER Button Mechanics', async ({ page }) =
 
     await expect(valUnits).toHaveText('200 / 200');
 
-    // Verify RECOVER button state when units=200 and stars<3000
+    // Verify RECOVER button state when units=200 and stars<9000
     await expect(btnProduce).toHaveText(/RECOVER/);
     await expect(btnProduce).toBeEnabled();
 
     const starsBeforeRecover = parseInt((await valStars.innerText()).replace(/[^0-9]/g, ''), 10);
-    expect(starsBeforeRecover).toBeLessThan(3000);
+    expect(starsBeforeRecover).toBeLessThan(9000);
 
     // Click RECOVER button and check +150 star gain
     await btnProduce.click();
@@ -104,13 +110,13 @@ test('Core Route - Penalty Route & RECOVER Button Mechanics', async ({ page }) =
     expect(starsAfterFirstRecover - starsBeforeRecover).toBe(150);
 
     // Continue recovery while numeric state still has a star deficit.
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 60; i++) {
         const state = await gameState(valUnits, valStars);
-        if (state.stars === 3000 || await endingOverlay.isVisible()) break;
+        if (state.stars === 9000 || await endingOverlay.isVisible()) break;
         await btnProduce.click();
     }
 
-    await expect(valStars).toHaveText('3000 ★');
+    await expect(valStars).toHaveText('9000 ★');
     await expect(btnProduce).toBeDisabled();
     await expect(endingOverlay).toBeVisible();
 });
@@ -124,13 +130,12 @@ test('Core Route - 1-Shot Ending Modal Overlay Verification', async ({ page }) =
     const banner = page.locator('#intrusion-banner');
     const endingOverlay = page.locator('#ending-overlay');
 
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 100; i++) {
         if (await endingOverlay.isVisible()) break;
         if (await banner.isVisible()) {
             await page.keyboard.press('Escape');
         } else {
             const state = await gameState(valUnits, valStars);
-            if (state.units === 200 && state.stars === 3000) break;
             await btnProduce.click();
         }
     }
@@ -147,8 +152,69 @@ test('Core Route - 1-Shot Ending Modal Overlay Verification', async ({ page }) =
     await expect(endingOverlay).toContainText('순 재무 잔액 -$1');
     await expect(page.locator('#ending-incident-cost')).toContainText('장애 비용 -$');
 
+    const endingImage = endingOverlay.locator('#ending-acquisition-image');
+    await expect(endingOverlay.locator('.ending-divider')).toBeVisible();
+    await expect(endingImage).toBeVisible();
+    await expect(endingImage).toHaveAttribute(
+        'alt',
+        'AI 기업 인수식에서 정장 펭귄이 계약서를 받고 AGI 로봇이 참치 뱃살을 탐내는 동안 GPU 청구서가 쏟아지는 장면'
+    );
+    await expect.poll(async () => endingImage.evaluate((image) => ({
+        complete: image.complete,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight
+    }))).toEqual({
+        complete: true,
+        naturalWidth: 1672,
+        naturalHeight: 941
+    });
+
+    const endingOrder = await endingOverlay.locator('.ending-dialog').evaluate((dialog) => {
+        const selectors = [
+            '.ending-summary',
+            '.ending-divider',
+            '#ending-acquisition-image',
+            '.ending-offer',
+            '.ending-title',
+            '#btn-play-again'
+        ];
+        return selectors.map((selector) => Array.from(dialog.children).indexOf(dialog.querySelector(selector)));
+    });
+    expect(endingOrder).toEqual([4, 5, 6, 7, 8, 9]);
+
     // Verify Play Again button inside ending overlay
     const playAgainBtn = endingOverlay.locator('#btn-play-again');
     await expect(playAgainBtn).toBeVisible();
     await expect(playAgainBtn).toHaveText('다시 플레이');
 });
+
+for (const viewport of [
+    { width: 320, height: 640 },
+    { width: 640, height: 360 }
+]) {
+    test(`Ending Modal - ${viewport.width}x${viewport.height} reflow keeps image and replay reachable`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await page.goto('/');
+        await page.locator('#ending-overlay').evaluate((overlay) => {
+            overlay.style.display = 'flex';
+        });
+
+        const dialog = page.locator('.ending-dialog');
+        const image = page.locator('#ending-acquisition-image');
+        const playAgain = page.locator('#btn-play-again');
+        await expect(image).toBeVisible();
+
+        const geometry = await dialog.evaluate((element) => ({
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight
+        }));
+        expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+        expect(geometry.clientHeight).toBeLessThanOrEqual(viewport.height);
+
+        await playAgain.scrollIntoViewIfNeeded();
+        await expect(playAgain).toBeInViewport();
+        await expect(playAgain).toBeVisible();
+    });
+}

@@ -1,4 +1,4 @@
-import { createInitialState, reduceGameState } from './game-core.js';
+import { STAR_TARGET, createInitialState, reduceGameState } from './game-core.js';
 import { dialogueDecks, puzzles, upgrades } from './content.js';
 
 let state = createInitialState();
@@ -329,7 +329,7 @@ btnAcceptPenalty.addEventListener('click', () => {
 // Produce & Recover Main Action Handler
 btnProduce.addEventListener('click', () => {
     const wasActiveIntrusion = state.activeIntrusion;
-    if (state.productionUnits >= 200 && state.githubStars < 3000) {
+    if (state.productionUnits >= 200 && state.githubStars < STAR_TARGET) {
         state = reduceGameState(state, { type: 'RECOVER' });
     } else {
         state = reduceGameState(state, { type: 'PRODUCE' });
@@ -485,13 +485,13 @@ function renderGameState() {
         intrusionBanner.style.display = 'none';
 
         // 3. Produce vs Recover Button State Logic
-        if (state.productionUnits >= 200 && state.githubStars < 3000) {
+        if (state.productionUnits >= 200 && state.githubStars < STAR_TARGET) {
             btnProduce.disabled = false;
             btnProduce.textContent = '🔄 RECOVER (야근 복구 +150★)';
             btnProduce.setAttribute('aria-label', 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구');
             btnProduce.classList.remove('is-produce', 'is-complete', 'is-locked');
             btnProduce.classList.add('is-recover');
-        } else if (state.productionUnits >= 200 && state.githubStars >= 3000) {
+        } else if (state.productionUnits >= 200 && state.githubStars >= STAR_TARGET) {
             btnProduce.disabled = true;
             btnProduce.textContent = '🎉 EXIT 0 달성!';
             btnProduce.setAttribute('aria-label', 'EXIT 0 달성');
@@ -507,8 +507,11 @@ function renderGameState() {
     }
 
     // 4. Visual Stage Boundaries (0, 40, 80, 120, 160, 200)
-    if (state.productionUnits >= 200) {
+    if (state.productionUnits >= 200 && state.githubStars >= STAR_TARGET) {
         stageBadge.textContent = '5단계 · 마이애미 해변의 AGI 재벌 · EXIT 0';
+        shelterDisplay.textContent = '🐧🏖️🍹';
+    } else if (state.productionUnits >= 200) {
+        stageBadge.textContent = '5단계 · 복구 중';
         shelterDisplay.textContent = '🐧🏖️🍹';
     } else if (state.productionUnits >= 160) {
         stageBadge.textContent = '4단계 · 초거대 AI 데이터센터 CEO';

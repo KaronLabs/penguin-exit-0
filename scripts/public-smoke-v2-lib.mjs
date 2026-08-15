@@ -24,7 +24,7 @@ export const NEGATIVE_CONTROL_REGISTRY = Object.freeze([
     ['NC12_FAILED_REQUEST_INJECTED', 'errors.requestFailed'],
 ].map(([id, expectedInvariant]) => Object.freeze({ id, expectedInvariant })));
 
-const PRODUCT_PATHS = Object.freeze(['/', '/content.js', '/game-core.js', '/script.js', '/style.css']);
+const PRODUCT_PATHS = Object.freeze(['/', '/content.js', '/game-core.js', '/script.js', '/style.css', '/assets/dangerous-alliance-ssh.png', '/assets/ending-tuna-acquisition.png']);
 const RELEASE_ID = /^[0-9]{8}T[0-9]{6}Z-r14-public-smoke-v2$/;
 const CAMPAIGN_ID = /^[0-9]{8}T[0-9]{6}Z-r10-korean-release$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -473,7 +473,7 @@ function validateAcceptedManifest(manifest) {
     for (const label of expectedCaseLabels()) for (const stage of STAGES) expected.add(`screenshots/${expectedScreenshotName(label, stage)}`);
     for (const phase of ['pre', 'mid', 'post']) for (const suffix of ['command.json', 'stdout.bin', 'stderr.bin']) expected.add(`control-plane/${phase}.${suffix}`);
     expected.add('file-probes/initial-10.json'); expected.add('file-probes/final-alias-5.json');
-    for (const origin of ['initial-immutable', 'initial-alias', 'final-alias']) for (const token of ['root', 'content-js', 'game-core-js', 'script-js', 'style-css']) expected.add(`file-probes/bodies/${origin}-${token}.bin`);
+    for (const origin of ['initial-immutable', 'initial-alias', 'final-alias']) for (const token of ['root', 'content-js', 'game-core-js', 'script-js', 'style-css', 'assets-dangerous-alliance-ssh-png', 'assets-ending-tuna-acquisition-png']) expected.add(`file-probes/bodies/${origin}-${token}.bin`);
     const actual = manifest.files.map((entry) => entry.path).sort();
     if (canonicalJson(actual) !== canonicalJson([...expected].sort())) fail('manifest.acceptedFileSet');
 }
@@ -571,7 +571,7 @@ function validatePersistence(value) {
 }
 
 function validateActions(actions) {
-    if (!Array.isArray(actions) || actions.length !== 38) fail('actions.cardinality');
+    if (!Array.isArray(actions) || actions.length !== 78) fail('actions.cardinality');
     actions.forEach((action, index) => {
         exactKeys(action, ['seq', 'utc', 'monotonicMs', 'api', 'target', 'preStateSha256', 'postStateSha256', 'resultingUrl'], 'action');
         if (action.seq !== index + 1) fail('actions.sequence');
@@ -590,7 +590,7 @@ function validateActions(actions) {
         for (let click = 0; click < 5; click += 1) expected.push(['locator.click', '#btn-produce']);
         expected.push(['locator.click', block === 0 ? '#btn-accept-penalty' : '#btn-revert']);
     }
-    for (let click = 0; click < 7; click += 1) expected.push(['locator.click', '#btn-produce']);
+    for (let click = 0; click < 47; click += 1) expected.push(['locator.click', '#btn-produce']);
     expected.push(['keyboard.press', 'Tab'], ['keyboard.press', 'Shift+Tab']);
     actions.forEach((action, index) => {
         if (action.api !== expected[index][0] || action.target !== expected[index][1]) fail('actions.contract');
@@ -633,18 +633,18 @@ function validatePenalty(value) {
 }
 
 function validateRecoveries(value) {
-    if (!Array.isArray(value) || value.length !== 7) fail('recoveries.cardinality');
+    if (!Array.isArray(value) || value.length !== 47) fail('recoveries.cardinality');
     let stars = 2000;
     value.forEach((recovery, index) => {
         exactKeys(recovery, ['actionSeq', 'controlAccessibleName', 'before', 'after', 'starDelta'], 'recovery');
-        const delta = Math.min(150, 3000 - stars);
+        const delta = Math.min(150, 9000 - stars);
         if (recovery.controlAccessibleName !== 'RECOVER: 생산량 변화 없이 GitHub 스타 150 복구' || recovery.starDelta !== delta) fail('recover.starDelta');
         if (recovery.after?.units - recovery.before?.units !== 0) fail('recover.unitsDelta');
         integer(recovery.actionSeq, 'recover.actionSeq'); if (recovery.actionSeq !== 30 + index) fail('recover.actionSeq');
         exactState(recovery.before, 'recover.before', { units: 200, stars, incidentCost: 1000, activeIntrusion: null });
         stars += delta;
         exactState(recovery.after, 'recover.after', { units: 200, stars, incidentCost: 1000, activeIntrusion: null });
-        if (index === 6 && delta !== 100) fail('recover.delta');
+        if (index === 46 && delta !== 100) fail('recover.delta');
     });
 }
 
@@ -724,7 +724,7 @@ export function validateBinding(inputs) {
     const alias = validateUrl(inputs.aliasUrl, 'binding.aliasUrl');
     if (immutable.origin === alias.origin || alias.hostname !== `${project}.pages.dev` || !new RegExp(`^[a-f0-9]{8}\\.${project.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\.pages\\.dev$`).test(immutable.hostname) || !immutable.hostname.startsWith(`${inputs.deploymentId.slice(0, 8).toLowerCase()}.`)) fail('binding.origins');
     exactKeys(inputs.productFiles, PRODUCT_PATHS, 'binding.productFiles');
-    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css' };
+    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css', '/assets/dangerous-alliance-ssh.png': 'image/png', '/assets/ending-tuna-acquisition.png': 'image/png' };
     for (const product of PRODUCT_PATHS) {
         const value = inputs.productFiles[product];
         exactKeys(value, ['bytes', 'mime', 'sha256'], `binding.productFiles.${product}`);
@@ -906,7 +906,7 @@ export function validateOperationReceipt(receipt) {
     if (receipt.worker.finishedMonotonicMs - receipt.campaignVerifier.startedMonotonicMs >= 900000) fail('operationReceipt.deadline');
     exactKeys(receipt.accepted, ['realpath', 'manifestPath', 'manifestSha256', 'treeDigest', 'publishedUtc', 'eventsPath', 'eventsSha256', 'eventCount', 'finalEventSha256'], 'operationReceipt.accepted');
     canonicalPath(receipt.accepted.realpath, 'operationReceipt.accepted.realpath'); canonicalPath(receipt.accepted.manifestPath, 'operationReceipt.accepted.manifestPath'); utc(receipt.accepted.publishedUtc, 'operationReceipt.accepted.publishedUtc'); canonicalPath(receipt.accepted.eventsPath, 'operationReceipt.accepted.eventsPath');
-    if (receipt.accepted.eventCount !== 278) fail('operationReceipt.accepted.eventCount');
+    if (receipt.accepted.eventCount !== 518) fail('operationReceipt.accepted.eventCount');
     for (const key of ['manifestSha256', 'treeDigest', 'eventsSha256', 'finalEventSha256']) sha(receipt.accepted[key], `operationReceipt.accepted.${key}`);
     if (!Array.isArray(receipt.screenshotBindings) || receipt.screenshotBindings.length !== 18) fail('operationReceipt.screenshotBindings');
     receipt.screenshotBindings.forEach((binding) => {
@@ -923,7 +923,7 @@ export function validateOperationReceipt(receipt) {
         if (read.capturePath !== `control-plane/${phase}.command.json`) fail(`operationReceipt.cloudflareReads.${phase}.capturePath`);
     }
     exactKeys(receipt.fileProbes, ['initialPath', 'initialSha256', 'initialPassed', 'initialTotal', 'finalAliasPath', 'finalAliasSha256', 'finalAliasPassed', 'finalAliasTotal'], 'operationReceipt.fileProbes');
-    if (receipt.fileProbes.initialPassed !== 10 || receipt.fileProbes.initialTotal !== 10 || receipt.fileProbes.finalAliasPassed !== 5 || receipt.fileProbes.finalAliasTotal !== 5) fail('operationReceipt.fileProbes');
+    if (receipt.fileProbes.initialPassed !== 14 || receipt.fileProbes.initialTotal !== 14 || receipt.fileProbes.finalAliasPassed !== 7 || receipt.fileProbes.finalAliasTotal !== 7) fail('operationReceipt.fileProbes');
     relativeFile(receipt.fileProbes.initialPath, 'operationReceipt.fileProbes.initialPath'); relativeFile(receipt.fileProbes.finalAliasPath, 'operationReceipt.fileProbes.finalAliasPath');
     if (receipt.fileProbes.initialPath !== 'file-probes/initial-10.json' || receipt.fileProbes.finalAliasPath !== 'file-probes/final-alias-5.json') fail('operationReceipt.fileProbes.path');
     for (const key of ['initialSha256', 'finalAliasSha256']) sha(receipt.fileProbes[key], `operationReceipt.fileProbes.${key}`);
@@ -970,13 +970,13 @@ function validateDeploymentOperatorReceipt(config, deployment, recordBytes) {
 }
 
 function validateEvents(events, receipt) {
-    if (events.length !== 278) fail('events.cardinality');
+    if (events.length !== 518) fail('events.cardinality');
     const schedule = [{ type: 'operation-start', case: null }];
     for (const caseLabel of expectedCaseLabels()) {
         schedule.push({ type: 'case-start', case: caseLabel }, { type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel });
         for (let index = 0; index < 3; index += 1) schedule.push({ type: 'trusted-input', case: caseLabel });
         schedule.push({ type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel });
-        for (let index = 3; index < 38; index += 1) schedule.push({ type: 'trusted-input', case: caseLabel });
+        for (let index = 3; index < 78; index += 1) schedule.push({ type: 'trusted-input', case: caseLabel });
         schedule.push({ type: 'screenshot-oracle', case: caseLabel }, { type: 'screenshot-written', case: caseLabel }, { type: 'case-finish', case: caseLabel });
     }
     schedule.push({ type: 'operation-finish', case: null });
@@ -1008,13 +1008,13 @@ function validateEvents(events, receipt) {
             else if (event.type === 'trusted-input') { exactKeys(event.payload, ['actionSeq', 'api', 'target', 'preStateSha256', 'postStateSha256', 'resultingUrl'], 'events.trustedInput.payload'); count.actionSeq++; if (event.payload.actionSeq !== count.actionSeq) fail('events.actionSequence'); string(event.payload.api, 'events.trustedInput.api'); string(event.payload.target, 'events.trustedInput.target'); sha(event.payload.preStateSha256, 'events.trustedInput.preStateSha256'); sha(event.payload.postStateSha256, 'events.trustedInput.postStateSha256'); string(event.payload.resultingUrl, 'events.trustedInput.resultingUrl'); trusted.get(event.case).push(event); count.inputs++; }
             else if (event.type === 'screenshot-oracle') { exactKeys(event.payload, ['stage', 'oracleSha256'], 'events.screenshotOracle.payload'); if (!STAGES.includes(event.payload.stage)) fail('events.screenshotOracle.stage'); sha(event.payload.oracleSha256, 'events.screenshotOracle.oracleSha256'); count.stages.push(`oracle:${event.payload.stage}`); eventMap.set(`${event.case}\0oracle\0${event.payload.stage}`, event); count.oracle++; }
             else if (event.type === 'screenshot-written') { exactKeys(event.payload, ['stage', 'path', 'pngSha256', 'oracleSha256'], 'events.screenshotWritten.payload'); if (!STAGES.includes(event.payload.stage)) fail('events.screenshotWritten.stage'); relativeFile(event.payload.path, 'events.screenshotWritten.path'); sha(event.payload.pngSha256, 'events.screenshotWritten.pngSha256'); sha(event.payload.oracleSha256, 'events.screenshotWritten.oracleSha256'); count.stages.push(`written:${event.payload.stage}`); eventMap.set(`${event.case}\0written\0${event.payload.stage}`, event); count.screenshots++; }
-            else if (event.type === 'case-finish') { exactKeys(event.payload, ['actionCount', 'finalUrl'], 'events.caseFinish.payload'); if (event.payload.actionCount !== 38) fail('events.caseFinish.payload'); string(event.payload.finalUrl, 'events.caseFinish.finalUrl'); boundaries.get(event.case).finish = event; count.finish++; }
+            else if (event.type === 'case-finish') { exactKeys(event.payload, ['actionCount', 'finalUrl'], 'events.caseFinish.payload'); if (event.payload.actionCount !== 78) fail('events.caseFinish.payload'); string(event.payload.finalUrl, 'events.caseFinish.finalUrl'); boundaries.get(event.case).finish = event; count.finish++; }
             else fail('events.type');
         }
         previous = event.eventSha256;
     });
     const expectedStages = ['oracle:initial', 'written:initial', 'oracle:progress', 'written:progress', 'oracle:ending', 'written:ending'];
-    for (const count of perCase.values()) if (count.start !== 1 || count.finish !== 1 || count.inputs !== 38 || count.oracle !== 3 || count.screenshots !== 3 || canonicalJson(count.stages) !== canonicalJson(expectedStages)) fail('events.schedule');
+    for (const count of perCase.values()) if (count.start !== 1 || count.finish !== 1 || count.inputs !== 78 || count.oracle !== 3 || count.screenshots !== 3 || canonicalJson(count.stages) !== canonicalJson(expectedStages)) fail('events.schedule');
     return { finalEventSha256: previous, eventMap, trusted, boundaries };
 }
 
@@ -1038,7 +1038,7 @@ function validateProductFiles(value, invariant) {
 
 function expectedProductsFromSource(sourceRoot) {
     const result = {};
-    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css' };
+    const mime = { '/': 'text/html', '/content.js': 'application/javascript', '/game-core.js': 'application/javascript', '/script.js': 'application/javascript', '/style.css': 'text/css', '/assets/dangerous-alliance-ssh.png': 'image/png', '/assets/ending-tuna-acquisition.png': 'image/png' };
     for (const publicPath of PRODUCT_PATHS) {
         const relative = publicPath === '/' ? 'index.html' : publicPath.slice(1);
         const absolute = contained(sourceRoot, path.join(sourceRoot, relative), `campaign.source.${relative}`);
@@ -1184,7 +1184,7 @@ function validateProbe(root, relative, phase, expectedOrigins, campaign, deploym
         string(result.mime, `fileGate.${invariantPhase}.mime`);
         if (!mediaType || mediaType !== campaign.productFiles[publicPath].mime || result.mime !== campaign.productFiles[publicPath].mime) fail(`fileGate.${invariantPhase}.mime`);
         nonNegative(result.bytes, `fileGate.${invariantPhase}.bytes`); sha(result.sha256, `fileGate.${invariantPhase}.sha256`); utc(result.startedUtc, `fileGate.${invariantPhase}.startedUtc`); utc(result.finishedUtc, `fileGate.${invariantPhase}.finishedUtc`); if (Date.parse(result.finishedUtc) < Date.parse(result.startedUtc)) fail(`fileGate.${invariantPhase}.time`);
-        const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('.', '-');
+        const token = publicPath === '/' ? 'root' : publicPath.slice(1).replaceAll('/', '-').replaceAll('.', '-');
         const expectedPrefix = phase === 'initial' ? `initial-${originKind}` : 'final-alias';
         if (result.bodyPath !== `file-probes/bodies/${expectedPrefix}-${token}.bin`) fail(`fileGate.${invariantPhase}.bodyPath`);
         const body = relativeAcceptedPath(root, result.bodyPath, `fileGate.${invariantPhase}.bodyPath`);
@@ -1224,7 +1224,7 @@ export function validateAuditReceipt(receipt, expected) {
     if (receipt.schemaVersion !== 1 || receipt.status !== 'VERIFIED' || receipt.passedCases !== 6 || receipt.totalCases !== 6 || receipt.controlPlaneReads !== 3) fail('auditReceipt.summary');
     if (!RELEASE_ID.test(string(receipt.releaseId, 'auditReceipt.releaseId'))) fail('auditReceipt.releaseId'); utc(receipt.createdUtc, 'auditReceipt.createdUtc'); canonicalPath(receipt.auditedTargetRealpath, 'auditReceipt.auditedTargetRealpath'); string(receipt.deploymentId, 'auditReceipt.deploymentId');
     exactKeys(receipt.initialFileGate, ['passed', 'total'], 'auditReceipt.initialFileGate'); exactKeys(receipt.finalAliasGate, ['passed', 'total'], 'auditReceipt.finalAliasGate');
-    if (receipt.initialFileGate.passed !== 10 || receipt.initialFileGate.total !== 10 || receipt.finalAliasGate.passed !== 5 || receipt.finalAliasGate.total !== 5) fail('auditReceipt.gates');
+    if (receipt.initialFileGate.passed !== 14 || receipt.initialFileGate.total !== 14 || receipt.finalAliasGate.passed !== 7 || receipt.finalAliasGate.total !== 7) fail('auditReceipt.gates');
     for (const key of ['configSha256', 'operationReceiptSha256', 'acceptedManifestSha256', 'eventsSha256', 'finalEventSha256']) sha(receipt[key], `auditReceipt.${key}`);
     if (!Array.isArray(receipt.screenshotBindings) || receipt.screenshotBindings.length !== 18) fail('auditReceipt.screenshotBindings');
     receipt.screenshotBindings.forEach((binding) => {
@@ -1512,7 +1512,7 @@ export function auditAcceptedRun(options) {
         schemaVersion: 1, releaseId: config.releaseId, status: 'VERIFIED', createdUtc: new Date().toISOString(), auditedTargetRealpath: root,
         configSha256: sha256File(resolved.configPath), operationReceiptSha256: operationBytesHash, acceptedManifestSha256: manifestHash, eventsSha256: eventsHash,
         finalEventSha256: eventValidation.finalEventSha256, deploymentId: accepted.deploymentId, passedCases: 6, totalCases: 6, controlPlaneReads: 3,
-        initialFileGate: { passed: 10, total: 10 }, finalAliasGate: { passed: 5, total: 5 }, screenshotBindings,
+        initialFileGate: { passed: 14, total: 14 }, finalAliasGate: { passed: 7, total: 7 }, screenshotBindings,
     };
     validateAuditReceipt(receipt);
     return receipt;

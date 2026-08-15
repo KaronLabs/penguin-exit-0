@@ -16,7 +16,7 @@ test('AI Intrusion Guards - Single Ending Execution Lock', () => {
     let state = createInitialState();
     state.endingTriggered = true;
     state.productionUnits = 200;
-    state.githubStars = 3000;
+    state.githubStars = 9000;
 
     // Mutating actions after ending triggered must return exact same state object (lock)
     const state2 = reduceGameState(state, { type: 'PRODUCE' });

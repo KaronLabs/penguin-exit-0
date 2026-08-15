@@ -5,12 +5,12 @@ import { createInitialState, reduceGameState } from '../game-core.js';
 test('Remediation P0 - Defer ending on simultaneous intrusion at 200 units', () => {
     let state = createInitialState();
     state.productionUnits = 190;
-    state.githubStars = 2850;
+    state.githubStars = 8850;
     state.threatMeter = 90;
 
     state = reduceGameState(state, { type: 'PRODUCE' });
     assert.equal(state.productionUnits, 200);
-    assert.equal(state.githubStars, 3000);
+    assert.equal(state.githubStars, 9000);
     assert.notEqual(state.activeIntrusion, null);
     assert.equal(state.endingTriggered, false);
 
