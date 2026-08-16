@@ -233,9 +233,11 @@ function queuePuzzleResult(puzzle, choice, repeated, triggerButton) {
     if (!repeated) pendingPuzzleResultSlot = resultSlot;
     else if (!preservesPendingResult) pendingPuzzleResultSlot = null;
     scheduleTerminal(() => {
-        if (repeated) appendDialogue('repeat');
+        if (repeated) {
+            if (!choice.isFairDiagnostic) appendDialogue('repeat');
+        }
         else {
-            appendDialogue('puzzle');
+            if (!choice.isFairDiagnostic) appendDialogue('puzzle');
             if (activePuzzleId !== scheduledPuzzleId || scheduledResultId !== latestPuzzleResultId) return;
             pendingPuzzleResultSlot = null;
             if (choice.resultPresentation) openDangerousAlliance(choice.resultPresentation, triggerButton);

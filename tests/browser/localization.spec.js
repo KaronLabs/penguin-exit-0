@@ -15,14 +15,14 @@ const expectedIntrusions = [
     { title: '💼 CEO 금요일 17:59 배포 지시!', body: 'CEO가 즉시 프로덕션 배포를 요구합니다!' }
 ];
 const firstPuzzleChoices = [
-    { tabId: 'wifi', optionIndex: 0, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
-    { tabId: 'wifi', optionIndex: 1, command: 'top / ip link', output: 'eth0: state DOWN\n링크 상태와 라우팅을 함께 확인했습니다. 범인은 케이블입니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
-    { tabId: 'wifi', optionIndex: 2, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npc: null },
-    { tabId: 'cpu', optionIndex: 0, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
-    { tabId: 'cpu', optionIndex: 1, command: 'kill -9 1337', output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
-    { tabId: 'cpu', optionIndex: 2, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0 / 3', debt: '20%', npc: null },
-    { tabId: 'ssh', optionIndex: 0, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
-    { tabId: 'ssh', optionIndex: 1, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: null }
+    { tabId: 'wifi', optionIndex: 0, fair: true, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 1, fair: true, command: 'top / ip link', output: 'eth0: state DOWN\n링크 상태와 라우팅을 함께 확인했습니다. 범인은 케이블입니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 2, fair: false, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npc: null },
+    { tabId: 'cpu', optionIndex: 0, fair: true, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
+    { tabId: 'cpu', optionIndex: 1, fair: true, command: 'kill -9 1337', output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
+    { tabId: 'cpu', optionIndex: 2, fair: false, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0 / 3', debt: '20%', npc: null },
+    { tabId: 'ssh', optionIndex: 0, fair: true, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
+    { tabId: 'ssh', optionIndex: 1, fair: false, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: null }
 ];
 
 async function puzzleRuntimeSnapshot(page) {
@@ -240,7 +240,7 @@ test('초기 화면은 한국어 문서 언어와 랜드마크를 제공한다',
     expect.soft(terminalViewport.lastText.startsWith('아콘 🐧 // ')).toBe(true);
 });
 
-test('최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 남긴다', async ({ page }) => {
+test('최초 퍼즐 선택은 오답에만 독설을 남긴다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
 
     for (const fixture of firstPuzzleChoices) {
@@ -255,18 +255,18 @@ test('최초 퍼즐 선택은 명령 결과 독설과 경제 결과를 함께 �
             terminalLines: [
                 { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
                 { kind: 'system', context: null, text: fixture.output },
-                expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+                ...fixture.fair ? [] : [expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })]
             ],
             tuna: fixture.tuna,
             debt: fixture.debt,
-            quoteText: '아콘 독설 수집 1/100',
-            quoteCount: 1,
+            quoteText: `아콘 독설 수집 ${fixture.fair ? 0 : 1}/100`,
+            quoteCount: fixture.fair ? 0 : 1,
             npc: fixture.npc
         });
     }
 });
 
-test('반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 않고 repeat 독설을 남긴다', async ({ page }) => {
+test('반복 퍼즐 선택도 오답에만 독설을 남기고 경제를 다시 적용하지 않는다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
 
     for (const fixture of firstPuzzleChoices) {
@@ -285,16 +285,16 @@ test('반복 퍼즐 선택은 모든 경로에서 경제를 다시 적용하지 
         const repeatSnapshot = await puzzleRuntimeSnapshot(page);
 
         expect.soft({
-            tail: repeatSnapshot.terminalLines.slice(-3),
+            tail: repeatSnapshot.terminalLines.slice(fixture.fair ? -2 : -3),
             quoteDelta: repeatSnapshot.quoteCount - firstSnapshot.quoteCount,
             economy: [firstSnapshot.tuna, firstSnapshot.debt, repeatSnapshot.tuna, repeatSnapshot.debt]
         }, fixture.command).toEqual({
             tail: [
                 { kind: 'command', context: null, text: `archon@stone-igloo:~$ ${fixture.command}` },
                 { kind: 'system', context: null, text: fixture.output },
-                expect.objectContaining({ kind: 'archon', context: 'repeat', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+                ...fixture.fair ? [] : [expect.objectContaining({ kind: 'archon', context: 'repeat', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })]
             ],
-            quoteDelta: 1,
+            quoteDelta: fixture.fair ? 0 : 1,
             economy: [fixture.tuna, fixture.debt, fixture.tuna, fixture.debt]
         });
     }
@@ -373,9 +373,9 @@ test('탭 전환은 이전 탭의 NPC 조우만 새 탭에서 차단한다', asy
     const activeTitle = await page.evaluate(() => document.querySelector('#puzzle-title').textContent);
     expect({ activeTitle, npc: switchedSnapshot.npc }).toEqual({ activeTitle: '장애 #2: 서버 #4 고CPU 경보', npc: null });
     expect(switchedSnapshot.terminalLines.slice(-1)).toEqual([
-        expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
+        { kind: 'system', context: null, text: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.' }
     ]);
-    expect(switchedSnapshot.quoteCount).toBe(2);
+    expect(switchedSnapshot.quoteCount).toBe(0);
 });
 
 test('SSH 결과는 정상 NPC와 위험 동맹 팝업을 한 번만 상호 배타적으로 표시한다', async ({ page }) => {
@@ -491,16 +491,12 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
     await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
     await option.click();
-    await expect(page.locator('#terminal-output')).toContainText('에러 로그 안 읽냐? 네 눈은 장식이냐, 아니면 CSS냐?');
+    await expect(page.locator('#terminal-output [data-terminal-kind="archon"]')).toHaveCount(0);
     await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/100');
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('penguin-exit-0:quote-discovery:v2')))).toMatchObject({
-        version: 2,
-        cursors: { puzzle: 1, repeat: 1 },
-        discovered: ['puzzle:0', 'repeat:0']
-    });
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/100');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('penguin-exit-0:quote-discovery:v2'))).toBeNull();
     await page.reload();
-    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 2/100');
+    await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/100');
     await page.locator('[data-puz="wifi"]').click();
     await page.locator('.puzzle-option').first().click();
     await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
@@ -515,7 +511,7 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await expect(page.locator('#val-debt')).toHaveText('15%');
     await debtOption.click();
     await expect(page.locator('#val-debt')).toHaveText('15%');
-    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-dialogue-index', '1');
+    await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-dialogue-index', '0');
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveAttribute('data-terminal-kind', 'archon');
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveText(/^아콘 🐧 \/\/ /);
     for (const [caseName, invalidStorage] of [

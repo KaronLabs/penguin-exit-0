@@ -185,8 +185,8 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     await page.evaluate(() => window.__resetGameForTest());
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('[data-puz="wifi"]').click();
-    await page.locator('.puzzle-option').first().click();
-    for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').first().click();
+    await page.locator('.puzzle-option').nth(2).click();
+    for (let click = 0; click < 30; click += 1) await page.locator('.puzzle-option').nth(2).click();
     await expect(page.locator('#terminal-output [data-dialogue-context="repeat"]')).toHaveCount(27);
     if (process.env.ACCESSIBILITY_MUTATION === 'npc-overlap-320') {
         await page.addStyleTag({ content: '#npc-card { transform: translateY(-280px) !important; }' });
