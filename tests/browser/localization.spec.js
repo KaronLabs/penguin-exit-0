@@ -300,6 +300,62 @@ test('반복 퍼즐 선택도 오답에만 독설을 남기고 경제를 다시 
     }
 });
 
+test('같은 장애의 다른 선택지는 최초 경제 결과를 바꾸지 않고 연출은 유지한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const cases = [
+        { tabId: 'wifi', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'npc' },
+        { tabId: 'wifi', choices: [1, 0], tuna: '2 / 3', debt: '0%', presentation: 'npc' },
+        { tabId: 'cpu', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'npc' },
+        { tabId: 'cpu', choices: [1, 0], tuna: '2 / 3', debt: '0%', presentation: 'npc' },
+        { tabId: 'ssh', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'alliance' },
+        { tabId: 'ssh', choices: [1, 0], tuna: '2 / 3', debt: '25%', presentation: 'npc' }
+    ];
+
+    for (const fixture of cases) {
+        await page.goto('/');
+        await page.locator(`[data-puz="${fixture.tabId}"]`).click();
+        await page.locator('.puzzle-option').nth(fixture.choices[0]).click();
+        if (await page.locator('#dangerous-alliance-overlay').isVisible()) {
+            await page.locator('#btn-accept-alliance-result').click();
+        }
+        await page.locator('.puzzle-option').nth(fixture.choices[1]).click();
+
+        await expect.soft(page.locator('#val-tuna'), `${fixture.tabId} ${fixture.choices.join('→')}`).toHaveText(fixture.tuna);
+        await expect.soft(page.locator('#val-debt'), `${fixture.tabId} ${fixture.choices.join('→')}`).toHaveText(fixture.debt);
+        if (fixture.presentation === 'alliance') {
+            await expect.soft(page.locator('#dangerous-alliance-overlay')).toBeVisible();
+            await expect.soft(page.locator('#npc-card')).toBeHidden();
+        } else {
+            await expect.soft(page.locator('#npc-card')).toBeVisible();
+            await expect.soft(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+        }
+    }
+});
+
+test('오답이 최초 선택이면 같은 장애의 후속 정답도 경제 결과를 바꾸지 않는다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('.puzzle-option').nth(0).click();
+
+    await expect(page.locator('#val-tuna')).toHaveText('0 / 3');
+    await expect(page.locator('#val-debt')).toHaveText('15%');
+    await expect(page.locator('#npc-card')).toBeVisible();
+});
+
+test('서로 다른 장애의 최초 선택은 각각 경제 결과를 적용한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+
+    for (const [tabId, tuna] of [['wifi', '1 / 3'], ['cpu', '2 / 3'], ['ssh', '3 / 3']]) {
+        await page.locator(`[data-puz="${tabId}"]`).click();
+        await page.locator('.puzzle-option').nth(0).click();
+        await expect(page.locator('#val-tuna')).toHaveText(tuna);
+    }
+    await expect(page.locator('#val-debt')).toHaveText('0%');
+});
+
 test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/');

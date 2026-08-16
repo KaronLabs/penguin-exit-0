@@ -15,6 +15,7 @@ const dialogueContexts = Object.keys(dialogueDecks);
 const totalDialogueCount = Object.values(dialogueDecks)
     .reduce((total, deck) => total + deck.length, 0);
 const resolvedChoices = new Set();
+const resolvedPuzzleEconomies = new Set();
 const pendingTerminalTimers = new Set();
 let quoteDiscovery = loadQuoteDiscovery();
 
@@ -24,6 +25,7 @@ window.__resetGameForTest = function() {
     state = createInitialState();
     endingRendered = false;
     resolvedChoices.clear();
+    resolvedPuzzleEconomies.clear();
     latestPuzzleResultId += 1;
     pendingPuzzleResultSlot = null;
     clearTerminalTimers();
@@ -393,8 +395,9 @@ function renderPuzzles() {
             npcCard.hidden = true;
             const choiceSlot = `${currentPuzzle.id}:${choice.key}`;
             const repeated = resolvedChoices.has(choiceSlot);
-            if (!repeated) {
-                resolvedChoices.add(choiceSlot);
+            if (!repeated) resolvedChoices.add(choiceSlot);
+            if (!resolvedPuzzleEconomies.has(currentPuzzle.id)) {
+                resolvedPuzzleEconomies.add(currentPuzzle.id);
                 if (choice.rewardTuna > 0) {
                     state = reduceGameState(state, { type: 'ADD_TUNA', amount: choice.rewardTuna });
                 }
