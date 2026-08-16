@@ -30,8 +30,12 @@ test('Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH', () => 
         isFairDiagnostic: false,
         rewardTuna: 0,
         techDebtPercent: 20,
+        forfeitsReward: true,
         output: 'PID 검증 없이 kill -9 1337을 실행했습니다.\nCPU는 내려갔지만 변경 관리와 감사 절차가 사망했습니다.'
     });
+
+    const rebootChoice = cpuPuzzle.choices.find(c => c.key === 'reboot');
+    assert.equal(rebootChoice.forfeitsReward, true);
 
     const authLogChoice = sshPuzzle.choices.find(c => c.key === 'auth_log');
     assert.equal(authLogChoice.isFairDiagnostic, true);

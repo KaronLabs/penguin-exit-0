@@ -300,46 +300,62 @@ test('반복 퍼즐 선택도 오답에만 독설을 남기고 경제를 다시 
     }
 });
 
-test('같은 장애의 다른 선택지는 최초 경제 결과를 바꾸지 않고 연출은 유지한다', async ({ page }) => {
+test('Wi-Fi 오답은 후속 정답 보상을 소모하지 않고 부채는 선택지별 한 번만 적용한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const cases = [
-        { tabId: 'wifi', choices: [0, 1], tuna: '1', debt: '0%', presentation: 'npc' },
-        { tabId: 'wifi', choices: [1, 0], tuna: '2', debt: '0%', presentation: 'npc' },
-        { tabId: 'ssh', choices: [0, 1], tuna: '1', debt: '0%', presentation: 'alliance' },
-        { tabId: 'ssh', choices: [1, 0], tuna: '3', debt: '25%', presentation: 'npc' }
+        { choices: [2, 0], tuna: '1', debt: '15%' },
+        { choices: [2, 1], tuna: '2', debt: '15%' },
+        { choices: [0, 2], tuna: '1', debt: '15%' },
+        { choices: [1, 2], tuna: '2', debt: '15%' },
+        { choices: [2, 2], tuna: '0', debt: '15%' },
+        { choices: [0, 1], tuna: '1', debt: '0%' },
+        { choices: [1, 0], tuna: '2', debt: '0%' }
     ];
 
     for (const fixture of cases) {
         await page.goto('/');
-        await page.locator(`[data-puz="${fixture.tabId}"]`).click();
+        await page.locator('[data-puz="wifi"]').click();
+        await page.locator('.puzzle-option').nth(fixture.choices[0]).click();
+        await page.locator('.puzzle-option').nth(fixture.choices[1]).click();
+
+        await expect.soft(page.locator('#val-tuna'), `wifi ${fixture.choices.join('→')}`).toHaveText(fixture.tuna);
+        await expect.soft(page.locator('#val-debt'), `wifi ${fixture.choices.join('→')}`).toHaveText(fixture.debt);
+    }
+});
+
+test('SSH는 첫 보상만 지급하고 위험 동맹 부채와 팝업에는 실제 증감량을 표시한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const cases = [
+        { choices: [0, 1], tuna: '1', debt: '25%', summary: '참치 +0 · 기술 부채 +25%', npc: false },
+        { choices: [1, 0], tuna: '3', debt: '25%', summary: null, npc: true },
+        { choices: [1, 1], tuna: '3', debt: '25%', summary: null, npc: false },
+        { choices: [0, 0], tuna: '1', debt: '0%', summary: null, npc: false }
+    ];
+
+    for (const fixture of cases) {
+        await page.goto('/');
+        await page.locator('[data-puz="ssh"]').click();
         await page.locator('.puzzle-option').nth(fixture.choices[0]).click();
         if (await page.locator('#dangerous-alliance-overlay').isVisible()) {
             await page.locator('#btn-accept-alliance-result').click();
         }
         await page.locator('.puzzle-option').nth(fixture.choices[1]).click();
 
-        await expect.soft(page.locator('#val-tuna'), `${fixture.tabId} ${fixture.choices.join('→')}`).toHaveText(fixture.tuna);
-        await expect.soft(page.locator('#val-debt'), `${fixture.tabId} ${fixture.choices.join('→')}`).toHaveText(fixture.debt);
-        if (fixture.presentation === 'alliance') {
-            await expect.soft(page.locator('#dangerous-alliance-overlay')).toBeVisible();
-            await expect.soft(page.locator('#npc-card')).toBeHidden();
+        await expect.soft(page.locator('#val-tuna'), `ssh ${fixture.choices.join('→')}`).toHaveText(fixture.tuna);
+        await expect.soft(page.locator('#val-debt'), `ssh ${fixture.choices.join('→')}`).toHaveText(fixture.debt);
+        if (fixture.summary) {
+            await expect.soft(page.locator('#dangerous-alliance-overlay'), `ssh ${fixture.choices.join('→')} alliance`).toBeVisible();
+            await expect.soft(page.locator('#dangerous-alliance-summary'), `ssh ${fixture.choices.join('→')} summary`).toHaveText(fixture.summary);
+            await expect.soft(page.locator('#npc-card'), `ssh ${fixture.choices.join('→')} npc`).toBeHidden();
         } else {
-            await expect.soft(page.locator('#npc-card')).toBeVisible();
-            await expect.soft(page.locator('#dangerous-alliance-overlay')).toBeHidden();
+            await expect.soft(page.locator('#dangerous-alliance-overlay'), `ssh ${fixture.choices.join('→')} alliance`).toBeHidden();
+            if (fixture.npc) {
+                await expect.soft(page.locator('#npc-card'), `ssh ${fixture.choices.join('→')} npc`).toBeVisible();
+            } else {
+                await expect.soft(page.locator('#npc-card'), `ssh ${fixture.choices.join('→')} npc`).toBeHidden();
+            }
         }
     }
-});
-
-test('오답이 최초 선택이면 같은 장애의 후속 정답도 경제 결과를 바꾸지 않는다', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
-    await page.locator('[data-puz="wifi"]').click();
-    await page.locator('.puzzle-option').nth(2).click();
-    await page.locator('.puzzle-option').nth(0).click();
-
-    await expect(page.locator('#val-tuna')).toHaveText('0');
-    await expect(page.locator('#val-debt')).toHaveText('15%');
-    await expect(page.locator('#npc-card')).toBeVisible();
 });
 
 test('서로 다른 장애의 해결 결과는 각각 경제를 적용한다', async ({ page }) => {
@@ -406,6 +422,57 @@ test('CPU 조사 후 reboot를 선택하면 이후 정상 종료에도 보상을
     await expect(page.locator('#val-tuna')).toHaveText('0');
     await expect(page.locator('#val-debt')).toHaveText('20%');
     await expect(page.locator('#npc-card')).toContainText('Walrus DBA');
+});
+
+test('CPU 정상 보상 후 reboot는 참치를 회수하지 않고 부채만 한 번 적용한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="cpu"]').click();
+
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('.puzzle-option').nth(2).click();
+
+    await expect(page.locator('#val-tuna')).toHaveText('2');
+    await expect(page.locator('#val-debt')).toHaveText('20%');
+});
+
+test('Wi-Fi와 CPU의 빠른 반복 클릭은 보상과 부채를 중복 적용하지 않는다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(2).dblclick();
+    await page.locator('.puzzle-option').nth(0).dblclick();
+    await expect(page.locator('#val-tuna')).toHaveText('1');
+    await expect(page.locator('#val-debt')).toHaveText('15%');
+
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').nth(0).dblclick();
+    await page.locator('.puzzle-option').nth(1).dblclick();
+    await expect(page.locator('#val-tuna')).toHaveText('3');
+    await expect(page.locator('#val-debt')).toHaveText('15%');
+});
+
+test('게임 초기화는 Wi-Fi와 SSH의 보상 및 부채 결산 상태를 제거한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('3');
+    await expect(page.locator('#val-debt')).toHaveText('40%');
+
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await expect(page.locator('#val-tuna')).toHaveText('2');
+    await expect(page.locator('#val-debt')).toHaveText('0%');
 });
 
 test('CPU 진단은 탭 이동 동안 유지되고 게임 초기화에서 제거된다', async ({ page }) => {

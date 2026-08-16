@@ -53,7 +53,6 @@ export const puzzles = [
                 rewardTuna: 0,
                 techDebtPercent: 0,
                 showEncounter: false,
-                locksEconomy: false,
                 nextStage: 'diagnosed',
                 output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.'
             },
@@ -69,6 +68,7 @@ export const puzzles = [
                     isFairDiagnostic: false,
                     rewardTuna: 0,
                     techDebtPercent: 20,
+                    forfeitsReward: true,
                     output: 'PID 검증 없이 kill -9 1337을 실행했습니다.\nCPU는 내려갔지만 변경 관리와 감사 절차가 사망했습니다.'
                 },
                 output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.'
@@ -80,6 +80,7 @@ export const puzzles = [
                 isFairDiagnostic: false,
                 rewardTuna: 0,
                 techDebtPercent: 20,
+                forfeitsReward: true,
                 output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.'
             }
         ]

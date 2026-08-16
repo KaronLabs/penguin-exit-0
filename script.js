@@ -15,7 +15,8 @@ const dialogueContexts = Object.keys(dialogueDecks);
 const totalDialogueCount = Object.values(dialogueDecks)
     .reduce((total, deck) => total + deck.length, 0);
 const resolvedChoices = new Set();
-const resolvedPuzzleEconomies = new Set();
+const settledEconomySlots = new Set();
+const puzzleRewardStates = new Map();
 const puzzleProgress = new Map();
 const pendingTerminalTimers = new Set();
 let quoteDiscovery = loadQuoteDiscovery();
@@ -26,7 +27,8 @@ window.__resetGameForTest = function() {
     state = createInitialState();
     endingRendered = false;
     resolvedChoices.clear();
-    resolvedPuzzleEconomies.clear();
+    settledEconomySlots.clear();
+    puzzleRewardStates.clear();
     puzzleProgress.clear();
     latestPuzzleResultId += 1;
     pendingPuzzleResultSlot = null;
@@ -404,16 +406,34 @@ function renderPuzzles() {
             const repeated = resolvedChoices.has(choiceSlot);
             if (!repeated) resolvedChoices.add(choiceSlot);
             if (choice.nextStage) puzzleProgress.set(currentPuzzle.id, choice.nextStage);
-            if (effectiveChoice.locksEconomy !== false && !resolvedPuzzleEconomies.has(currentPuzzle.id)) {
-                resolvedPuzzleEconomies.add(currentPuzzle.id);
-                if (effectiveChoice.rewardTuna > 0) {
-                    state = reduceGameState(state, { type: 'ADD_TUNA', amount: effectiveChoice.rewardTuna });
-                }
+            let tunaAdded = 0;
+            let debtAdded = 0;
+            if (!settledEconomySlots.has(choiceSlot)) {
+                settledEconomySlots.add(choiceSlot);
+                const rewardState = puzzleRewardStates.get(currentPuzzle.id) || 'available';
                 if (effectiveChoice.techDebtPercent > 0) {
                     state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: effectiveChoice.techDebtPercent });
+                    debtAdded = effectiveChoice.techDebtPercent;
+                }
+                if (effectiveChoice.forfeitsReward && rewardState === 'available') {
+                    puzzleRewardStates.set(currentPuzzle.id, 'forfeited');
+                }
+                if (effectiveChoice.rewardTuna > 0 && rewardState === 'available' && !effectiveChoice.forfeitsReward) {
+                    state = reduceGameState(state, { type: 'ADD_TUNA', amount: effectiveChoice.rewardTuna });
+                    puzzleRewardStates.set(currentPuzzle.id, 'awarded');
+                    tunaAdded = effectiveChoice.rewardTuna;
                 }
             }
-            queuePuzzleResult(currentPuzzle, effectiveChoice, repeated, btn, isPremature ? 'premature' : 'default');
+            const presentedChoice = effectiveChoice.resultPresentation
+                ? {
+                    ...effectiveChoice,
+                    resultPresentation: {
+                        ...effectiveChoice.resultPresentation,
+                        summary: `참치 +${tunaAdded} · 기술 부채 +${debtAdded}%`
+                    }
+                }
+                : effectiveChoice;
+            queuePuzzleResult(currentPuzzle, presentedChoice, repeated, btn, isPremature ? 'premature' : 'default');
             renderGameState();
         });
 
