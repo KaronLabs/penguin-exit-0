@@ -40,6 +40,12 @@ test('Remediation P1 - Reject negative tuna amounts', () => {
     assert.equal(state.tunaCans, 0);
 });
 
+test('Tuna inventory has no upper cap', () => {
+    let state = createInitialState();
+    state = reduceGameState(state, { type: 'ADD_TUNA', amount: 100 });
+    assert.equal(state.tunaCans, 100);
+});
+
 test('Remediation P1 - Reject forged upgrade payloads', () => {
     let state = createInitialState();
     state.githubStars = 0;

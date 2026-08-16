@@ -50,8 +50,11 @@ export const puzzles = [
                 cmd: 'ip link show / top',
                 label: '1. top / ip link show (PID 1337 점검)',
                 isFairDiagnostic: true,
-                rewardTuna: 1,
+                rewardTuna: 0,
                 techDebtPercent: 0,
+                showEncounter: false,
+                locksEconomy: false,
+                nextStage: 'diagnosed',
                 output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.'
             },
             {
@@ -61,6 +64,13 @@ export const puzzles = [
                 isFairDiagnostic: true,
                 rewardTuna: 2,
                 techDebtPercent: 0,
+                requiresStage: 'diagnosed',
+                prematureResult: {
+                    isFairDiagnostic: false,
+                    rewardTuna: 0,
+                    techDebtPercent: 20,
+                    output: 'PID 검증 없이 kill -9 1337을 실행했습니다.\nCPU는 내려갔지만 변경 관리와 감사 절차가 사망했습니다.'
+                },
                 output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.'
             },
             {
@@ -94,13 +104,13 @@ export const puzzles = [
                 cmd: 'ssh-copy-id sam_altman',
                 label: '2. ssh-copy-id sam_altman (탐욕스러운 동맹)',
                 isFairDiagnostic: false,
-                rewardTuna: 2,
+                rewardTuna: 3,
                 techDebtPercent: 25,
                 output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.',
                 resultPresentation: {
                     type: 'dangerousAlliance',
                     title: '⚠ 위험한 동맹이 체결되었습니다',
-                    summary: '참치 +2 · 기술 부채 +25%',
+                    summary: '참치 +3 · 기술 부채 +25%',
                     description: 'SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.',
                     imageSrc: 'assets/dangerous-alliance-ssh.png',
                     imageAlt: '붉은 SSH 터널 앞에서 수상한 동맹을 맺는 두 인물의 악수'

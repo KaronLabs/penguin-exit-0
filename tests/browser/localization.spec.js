@@ -15,14 +15,14 @@ const expectedIntrusions = [
     { title: '💼 CEO 금요일 17:59 배포 지시!', body: 'CEO가 즉시 프로덕션 배포를 요구합니다!' }
 ];
 const firstPuzzleChoices = [
-    { tabId: 'wifi', optionIndex: 0, fair: true, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
-    { tabId: 'wifi', optionIndex: 1, fair: true, command: 'top / ip link', output: 'eth0: state DOWN\n링크 상태와 라우팅을 함께 확인했습니다. 범인은 케이블입니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
-    { tabId: 'wifi', optionIndex: 2, fair: false, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0 / 3', debt: '15%', npc: null },
-    { tabId: 'cpu', optionIndex: 0, fair: true, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
-    { tabId: 'cpu', optionIndex: 1, fair: true, command: 'kill -9 1337', output: '[1] + Killed xmrig\nCPU 사용량이 2%로 떨어졌습니다. 프로덕션을 살렸습니다.', tuna: '2 / 3', debt: '0%', npc: { icon: '🐘', name: 'Walrus DBA', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' } },
-    { tabId: 'cpu', optionIndex: 2, fair: false, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0 / 3', debt: '20%', npc: null },
-    { tabId: 'ssh', optionIndex: 0, fair: true, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1 / 3', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
-    { tabId: 'ssh', optionIndex: 1, fair: false, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '2 / 3', debt: '25%', npc: null }
+    { tabId: 'wifi', optionIndex: 0, fair: true, command: 'ping 8.8.8.8', output: '64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=14.2 ms\n케이블이 빠져 있었습니다. 네트워크를 복구했습니다.', tuna: '1', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 1, fair: true, command: 'top / ip link', output: 'eth0: state DOWN\n링크 상태와 라우팅을 함께 확인했습니다. 범인은 케이블입니다.', tuna: '2', debt: '0%', npc: { icon: '🐻', name: 'Polar Bear DevOps', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },
+    { tabId: 'wifi', optionIndex: 2, fair: false, command: 'systemctl restart nginx', output: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.', tuna: '0', debt: '15%', npc: null },
+    { tabId: 'cpu', optionIndex: 0, fair: true, command: 'ip link show / top', output: 'PID 1337 xmrig가 CPU 99.9%를 점유 중입니다. 프로세스와 네트워크를 확인했습니다.', tuna: '0', debt: '0%', npc: null },
+    { tabId: 'cpu', optionIndex: 1, fair: false, command: 'kill -9 1337', output: 'PID 검증 없이 kill -9 1337을 실행했습니다.\nCPU는 내려갔지만 변경 관리와 감사 절차가 사망했습니다.', tuna: '0', debt: '20%', npc: null },
+    { tabId: 'cpu', optionIndex: 2, fair: false, command: 'reboot', output: '피크 시간에 DB를 재부팅했습니다. CEO가 전화 중입니다.', tuna: '0', debt: '20%', npc: null },
+    { tabId: 'ssh', optionIndex: 0, fair: true, command: 'cat /var/log/auth.log', output: 'Accepted publickey for sam_altman from 192.168.x.x\n로그에 낯익은 이름이 있습니다.', tuna: '1', debt: '0%', npc: { icon: '🤖', name: 'Sam Altman', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' } },
+    { tabId: 'ssh', optionIndex: 1, fair: false, command: 'ssh-copy-id sam_altman', output: 'Key installed. OpenAI로 향하는 보안 터널을 연결했습니다.', tuna: '3', debt: '25%', npc: null }
 ];
 
 async function puzzleRuntimeSnapshot(page) {
@@ -303,12 +303,10 @@ test('반복 퍼즐 선택도 오답에만 독설을 남기고 경제를 다시 
 test('같은 장애의 다른 선택지는 최초 경제 결과를 바꾸지 않고 연출은 유지한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const cases = [
-        { tabId: 'wifi', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'npc' },
-        { tabId: 'wifi', choices: [1, 0], tuna: '2 / 3', debt: '0%', presentation: 'npc' },
-        { tabId: 'cpu', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'npc' },
-        { tabId: 'cpu', choices: [1, 0], tuna: '2 / 3', debt: '0%', presentation: 'npc' },
-        { tabId: 'ssh', choices: [0, 1], tuna: '1 / 3', debt: '0%', presentation: 'alliance' },
-        { tabId: 'ssh', choices: [1, 0], tuna: '2 / 3', debt: '25%', presentation: 'npc' }
+        { tabId: 'wifi', choices: [0, 1], tuna: '1', debt: '0%', presentation: 'npc' },
+        { tabId: 'wifi', choices: [1, 0], tuna: '2', debt: '0%', presentation: 'npc' },
+        { tabId: 'ssh', choices: [0, 1], tuna: '1', debt: '0%', presentation: 'alliance' },
+        { tabId: 'ssh', choices: [1, 0], tuna: '3', debt: '25%', presentation: 'npc' }
     ];
 
     for (const fixture of cases) {
@@ -339,21 +337,109 @@ test('오답이 최초 선택이면 같은 장애의 후속 정답도 경제 결
     await page.locator('.puzzle-option').nth(2).click();
     await page.locator('.puzzle-option').nth(0).click();
 
-    await expect(page.locator('#val-tuna')).toHaveText('0 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('0');
     await expect(page.locator('#val-debt')).toHaveText('15%');
     await expect(page.locator('#npc-card')).toBeVisible();
 });
 
-test('서로 다른 장애의 최초 선택은 각각 경제 결과를 적용한다', async ({ page }) => {
+test('서로 다른 장애의 해결 결과는 각각 경제를 적용한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
 
-    for (const [tabId, tuna] of [['wifi', '1 / 3'], ['cpu', '2 / 3'], ['ssh', '3 / 3']]) {
-        await page.locator(`[data-puz="${tabId}"]`).click();
-        await page.locator('.puzzle-option').nth(0).click();
-        await expect(page.locator('#val-tuna')).toHaveText(tuna);
-    }
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await expect(page.locator('#val-tuna')).toHaveText('1');
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('3');
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await expect(page.locator('#val-tuna')).toHaveText('4');
     await expect(page.locator('#val-debt')).toHaveText('0%');
+});
+
+test('CPU 장애는 조사 후 종료해야 참치와 NPC를 제공한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="cpu"]').click();
+
+    await page.locator('.puzzle-option').nth(0).click();
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+    await expect(page.locator('#val-debt')).toHaveText('0%');
+    await expect(page.locator('#npc-card')).toBeHidden();
+
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('2');
+    await expect(page.locator('#val-debt')).toHaveText('0%');
+    await expect(page.locator('#npc-card')).toContainText('Walrus DBA');
+    await expect(page.locator('#terminal-output [data-terminal-kind="archon"]')).toHaveCount(0);
+});
+
+test('CPU 선행 kill은 오답과 부채를 확정하고 이후 해결 보상을 박탈한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="cpu"]').click();
+
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+    await expect(page.locator('#val-debt')).toHaveText('20%');
+    await expect(page.locator('#npc-card')).toBeHidden();
+    await expect(page.locator('#terminal-output [data-dialogue-context="puzzle"]')).toHaveAttribute('data-terminal-kind', 'archon');
+
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+    await expect(page.locator('#val-debt')).toHaveText('20%');
+    await expect(page.locator('#npc-card')).toContainText('Walrus DBA');
+});
+
+test('CPU 조사 후 reboot를 선택하면 이후 정상 종료에도 보상을 지급하지 않는다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="cpu"]').click();
+
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('.puzzle-option').nth(2).click();
+    await page.locator('.puzzle-option').nth(1).click();
+
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+    await expect(page.locator('#val-debt')).toHaveText('20%');
+    await expect(page.locator('#npc-card')).toContainText('Walrus DBA');
+});
+
+test('CPU 진단은 탭 이동 동안 유지되고 게임 초기화에서 제거된다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('2');
+
+    await page.evaluate(() => window.__resetGameForTest());
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+    await expect(page.locator('#val-debt')).toHaveText('20%');
+});
+
+test('참치 카운터는 상한을 숨기고 최선 선택의 실제 누적량을 표시한다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await expect(page.locator('#val-tuna')).toHaveText('0');
+
+    await page.locator('[data-puz="wifi"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('2');
+    await page.locator('[data-puz="cpu"]').click();
+    await page.locator('.puzzle-option').nth(0).click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('4');
+    await page.locator('[data-puz="ssh"]').click();
+    await page.locator('.puzzle-option').nth(1).click();
+    await expect(page.locator('#val-tuna')).toHaveText('7');
+    await expect(page.locator('#dangerous-alliance-summary')).toHaveText('참치 +3 · 기술 부채 +25%');
 });
 
 test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는다', async ({ page }) => {
@@ -394,7 +480,7 @@ test('탭 전환은 진행 중인 퍼즐 결과와 독설을 취소하지 않는
                 { kind: 'system', context: null, text: 'Nginx를 재시작했지만 인터넷은 여전히 죽어 있습니다.' },
                 expect.objectContaining({ kind: 'archon', context: 'puzzle', text: expect.stringMatching(/^아콘 🐧 \/\/ .+$/) })
             ],
-            tuna: '0 / 3',
+            tuna: '0',
             debt: '15%',
             quoteText: '아콘 독설 수집 1/100',
             quoteCount: 1,
@@ -454,7 +540,7 @@ test('SSH 결과는 정상 NPC와 위험 동맹 팝업을 한 번만 상호 배�
     await expect(page.locator('#npc-card')).toBeHidden();
     await expect(allianceOverlay).toBeVisible();
     await expect(page.locator('#dangerous-alliance-heading')).toHaveText('⚠ 위험한 동맹이 체결되었습니다');
-    await expect(page.locator('#dangerous-alliance-summary')).toHaveText('참치 +2 · 기술 부채 +25%');
+    await expect(page.locator('#dangerous-alliance-summary')).toHaveText('참치 +3 · 기술 부채 +25%');
     await expect(page.locator('#dangerous-alliance-description')).toHaveText('SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.');
     expect(await page.locator('#dangerous-alliance-image').evaluate((image) => ({
         src: image.getAttribute('src'),
@@ -467,12 +553,12 @@ test('SSH 결과는 정상 NPC와 위험 동맹 팝업을 한 번만 상호 배�
         naturalWidth: 1536,
         naturalHeight: 1024
     });
-    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('3');
     await expect(page.locator('#val-debt')).toHaveText('25%');
     await page.locator('#btn-accept-alliance-result').click();
     await allianceOption.click();
     await page.waitForTimeout(1100);
-    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('3');
     await expect(page.locator('#val-debt')).toHaveText('25%');
     await expect(allianceOverlay).toBeHidden();
 
@@ -506,14 +592,14 @@ test('SSH 위험 동맹을 빠르게 반복 선택해도 최초 결과를 정확
     const allianceOverlay = page.locator('#dangerous-alliance-overlay');
     await expect(allianceOverlay).toBeVisible();
     await expect(page.locator('#npc-card')).toBeHidden();
-    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('3');
     await expect(page.locator('#val-debt')).toHaveText('25%');
 
     await page.locator('#btn-accept-alliance-result').click();
     await allianceOption.click();
     await page.waitForTimeout(1100);
     await expect(allianceOverlay).toBeHidden();
-    await expect(page.locator('#val-tuna')).toHaveText('2 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('3');
     await expect(page.locator('#val-debt')).toHaveText('25%');
 });
 
@@ -546,6 +632,7 @@ test('장애 설명은 세 뷰포트에서 관제 브리핑 위계와 의미 단
                     borderRadius: style.borderRadius,
                     label: before.content,
                     labelDisplay: before.display,
+                    labelFontSize: before.fontSize,
                     withinViewport: box.left >= 0 && box.right <= document.documentElement.clientWidth,
                     optionsFollowBrief: firstOption.top > box.bottom,
                     noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth
@@ -562,6 +649,7 @@ test('장애 설명은 세 뷰포트에서 관제 브리핑 위계와 의미 단
                 borderRadius: '4px',
                 label: '"INCIDENT BRIEF"',
                 labelDisplay: 'block',
+                labelFontSize: '13.24px',
                 withinViewport: true,
                 optionsFollowBrief: true,
                 noHorizontalOverflow: true
@@ -598,10 +686,10 @@ test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 �
     await option.click();
     await expect(page.locator('#terminal-output')).toContainText('64 bytes from 8.8.8.8');
     await expect(page.locator('#npc-card')).toContainText('Polar Bear DevOps');
-    await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('1');
     await option.click();
     await expect(page.locator('#terminal-output [data-terminal-kind="archon"]')).toHaveCount(0);
-    await expect(page.locator('#val-tuna')).toHaveText('1 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('1');
     await expect(page.locator('#quote-collection')).toHaveText('아콘 독설 수집 0/100');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('penguin-exit-0:quote-discovery:v2'))).toBeNull();
     await page.reload();

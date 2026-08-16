@@ -846,7 +846,7 @@ body.intrusion-impact--ceo > .main-grid {
     margin-bottom: 8px;
     color: var(--signal-cyan);
     font-family: var(--font-utility);
-    font-size: 0.64rem;
+    font-size: calc(0.64rem + 3px);
     font-weight: 700;
     letter-spacing: 0.12em;
     line-height: 1;

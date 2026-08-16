@@ -170,7 +170,7 @@ export function reduceGameState(state, action) {
 
         case 'ADD_TUNA': {
             const validAmount = Math.max(0, action.amount || 0);
-            nextState.tunaCans = Math.min(3, Math.max(0, nextState.tunaCans + validAmount));
+            nextState.tunaCans = Math.max(0, nextState.tunaCans + validAmount);
             break;
         }
 

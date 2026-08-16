@@ -20,7 +20,23 @@ test('Puzzle Content Registry - Fair SRE Diagnostics for High CPU & SSH', () => 
 
     const ipLinkChoice = cpuPuzzle.choices.find(c => c.key === 'ip_link');
     assert.equal(ipLinkChoice.isFairDiagnostic, true);
+    assert.equal(ipLinkChoice.rewardTuna, 0);
+    assert.equal(ipLinkChoice.showEncounter, false);
+    assert.equal(ipLinkChoice.nextStage, 'diagnosed');
+
+    const killChoice = cpuPuzzle.choices.find(c => c.key === 'kill');
+    assert.equal(killChoice.requiresStage, 'diagnosed');
+    assert.deepEqual(killChoice.prematureResult, {
+        isFairDiagnostic: false,
+        rewardTuna: 0,
+        techDebtPercent: 20,
+        output: 'PID 검증 없이 kill -9 1337을 실행했습니다.\nCPU는 내려갔지만 변경 관리와 감사 절차가 사망했습니다.'
+    });
 
     const authLogChoice = sshPuzzle.choices.find(c => c.key === 'auth_log');
     assert.equal(authLogChoice.isFairDiagnostic, true);
+
+    const allianceChoice = sshPuzzle.choices.find(c => c.key === 'altman');
+    assert.equal(allianceChoice.rewardTuna, 3);
+    assert.equal(allianceChoice.resultPresentation.summary, '참치 +3 · 기술 부채 +25%');
 });

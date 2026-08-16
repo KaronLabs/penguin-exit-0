@@ -13,13 +13,13 @@ const expectedPuzzles = [
         { key: 'systemctl', cmd: 'systemctl restart nginx', label: '3. systemctl restart nginx (무작정 재시작)', rewardTuna: 0, techDebtPercent: 15 }
     ] },
     { id: 'cpu', title: '장애 #2: 서버 #4 고CPU 경보', choices: [
-        { key: 'ip_link', cmd: 'ip link show / top', label: '1. top / ip link show (PID 1337 점검)', rewardTuna: 1, techDebtPercent: 0 },
+        { key: 'ip_link', cmd: 'ip link show / top', label: '1. top / ip link show (PID 1337 점검)', rewardTuna: 0, techDebtPercent: 0 },
         { key: 'kill', cmd: 'kill -9 1337', label: '2. kill -9 1337 (마이너 종료)', rewardTuna: 2, techDebtPercent: 0 },
         { key: 'reboot', cmd: 'reboot', label: '3. reboot (피크 시간 재부팅)', rewardTuna: 0, techDebtPercent: 20 }
     ] },
     { id: 'ssh', title: '장애 #3: 골든 티켓 SSH 침입', choices: [
         { key: 'auth_log', cmd: 'cat /var/log/auth.log', label: '1. cat /var/log/auth.log (로그 감사)', rewardTuna: 1, techDebtPercent: 0 },
-        { key: 'altman', cmd: 'ssh-copy-id sam_altman', label: '2. ssh-copy-id sam_altman (탐욕스러운 동맹)', rewardTuna: 2, techDebtPercent: 25 }
+        { key: 'altman', cmd: 'ssh-copy-id sam_altman', label: '2. ssh-copy-id sam_altman (탐욕스러운 동맹)', rewardTuna: 3, techDebtPercent: 25 }
     ] }
 ];
 
@@ -37,12 +37,12 @@ test('콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존�
     assert.equal(authLogChoice.resultPresentation, undefined);
     assert.equal(authLogChoice.rewardTuna, 1);
     assert.equal(authLogChoice.techDebtPercent, 0);
-    assert.equal(altmanChoice.rewardTuna, 2);
+    assert.equal(altmanChoice.rewardTuna, 3);
     assert.equal(altmanChoice.techDebtPercent, 25);
     assert.deepEqual(altmanChoice.resultPresentation, {
         type: 'dangerousAlliance',
         title: '⚠ 위험한 동맹이 체결되었습니다',
-        summary: '참치 +2 · 기술 부채 +25%',
+        summary: '참치 +3 · 기술 부채 +25%',
         description: 'SSH 키를 넘긴 대가로 빠른 보상을 얻었지만, 시스템은 수상한 동맹을 기억합니다.',
         imageSrc: 'assets/dangerous-alliance-ssh.png',
         imageAlt: '붉은 SSH 터널 앞에서 수상한 동맹을 맺는 두 인물의 악수'

@@ -16,6 +16,7 @@ const totalDialogueCount = Object.values(dialogueDecks)
     .reduce((total, deck) => total + deck.length, 0);
 const resolvedChoices = new Set();
 const resolvedPuzzleEconomies = new Set();
+const puzzleProgress = new Map();
 const pendingTerminalTimers = new Set();
 let quoteDiscovery = loadQuoteDiscovery();
 
@@ -26,6 +27,7 @@ window.__resetGameForTest = function() {
     endingRendered = false;
     resolvedChoices.clear();
     resolvedPuzzleEconomies.clear();
+    puzzleProgress.clear();
     latestPuzzleResultId += 1;
     pendingPuzzleResultSlot = null;
     clearTerminalTimers();
@@ -223,11 +225,11 @@ function closeDangerousAlliance({ restoreFocus = true } = {}) {
     if (restoreFocus && focusTarget?.isConnected && !focusTarget.disabled) focusTarget.focus();
 }
 
-function queuePuzzleResult(puzzle, choice, repeated, triggerButton) {
+function queuePuzzleResult(puzzle, choice, repeated, triggerButton, resultVariant = 'default') {
     appendTerminalLine(`archon@stone-igloo:~$ ${choice.cmd}`, '', null, 'command');
     scheduleTerminal(() => appendTerminalLine(choice.output, '', null, 'system'), 450);
     const scheduledPuzzleId = puzzle.id;
-    const resultSlot = `${puzzle.id}:${choice.key}`;
+    const resultSlot = `${puzzle.id}:${choice.key}:${resultVariant}`;
     const preservesPendingResult = repeated && pendingPuzzleResultSlot === resultSlot;
     const scheduledResultId = preservesPendingResult
         ? latestPuzzleResultId
@@ -243,7 +245,7 @@ function queuePuzzleResult(puzzle, choice, repeated, triggerButton) {
             if (activePuzzleId !== scheduledPuzzleId || scheduledResultId !== latestPuzzleResultId) return;
             pendingPuzzleResultSlot = null;
             if (choice.resultPresentation) openDangerousAlliance(choice.resultPresentation, triggerButton);
-            else if (choice.isFairDiagnostic) showEncounter(puzzle.encounter);
+            else if (choice.isFairDiagnostic && choice.showEncounter !== false) showEncounter(puzzle.encounter);
         }
     }, 1050);
 }
@@ -393,19 +395,25 @@ function renderPuzzles() {
         btn.addEventListener('click', () => {
             clearIntrusionImpact();
             npcCard.hidden = true;
-            const choiceSlot = `${currentPuzzle.id}:${choice.key}`;
+            const isPremature = choice.requiresStage
+                && puzzleProgress.get(currentPuzzle.id) !== choice.requiresStage;
+            const effectiveChoice = isPremature
+                ? { ...choice, ...choice.prematureResult }
+                : choice;
+            const choiceSlot = `${currentPuzzle.id}:${choice.key}:${isPremature ? 'premature' : 'default'}`;
             const repeated = resolvedChoices.has(choiceSlot);
             if (!repeated) resolvedChoices.add(choiceSlot);
-            if (!resolvedPuzzleEconomies.has(currentPuzzle.id)) {
+            if (choice.nextStage) puzzleProgress.set(currentPuzzle.id, choice.nextStage);
+            if (effectiveChoice.locksEconomy !== false && !resolvedPuzzleEconomies.has(currentPuzzle.id)) {
                 resolvedPuzzleEconomies.add(currentPuzzle.id);
-                if (choice.rewardTuna > 0) {
-                    state = reduceGameState(state, { type: 'ADD_TUNA', amount: choice.rewardTuna });
+                if (effectiveChoice.rewardTuna > 0) {
+                    state = reduceGameState(state, { type: 'ADD_TUNA', amount: effectiveChoice.rewardTuna });
                 }
-                if (choice.techDebtPercent > 0) {
-                    state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: choice.techDebtPercent });
+                if (effectiveChoice.techDebtPercent > 0) {
+                    state = reduceGameState(state, { type: 'ADD_TECH_DEBT', percent: effectiveChoice.techDebtPercent });
                 }
             }
-            queuePuzzleResult(currentPuzzle, choice, repeated, btn);
+            queuePuzzleResult(currentPuzzle, effectiveChoice, repeated, btn, isPremature ? 'premature' : 'default');
             renderGameState();
         });
 
@@ -453,7 +461,7 @@ function renderGameState() {
     valStars.textContent = `${state.githubStars} ★`;
     valDebt.textContent = `${state.techDebt}%`;
     valThreat.textContent = `${state.threatMeter} / 100`;
-    valTuna.textContent = `${state.tunaCans} / 3`;
+    valTuna.textContent = `${state.tunaCans}`;
     valCost.textContent = `-$${state.incidentCost}`;
 
     // 2. Intrusion Banner State & 4 AI Model Customization

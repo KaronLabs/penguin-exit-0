@@ -130,7 +130,7 @@ test('게임 초기화는 열린 위험 동맹과 예약된 결과 타이머를 
     await page.waitForTimeout(1100);
     await expect(page.locator('#dangerous-alliance-overlay')).toBeHidden();
     await expect(page.locator('#terminal-output')).toBeEmpty();
-    await expect(page.locator('#val-tuna')).toHaveText('0 / 3');
+    await expect(page.locator('#val-tuna')).toHaveText('0');
     await expect(page.locator('#val-debt')).toHaveText('0%');
 });
 
@@ -193,6 +193,7 @@ test('320x640에서 대표 상태에 가로 오버플로가 없고 터치 타깃
     }
     await page.locator('[data-puz="cpu"]').click();
     await page.locator('.puzzle-option').first().click();
+    await page.locator('.puzzle-option').nth(1).click();
     const npc = page.locator('#npc-card');
     await expect(npc).toBeVisible();
     await expect(npc).toHaveText(/Walrus DBA/);
