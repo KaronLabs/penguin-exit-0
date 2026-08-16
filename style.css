@@ -827,6 +827,31 @@ body.intrusion-impact--ceo > .main-grid {
     font-size: 0.78rem;
 }
 
+.puzzle-description {
+    margin: 10px 0 16px;
+    padding: 10px 12px 12px;
+    border-left: 3px solid var(--signal-cyan);
+    border-radius: 4px;
+    background: rgba(17, 26, 39, 0.78);
+    color: #C8D4E3;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.puzzle-description::before {
+    content: "INCIDENT BRIEF";
+    display: block;
+    margin-bottom: 8px;
+    color: var(--signal-cyan);
+    font-family: var(--font-utility);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1;
+}
+
 .terminal-output {
     height: clamp(14rem, 30vh, 18rem);
     overflow-y: auto;

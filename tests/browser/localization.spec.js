@@ -461,6 +461,59 @@ test('SSH 위험 동맹을 빠르게 반복 선택해도 최초 결과를 정확
     await expect(page.locator('#val-debt')).toHaveText('25%');
 });
 
+test('장애 설명은 세 뷰포트에서 관제 브리핑 위계와 의미 단위 줄바꿈을 유지한다', async ({ page }) => {
+    const descriptions = {
+        wifi: '북극곰 DevOps가 광섬유 케이블에 걸려 넘어졌습니다.\n이글루의 Wi-Fi가 끊겼습니다.',
+        cpu: '바다코끼리 DBA가 프로덕션에서 암호화폐 채굴기를 돌렸습니다.\nCPU가 100%입니다.',
+        ssh: '캘리포니아의 미확인 IP 블록에서 SSH 연결 요청이 들어왔습니다.\n로그부터 확인하십시오.'
+    };
+
+    for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 360 }, { width: 1280, height: 800 }]) {
+        await page.setViewportSize(viewport);
+        await page.goto('/');
+
+        for (const [tabId, description] of Object.entries(descriptions)) {
+            await page.locator(`[data-puz="${tabId}"]`).click();
+            await expect(page.locator('#puzzle-description')).toHaveText(description);
+            const proof = await page.locator('#puzzle-description').evaluate((node) => {
+                const style = getComputedStyle(node);
+                const before = getComputedStyle(node, '::before');
+                const box = node.getBoundingClientRect();
+                const firstOption = document.querySelector('.puzzle-option').getBoundingClientRect();
+                return {
+                    fontSize: style.fontSize,
+                    lineHeight: style.lineHeight,
+                    color: style.color,
+                    whiteSpace: style.whiteSpace,
+                    borderLeftColor: style.borderLeftColor,
+                    borderLeftWidth: style.borderLeftWidth,
+                    borderRadius: style.borderRadius,
+                    label: before.content,
+                    labelDisplay: before.display,
+                    withinViewport: box.left >= 0 && box.right <= document.documentElement.clientWidth,
+                    optionsFollowBrief: firstOption.top > box.bottom,
+                    noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+                };
+            });
+            expect(Number.parseFloat(proof.lineHeight)).toBeCloseTo(24.48, 2);
+            delete proof.lineHeight;
+            expect(proof).toEqual({
+                fontSize: '14.4px',
+                color: 'rgb(200, 212, 227)',
+                whiteSpace: 'pre-line',
+                borderLeftColor: 'rgb(84, 199, 236)',
+                borderLeftWidth: '3px',
+                borderRadius: '4px',
+                label: '"INCIDENT BRIEF"',
+                labelDisplay: 'block',
+                withinViewport: true,
+                optionsFollowBrief: true,
+                noHorizontalOverflow: true
+            });
+        }
+    }
+});
+
 test('퍼즐과 업그레이드는 한국어 설명과 원본 기술 토큰을 함께 제공한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');

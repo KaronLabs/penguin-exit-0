@@ -63,6 +63,14 @@ test('콘텐츠는 한국어 우선이며 명령어와 보상 계약을 보존�
 
     assert.ok(puzzles.every(({ description, choices }) => /[가-힣]/.test(description) && choices.every(({ output }) => typeof output === 'string' && output.length > 0)), 'each Korean-first puzzle must provide terminal output for every choice');
     assert.deepEqual(
+        puzzles.map(({ id, description }) => ({ id, description })),
+        [
+            { id: 'wifi', description: '북극곰 DevOps가 광섬유 케이블에 걸려 넘어졌습니다.\n이글루의 Wi-Fi가 끊겼습니다.' },
+            { id: 'cpu', description: '바다코끼리 DBA가 프로덕션에서 암호화폐 채굴기를 돌렸습니다.\nCPU가 100%입니다.' },
+            { id: 'ssh', description: '캘리포니아의 미확인 IP 블록에서 SSH 연결 요청이 들어왔습니다.\n로그부터 확인하십시오.' }
+        ]
+    );
+    assert.deepEqual(
         puzzles.map(({ id, encounter }) => ({ id, encounter })),
         [
             { id: 'wifi', encounter: { name: 'Polar Bear DevOps', icon: '🐻', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' } },

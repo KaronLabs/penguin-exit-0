@@ -7,7 +7,7 @@ export const puzzles = [
     {
         id: 'wifi',
         title: '장애 #1: 사무실 Wi-Fi 연결 끊김',
-        description: '북극곰 DevOps가 광섬유 케이블에 걸려 넘어졌습니다. 이글루의 Wi-Fi가 끊겼습니다.',
+        description: '북극곰 DevOps가 광섬유 케이블에 걸려 넘어졌습니다.\n이글루의 Wi-Fi가 끊겼습니다.',
         encounter: { name: 'Polar Bear DevOps', icon: '🐻', message: 'Wi-Fi는 살아났습니다. 참치 한 캔은 제 쪽에서 처리하죠.' },
         choices: [
             {
@@ -42,7 +42,7 @@ export const puzzles = [
     {
         id: 'cpu',
         title: '장애 #2: 서버 #4 고CPU 경보',
-        description: '바다코끼리 DBA가 프로덕션에서 암호화폐 채굴기를 돌렸습니다. CPU가 100%입니다.',
+        description: '바다코끼리 DBA가 프로덕션에서 암호화폐 채굴기를 돌렸습니다.\nCPU가 100%입니다.',
         encounter: { name: 'Walrus DBA', icon: '🐘', message: '그건 백그라운드 작업이었다고 우기려 했는데… 들켰군요.' },
         choices: [
             {
@@ -77,7 +77,7 @@ export const puzzles = [
     {
         id: 'ssh',
         title: '장애 #3: 골든 티켓 SSH 침입',
-        description: '캘리포니아의 미확인 IP 블록에서 SSH 연결 요청이 들어왔습니다. 로그부터 확인하십시오.',
+        description: '캘리포니아의 미확인 IP 블록에서 SSH 연결 요청이 들어왔습니다.\n로그부터 확인하십시오.',
         encounter: { name: 'Sam Altman', icon: '🤖', message: 'I like your penguin hustle. 다음 open-source 프로젝트는 제가 투자하죠.' },
         choices: [
             {
